@@ -10,6 +10,28 @@ Inventory is growing from an asset manager into a lightweight creative workspace
 
 It should not try to replace specialist tools such as Blender, Godot, Photoshop, Reaper, Word, or Scrivener. Its advantage is convenience, context, and the ability to work across many file families without leaving the library.
 
+## Native Creative System
+
+Inventory's native editors should eventually feel like parts of one local creative system rather than isolated mini-apps.
+
+The near-term native formats are:
+
+- Write: `.nvd` documents
+- Draw: `.nvv` vectors
+
+Future native destinations may include publishing, raster image editing, audio work, or lightweight 3D, but each should earn its place by becoming useful at a small scale first.
+
+The long-term idea is that native objects can travel between editors without becoming dead exports. A Draw vector embedded in a Write document should remain an editable Draw vector. A Write section may eventually become a Publish page block. A logo, diagram, paragraph style, brand kit, or export profile should be reusable across the workspace without flattening the source object too early.
+
+Ideas:
+
+- Allow `.nvv` vectors to be inserted into `.nvd` documents as live native embeds.
+- Let embedded native objects open their owning editor in context, rather than forcing export/import loops.
+- Keep the native file as the source of truth and treat exported SVG, PDF, DOCX, PNG, EPUB, or website output as generated views.
+- Share compatible style concepts across editors where it makes sense, such as document styles, web styles, vector appearance presets, and future brand kits.
+- Add explicit dependency and relink behavior before native files can safely reference each other.
+- Preserve local-first ownership: cross-editor links should work inside an Inventory without requiring cloud services or accounts.
+
 ## Master Library Intelligence
 
 The Master Library should become increasingly capable of taming a large unorganised collection with less manual effort.
@@ -92,7 +114,8 @@ Inventory may eventually provide small, frequently useful editing tools for othe
 Ideas:
 
 - A raster image editor for crop, resize, simple color adjustment, transparency work, and export.
-- Grow the intentionally atomic Draw canvas into shape creation, paths, node editing, Bézier handles, layers, strokes, richer fills, and explicit SVG import/export.
+- Grow the intentionally atomic Draw canvas into shape creation, paths, node editing, Bezier handles, layers, strokes, richer fills, reusable symbols, and explicit SVG import/export.
+- Explore Publish as a future native site/page designer that can reuse Write and Draw objects before exporting to a lightweight website.
 - Revisit the useful parts of the old ImageLab idea inside Inventory rather than building a disconnected second app.
 - A lightweight audio editor for simple inspection and file-level edits, without reviving the removed Scene Audio or Audio Layers concept.
 - A future app-owned 3D format, tentatively imagined as `.nv3`, for lightweight scene or object edits that should not overwrite source models.
