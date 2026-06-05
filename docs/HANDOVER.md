@@ -2,157 +2,247 @@
 
 Hello, future Codex.
 
-Inventory is no longer a scaffold or a speculative mockup. It is a real Tauri desktop app that has grown through close visual iteration with its user. Read the current code and the durable docs before assuming the early plan still describes the product.
+Inventory is a real Tauri desktop app now, not a scaffold. Read this file first, then check `AGENTS.md`, `docs/DECISIONS.md`, `docs/DIRECTION.md`, `docs/INVENTORY_FORMAT.md`, and the code before acting on old assumptions.
 
-## The User And The Work
+The repo is initialized and pushed to GitHub:
 
-The user has a strong visual sense and often discovers the right design by using the app, noticing a small discomfort, and refining it until the interface feels inevitable.
+- Remote: `https://github.com/Twinspeakers/Inventory.git`
+- Branch: `main`
+- No public license is granted. Keep the user's commercial options open.
+
+## How To Work With The User
+
+The user has a strong visual sense and often discovers the right design by using the app, noticing one small discomfort, and refining it until the UI feels obvious.
 
 Work well with them:
 
-- Be proactive and implement once the intent is clear.
-- Use chunks for large features so the user can test the shape before the next layer lands.
-- Treat their visual feedback as product information, not cosmetic fussiness.
-- For unusual interactions, restate the behavior in plain language before building. A small misunderstanding can create a large amount of wrong code.
-- Preserve the app's calm DAW-like density. Avoid marketing layouts, excessive cards, decorative padding, and noisy color.
-- Keep the conversation warm. This project has been built with a lot of delight.
+- Be proactive once intent is clear.
+- Use chunks for large features so the user can test each layer.
+- Treat visual feedback as product information, not fussiness.
+- Restate unusual interactions in plain language before building.
+- Keep the app calm, dense, and DAW-like. Avoid marketing-page padding inside the app.
+- Preserve delight. This project is being built with a lot of warmth.
 
-## What Inventory Is Now
+## Hard Design Rule
 
-Inventory is a local-first creative asset library and lightweight creative workspace.
+Do not use Tailwind `shadow-soft` for new persistent UI surfaces, app chrome, editor toolbars, floating editor tools, panels, notices, or always-visible controls. It has repeatedly created broad dark visual artifacts. Prefer flat bordered surfaces. Use shadows only for truly transient menus/popovers after checking visually.
 
-An Inventory project is a real folder containing `Invent.nvi`, native documents, cache locations, thumbnails, and future exports. Source folders remain external and user-owned. Inventory indexes them, previews them, and stores project-specific metadata without silently modifying them.
+## What Inventory Is
+
+Inventory is a local-first creative workspace for organising, previewing, and making with the files the user owns.
+
+Its core trust model:
+
+- Source files stay external and user-owned.
+- Inventory indexes source files and stores metadata about them.
+- Inventory-owned native files are different: they live inside the Inventory project and can be explicitly created, saved, renamed, and deleted by the app.
+- Original source files must never be silently moved, renamed, modified, or deleted.
+
+An Inventory project is a real folder containing `Invent.nvi`, native files, cache locations, thumbnails, and future exports. `Invent.nvi` is the active project source of truth and is saved atomically.
+
+## Current App Shape
 
 The visible app has:
 
-- A desktop menu bar and Inventory branding.
-- A left pane containing the virtual Master Library, the built-in Inventory branch, and loaded Source Folders.
-- A central Preview Stage above the Workspace asset shelf.
-- A right Inspector.
-- Resizable and collapsible side panes and Workspace, allowing an almost full-screen scene view.
-- Light, Dark, and user-created themes, plus General and Notifications app settings.
+- Desktop menu bar and Inventory branding.
+- Left pane with Master Library, Inventory native branch, and Source Folders.
+- Central Preview Stage.
+- Workspace asset shelf.
+- Right Inspector.
+- Resizable and collapsible side panes and Workspace.
+- Light, Dark, and custom themes.
+- Settings sections for General, Themes, and Notifications.
+
+User-facing native destinations:
+
+- `Write`: `.nvd` documents.
+- `Draw`: `.nvv` vectors.
+
+Selecting Inventory, Write, or Draw opens a hub. Selecting a native file opens its editor.
 
 ## Current Capabilities
 
 ### Inventory Projects
 
 - Create, open, save, and close Inventories.
-- `Invent.nvi` is the active project's atomically saved source of truth.
-- Closing an Inventory also closes its source folders and clears project-specific live state.
-- Inventory-owned `.nvd` documents live under `Inventory > Write`, while `.nvv` vectors live under `Inventory > Draw`; neither belongs to the Master Library.
-- Selecting Inventory, Write, or Draw opens a dedicated native-work hub rather than silently opening the first file. Write and Draw are the user-facing editor names; NVD and NVV remain the technical format names.
-- Inventory-owned NVD documents can be created, atomically saved, renamed, and deleted explicitly.
-- Inventory-owned NVV vectors can be created, opened, and atomically saved. Draw currently presents an intentionally atomic themed canvas, with editable canvas dimensions in the Inspector.
-- Dirty NVD documents show an optional Ctrl+S reminder, warn before refresh/window close, and prompt before switching or explicitly closing documents. The explicit close prompt always offers Save, Don't Save, and Cancel and cannot be disabled.
+- Closing an Inventory also closes source folders and clears project-specific live state.
+- `Invent.nvi` owns source folders, indexed assets, Master Library nodes, workspace state, and native document registries.
+- Inventory-owned `.nvd` files live under `documents/`.
+- Inventory-owned `.nvv` files live under `vectors/`.
+- Early `.nvv` files created in `documents/` are migrated to `vectors/` on open.
+- Manifest, `.nvd`, and `.nvv` saves use atomic sibling-temp replacement.
 
-### Source Assets And Workspace
+### Master Library And Source Assets
 
-- Load multiple source folders, refresh them, or remove them from the active Inventory.
-- Browse supported assets together in the Workspace.
-- Sort by name, type, modified date, or size.
-- Switch among large, medium, small, and Details views.
-- Resize Details columns and the Workspace height.
-- Search assets.
-- Use generated visual thumbnails where supported.
-
-### Master Library
-
-- Build a virtual, user-editable hierarchy without moving source files.
-- Add parent-aware library nodes from a bundled catalog or create a custom node.
-- Rename and delete user-created nodes.
-- Use file-type boundaries, tags, and rules to attract files into the most specific matching folder.
-- See files physically listed in the tree without duplicating one file across parent and child folders.
-- Rename an asset's Inventory display name without renaming the real source file.
-- Receive suggested child-folder placements in the Inspector.
-- Seed broad top-level folders only when an imported source folder needs them.
-
-### Tags And Inspector
-
-- Generate conservative automatic tags from file names, extensions, file types, and selected metadata.
-- Add user tags and keep important tags across display-name changes.
-- Edit notes.
-- View document statistics, including selection-only counts for NVD text.
-- View 3D model statistics, dimensions, center, imported transforms, and editable transform overrides.
-- See a rotating mini 3D preview for model assets.
+- Multiple source folders.
+- Virtual Master Library hierarchy without moving real files.
+- Parent-aware node suggestions from a bundled catalog.
+- Automatic tags, user tags, kept tags, notes, and Inventory display names.
+- File-type boundaries prevent unrelated media from sharing folders just because they share a tag.
+- A file appears once at its most specific matching visible tree location.
+- Suggested folder placement appears in the Inspector.
 
 ### Preview Readers
 
-- Raster images, including transparency-grid presentation and zoom/pan behavior.
-- SVG vector images.
+Reader modules are isolated in `src/sceneReaders/`.
+
+Supported preview families include:
+
+- Raster images with transparency-grid presentation and zoom/pan behavior.
+- SVG source assets.
 - WAV waveform thumbnails and one-shot playback.
 - PDFs through PDF.js.
-- Markdown through a dedicated reader with syntax-aware code rendering.
-- GLB, glTF, OBJ, and STL through Three.js, including orbit controls, grid, compass, and movable light.
+- Markdown with syntax-aware code rendering.
+- GLB, glTF, OBJ, and STL through Three.js.
 
-### NVD Editor
+### NVD / Write
 
-- Pageless and A4 presentation modes over the same persistent document editor, preserving Undo/Redo when switching modes.
-- One document-wide Tiptap editor in both modes. A4 presents measured paper sheets and gaps around decoration-only page spacers while selection, history, keyboard navigation, and saved content remain continuous.
-- Shared bounded pagination caching prevents the editor, Inspector, and thumbnails from independently measuring identical document content. Inspector page counts use a deferred document value so typing remains the urgent update.
-- Bundled offline fonts plus selected system fonts.
-- Recently used fonts.
-- Font family and point-size formatting for selections and future typed text.
-- Bold and Italic inline formatting.
-- Left, Center, Right, and Justify paragraph alignment.
-- A default-open Paragraph Inspector with custom line spacing, Space before, Space after, and character spacing. Values apply to touched paragraphs, support mixed selections and Undo/Redo, and use Enter to apply or accept an active style edit.
-- A universal Edit menu routes Undo and Redo to the active context with live enabled states, concise action labels, and `Ctrl+Z` / `Ctrl+Y` shortcuts. NVD uses Tiptap history; the Library currently records session-only Library-node renames and Inventory display-name renames.
-- Document-view zoom presets from 50% to 200%, selectable in the toolbar and stepped with Ctrl + Scroll.
-- The right edge of the NVD toolbar explicitly closes the active document. Clean documents close immediately; dirty documents always prompt for Save, Don't Save, or Cancel.
-- A default-open semantic style designer in the Inspector beneath Paragraph. Clicking a style preview applies it to the paragraphs touched by the cursor or selection; the pencil sandboxes toolbar formatting into a draft, and accepting updates that style throughout the document. Applied roles and reusable `p`, `h1`, `h2`, and `h3` definitions persist in the `.nvd` file. Older partial definitions retain missing values until the frontend applies the correct role-specific defaults.
-- Each reusable NVD style has a reset action that restores the current built-in definition and cascades through blocks still matching the previous style. The first reset presents a one-time confirmation that can be restored under Settings > Notifications. Style-definition changes and matching document updates move together through Undo and Redo, including styles that are not currently used by a document block.
-- Semantic `p`, `h1`, `h2`, and `h3` blocks inherit their corresponding document style automatically until their formatting is locally changed.
-- Paragraph and character spacing agree across Pageless, A4 pagination, Workspace previews, save, and reopen.
-- The compact NVD Navigation pane dedicates its content area to a clickable hierarchical heading outline derived from non-empty `h1`, `h2`, and `h3` blocks.
-- Workspace document previews and Inspector page/word/character statistics.
-- Shared rendering rules across Pageless, A4, Workspace previews, saving, and reopening.
+`.nvd` is Inventory's native rich document format. It is not Tiptap JSON and not Word's internal format.
+
+Current features:
+
+- Creation, open, save, rename, delete, and explicit document close.
+- Dirty-document prompts for switching, refresh/window close, and explicit close.
+- Optional Ctrl+S save reminder.
+- Pageless and A4 modes over one document-wide Tiptap editor.
+- A4 uses measured paper-sheet presentation and decoration-only page spacers. Do not go back to one Tiptap instance per page.
+- Shared pagination cache across editor, Inspector, and Workspace previews.
+- Bundled offline fonts, recent fonts, font family, font size, Bold, Italic.
+- Paragraph alignment: Left, Center, Right, Justify.
+- Toolbar zoom presets with Ctrl+Scroll stepping.
+- Paragraph Inspector: line spacing, Space before, Space after, letter/character spacing.
+- Semantic roles: `p`, `h1`, `h2`, `h3`.
+- Reusable style definitions persist in `.nvd` and cascade through matching blocks when accepted or reset.
+- Styles section is in the Inspector beneath Paragraph and defaults open.
+- Heading Navigation is derived from non-empty `h1`, `h2`, `h3`; paragraphs do not appear in Navigation.
+- Universal Edit menu routes Undo/Redo to the active context.
+
+Important NVD contracts:
+
+- Formatting changes must agree across the TypeScript model, Tiptap conversion, Rust serialization, Pageless rendering, A4 pagination, Workspace previews, Inspector statistics, save, reopen, and tests.
+- Font changes affect wrapping and page counts.
+- Toolbar controls must preserve text selection when clicked.
+- Line spacing and paragraph spacing are role/block presentation attributes.
+- Character spacing is an inline text-run attribute.
+
+### NVV / Draw
+
+`.nvv` is Inventory Draw's native vector format. It currently stores identity, timestamps, canvas dimensions, and optional paths.
+
+Current features:
+
+- Creation, open, save, and atomic persistence.
+- Canvas starts at `512 x 512`.
+- Canvas dimensions are editable in the Inspector.
+- Inspector Canvas section is collapsible; Width and Height share one row and use custom chevron number controls with `px` suffixes.
+- Per-file Notes are removed for `.nvv`; the Inspector shows a manual-refresh SVG markup preview instead.
+- Draw toolbar includes zoom presets and Ctrl+Scroll stepping. Default zoom is 100%.
+- Floating vertical tool rail, flat and artifact-free.
+- Select tool by default.
+- Long-press the shared Select slot to switch to Direct Select.
+- Pen tool creates anchors and Bezier handles.
+- Clicking an existing anchor in the current open path can close the path to that anchor.
+- Select targets whole paths and shows a neutral curve-aware free-transform box with 8 resize handles.
+- Direct Select edits anchors and handles.
+- Invisible hit targets make paths, anchors, and handles easier to select without making visible controls noisy.
+- Smooth handles mirror the opposite handle around the anchor.
+- Ctrl-click an anchor toggles smooth/corner handle mode.
+- Corner anchors have a subtle split line that rotates toward the local handle tangent while the anchor circle stays fixed.
+- Draw path edits participate in universal Undo/Redo via session history and should not knock the user out of Pen mode.
+
+Important NVV files:
+
+- `src/features/nvvEditor/NvvEditor.tsx`: Draw UI and tool behavior.
+- `src/features/nvvEditor/nvvSvg.ts`: shared SVG/path-data generation.
+- `src/features/nvvEditor/nvvZoom.ts`: zoom presets and stepping.
+- `src/features/inventoryProject/inventoryProjectTypes.ts`: TypeScript NVV schema.
+- `src-tauri/src/lib.rs`: Rust NVV schema, create/open/save/reconcile commands.
+- `docs/INVENTORY_FORMAT.md`: persistence contract.
+
+Current SVG preview behavior:
+
+- Generated manually with Refresh.
+- Does not word-wrap by default.
+- Uses `.nvv` native paths as source of truth.
+- The preview is educational/export-adjacent, not the internal editing format.
 
 ## Architecture Map
 
 Important paths:
 
-- `src/App.tsx`: still the main orchestration layer and a large amount of library behavior. It is much healthier than it was, but at roughly 5,000 lines it should not absorb every new feature.
+- `src/App.tsx`: main orchestration and still the biggest file. Keep pushing new behavior into feature modules.
 - `src/features/assetShelf/`: Workspace asset browsing.
-- `src/features/inspector/`: Inspector UI.
-- `src/features/inventoryProject/`: shared Inventory and NVD TypeScript types.
-- `src/features/nvdEditor/`: NVD editor, fonts, rich-text conversion, pagination, and thumbnails.
-- `src/features/nvvEditor/`: intentionally atomic Draw canvas.
+- `src/features/editors/`: shared editor behavior, including universal commands/session history.
+- `src/features/inspector/`: Inspector UI, NVD Paragraph/Styles, NVV Canvas/SVG preview.
+- `src/features/inventoryProject/`: shared Inventory, NVD, and NVV TypeScript types.
+- `src/features/nativeHubs/`: Inventory, Write, and Draw hub surfaces.
+- `src/features/nvdEditor/`: NVD editor, fonts, rich text conversion, pagination, thumbnails.
+- `src/features/nvvEditor/`: Draw editor, zoom, SVG preview utilities.
 - `src/features/sceneViewer/`: Preview Stage and scene toolbar.
-- `src/features/settings/`: Compact Settings shell with General, Themes, and Notifications sections.
-- `src/features/editors/`: behavior shared by current and future native editors.
-- `src/sceneReaders/`: isolated preview engines for audio, Markdown, PDF, raster, vector, and 3D.
-- `src/libraryCatalog/`: bundled library-node vocabulary, tag vocabulary, normalization, and catalog types.
-- `src-tauri/src/lib.rs`: Rust commands for scanning, Inventory lifecycle, NVD lifecycle, SQLite legacy state, and native tests.
-- `docs/INVENTORY_FORMAT.md`: current persistence contract.
+- `src/features/settings/`: General, Themes, Notifications.
+- `src/libraryCatalog/`: bundled node/tag vocabulary and normalization.
+- `src/sceneReaders/`: file preview engines.
+- `src-tauri/src/lib.rs`: Rust commands for scanning, Inventory lifecycle, native documents, and tests.
+
+## Current Docs Contract
+
+- `README.md`: public-facing repo overview; currently says no public license is granted.
+- `AGENTS.md`: durable agent rule about avoiding `shadow-soft`.
+- `docs/PROJECT_BRIEF.md`: what Inventory is.
+- `docs/DESIGN_DRAFT.md`: current interface/interaction model.
+- `docs/DECISIONS.md`: durable decisions only.
+- `docs/DIRECTION.md`: unrealized ideas and north-star thinking.
+- `docs/INVENTORY_FORMAT.md`: persistence contracts.
 - `docs/FILE_SAFETY_RULES.md`: non-negotiable file trust rules.
-- `docs/DIRECTION.md`: ideas that are not currently implemented.
+- `docs/WORK_LOG.md`: major milestones only.
+- `docs/HANDOVER.md`: this reboot guide.
 
-## State And Ownership
+## Direction To Preserve
 
-- `Invent.nvi` owns active project state.
-- Source folders, source assets, Master Library nodes, selections, and active NVD document references belong to an Inventory.
-- Original source files are not owned by Inventory.
-- Inventory-owned native files are the exception and may be explicitly managed by the app.
-- SQLite remains in the codebase as legacy app metadata, but it is not the active Inventory source of truth.
-- Themes and pane comfort settings are app-level preferences rather than Inventory project state.
+Inventory should become a set of native editors that can eventually talk to each other.
+
+The first native citizens are:
+
+- Write: `.nvd`
+- Draw: `.nvv`
+
+Long-term idea:
+
+- A Draw vector can live inside a Write document without becoming a dead export.
+- Embedded native objects should be editable in context.
+- Future Publish could turn Write/Draw objects into static website output.
+- Exports such as SVG, PDF, DOCX, PNG, EPUB, or website files should be generated views, not the source of truth.
+
+There may eventually be a separate website repo for downloads and documentation. For now, this app repo is private/protected source and should not be treated like a GitHub Pages site.
+
+## Explicitly Parked Or Rejected
+
+Do not revive these from memory without a fresh conversation:
+
+- Space Between text formatting was removed completely.
+- Underline is intentionally absent from the NVD toolbar.
+- Scene Audio and Audio Layers were removed.
+- Collections are parked while Master Library quality is still being perfected.
+- The old Compare button/concept was removed.
+- A responsive multi-page A4 spread is parked; it cannot be done by simply placing paper backgrounds in a grid.
 
 ## Fragile Contracts
 
-These areas deserve extra care:
+Be careful around:
 
-- Any new NVD formatting feature must agree across the TypeScript file model, Tiptap conversion, Rust serialization, Pageless rendering, A4 pagination, Workspace thumbnail, Inspector statistics, save, reopen, and tests.
-- Font changes affect wrapping and page counts. Do not treat typography as editor-only decoration.
-- Toolbar controls must preserve text selection when clicked.
-- A file should appear once in the Master Library tree, at its most specific matching location.
-- File-type boundaries must prevent an image from entering a 3D folder merely because both share a tag.
-- Inventory-owned documents must never leak into the Master Library.
-- Closing an Inventory must close its source folders.
+- Native file safety. Never silently touch original source files.
+- Inventory close behavior. Closing an Inventory must close source folders and clear project state.
+- Native files must not leak into Master Library placement.
+- Master Library placement must keep one visible tree location per source file.
+- Theme changes affect every surface. Built-in Light and Dark are immutable.
 - Resizing panes while viewing 3D should not recreate or blank the preview.
-- Theme changes can affect every surface. Built-in Light and Dark themes are immutable.
-- Original source files must not be changed silently.
+- NVD pagination and typography. Run frontend tests when touching them.
+- NVV path state and undo history. Pen/Direct Select/Transform edits should remain undoable and not unexpectedly switch tools.
+- SVG source assets are not `.nvv`; editing user-owned SVG should require an explicit import or `Edit as NVV` flow later.
 
-## Working Practices
+## Verification
 
-Useful verification commands:
+Expected checks:
 
 ```powershell
 npm run build
@@ -168,31 +258,45 @@ For a live desktop session:
 npm run tauri dev
 ```
 
-The dev app normally uses `http://localhost:5173/`, with Tauri output in `tauri.out.log` and `tauri.err.log` when launched through the existing helper pattern.
+Current helper pattern for restarting the app:
 
-Before finishing a visual feature, inspect the running app. Before finishing a native persistence feature, add or update a Rust regression test.
+```powershell
+Get-Process inventory -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-Sleep -Seconds 2
+Start-Process -FilePath 'npm.cmd' -ArgumentList @('run','tauri','dev') -WorkingDirectory (Get-Location).Path -WindowStyle Hidden
+Start-Sleep -Seconds 10
+Get-Process inventory -ErrorAction SilentlyContinue | Select-Object Id, ProcessName
+```
 
-## Documentation Rules
+Before finishing a visual feature, restart or inspect the running app if possible. Before finishing native persistence work, add or update Rust tests.
 
-- `PROJECT_BRIEF.md` describes what Inventory is.
-- `DESIGN_DRAFT.md` describes the current interface and interaction model.
-- `DECISIONS.md` records durable decisions only.
-- `DIRECTION.md` stores ideas that are not present.
-- `WORK_LOG.md` records major milestones only.
-- Delete implementation diary detail once it no longer helps future work.
+## Git Practice
 
-## Recent Important Context
+Git is available. Commit focused chunks and push when they are useful checkpoints.
 
-The Space Between NVD formatting experiment was removed completely. It should not exist as an active feature in code, schema, styles, tests, or current-capability docs. Do not revive it from memory without a fresh, precise interaction design.
+Useful commands:
 
-The single-editor A4 architecture is complete through its paper-presentation stage. Do not return to one Tiptap instance per page. Measured page starts are projected into the editor as decoration-only spacers that fill the unused previous-page area, both page margins, and the inter-page gap. They must never enter NVD content, selection offsets, or undo history.
+```powershell
+git status --short --branch
+git diff
+git add <files>
+git commit -m "Clear message"
+git push
+```
 
-A responsive multi-page A4 spread is parked in `DIRECTION.md`. It cannot be implemented by merely placing paper sheets in a grid: the current single editable DOM stream is vertically paginated, and page text, caret geometry, selection, and keyboard order must all move together.
+Avoid destructive git commands unless explicitly requested.
 
-Large-document hardening is in place. Pagination results use a bounded shared cache, page decorations reuse their `DecorationSet` across selection-only transactions, and sorted page offsets are projected into ProseMirror positions in one document pass. Keep `npm test` covering the generated 100-page regression when changing pagination or editor offsets.
+## Good Next Threads
+
+If starting fresh after context loss, good ways to continue are:
+
+- Keep developing Draw: selection polish, transform behavior, shape tools, stroke/fill inspector, layers, SVG export/import.
+- Harden `.nvv` persistence with more Rust/frontend tests.
+- Start a separate `inventory-site` repo for a lightweight website and documentation, while keeping this app repo focused on the desktop product.
+- Continue extracting behavior from `App.tsx` into feature modules.
 
 ## My Judgment
 
-The project is healthy enough for feature expansion, but the safest pattern is to let each new editor or major surface own its behavior in a feature folder. `App.tsx` should increasingly coordinate rather than implement.
+The project is healthy and has a strong identity. The safest pattern is to keep building small, useful native-editor capabilities that can later connect to each other.
 
-The most valuable quality in Inventory is not the number of features. It is the feeling that many different files can live together in one calm, coherent place. Protect that.
+The most valuable quality in Inventory is not feature count. It is the feeling that many different creative files can live together in one calm, coherent place while still belonging to the user.
