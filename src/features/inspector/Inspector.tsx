@@ -321,6 +321,8 @@ function NvvSvgPreview({ document }: { document: NvvDocument }) {
 }
 
 function NvvCanvasSettings({ document, onChange }: { document: NvvDocument; onChange: (document: NvvDocument) => void }) {
+  const [isOpen, setIsOpen] = useState(true);
+
   function updateDimension(dimension: "canvasWidth" | "canvasHeight", value: number) {
     if (!Number.isFinite(value)) {
       return;
@@ -331,33 +333,43 @@ function NvvCanvasSettings({ document, onChange }: { document: NvvDocument; onCh
 
   return (
     <section className="mt-4">
-      <div className="section-label">Canvas</div>
-      <div className="mt-2 grid gap-2">
-        <label className="nvv-canvas-field">
-          <span>Width</span>
-          <div>
-            <input
-              min="1"
-              type="number"
-              value={document.canvasWidth}
-              onChange={(event) => updateDimension("canvasWidth", event.currentTarget.valueAsNumber)}
-            />
-            <span>px</span>
-          </div>
-        </label>
-        <label className="nvv-canvas-field">
-          <span>Height</span>
-          <div>
-            <input
-              min="1"
-              type="number"
-              value={document.canvasHeight}
-              onChange={(event) => updateDimension("canvasHeight", event.currentTarget.valueAsNumber)}
-            />
-            <span>px</span>
-          </div>
-        </label>
-      </div>
+      <button
+        aria-expanded={isOpen}
+        className="model-section-toggle"
+        type="button"
+        onClick={() => setIsOpen((open) => !open)}
+      >
+        {isOpen ? <ChevronDown size={13} aria-hidden="true" /> : <ChevronRight size={13} aria-hidden="true" />}
+        <span>Canvas</span>
+      </button>
+      {isOpen ? (
+        <div className="mt-1 grid grid-cols-2 gap-2">
+          <label className="nvv-canvas-field">
+            <span>Width</span>
+            <div>
+              <input
+                min="1"
+                type="number"
+                value={document.canvasWidth}
+                onChange={(event) => updateDimension("canvasWidth", event.currentTarget.valueAsNumber)}
+              />
+              <span>px</span>
+            </div>
+          </label>
+          <label className="nvv-canvas-field">
+            <span>Height</span>
+            <div>
+              <input
+                min="1"
+                type="number"
+                value={document.canvasHeight}
+                onChange={(event) => updateDimension("canvasHeight", event.currentTarget.valueAsNumber)}
+              />
+              <span>px</span>
+            </div>
+          </label>
+        </div>
+      ) : null}
     </section>
   );
 }
