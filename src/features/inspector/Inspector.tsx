@@ -423,8 +423,8 @@ function NvvCanvasNumberInput({
         }}
       />
       <span
-        className="paragraph-setting-suffix"
-        style={{ left: `calc(0.5rem + ${Math.max(draft.length, 1)}ch + 6px)` }}
+        className="paragraph-setting-suffix normal-case"
+        style={{ left: `calc(0.5rem + ${Math.max(draft.length, 1)}ch + 8px)` }}
         aria-hidden="true"
       >
         px
