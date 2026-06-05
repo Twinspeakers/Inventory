@@ -289,16 +289,8 @@ textarea {
     @apply grid min-w-0 gap-1 text-[10px] font-semibold uppercase text-muted;
   }
 
-  .nvv-canvas-field > div {
-    @apply flex h-7 min-w-0 items-center overflow-hidden rounded-sm border border-line bg-canvas focus-within:border-steel;
-  }
-
-  .nvv-canvas-field input {
-    @apply min-w-0 flex-1 bg-transparent px-1.5 text-xs font-normal text-ink outline-none;
-  }
-
-  .nvv-canvas-field div span {
-    @apply pr-1.5 text-[10px] font-normal normal-case text-muted;
+  .nvv-canvas-number-input {
+    @apply bg-canvas;
   }
 
   .nvv-svg-preview-refresh {
