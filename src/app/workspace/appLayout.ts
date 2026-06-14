@@ -9,8 +9,8 @@ import {
   type DetailsColumnKey,
   type DetailsColumnWidths,
   type SortDirection,
-} from "./features/assetShelf";
-import type { ModelTransform } from "./sceneReaders/threeModelReader";
+} from "../../features/assetShelf";
+import type { ModelTransform } from "../../sceneReaders/threeModelReader";
 
 export const DEFAULT_LEFT_PANE_WIDTH = 310;
 export const MIN_LEFT_PANE_WIDTH = 220;
@@ -296,3 +296,4 @@ export function isAssetSortKey(value: string | null): value is AssetSortKey {
 export function isAssetViewMode(value: string | null): value is AssetViewMode {
   return value === "extra-large" || value === "large" || value === "medium" || value === "details";
 }
+
