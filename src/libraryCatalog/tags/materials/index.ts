@@ -1,0 +1,1 @@
+export { materialTags } from "./materials";

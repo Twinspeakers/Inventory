@@ -1,0 +1,1 @@
+export { objectTags } from "./objects";

@@ -16,15 +16,17 @@ import {
   libraryNodeIgnoredMatchTerms,
   libraryNodeTemplates,
   libraryTagDefinitions,
+  libraryTagSourceSections,
   normalizeLibraryMatchText,
   normalizeLibraryNodeTagValues,
   normalizedTextIncludesTerm,
-  parseLibraryNodeTags,
   type LibraryNodeFileType,
   type LibraryNodeMatchField,
   type LibraryNodeMatchRule,
   type LibraryNodeTemplate,
   type LibraryTagDefinition,
+  type LibraryTagSourceFolder,
+  type LibraryTagSourceSection,
 } from "./libraryCatalog";
 import {
   AssetShelf,
@@ -32,9 +34,6 @@ import {
   MIN_ASSET_SHELF_HEIGHT,
   MIN_PREVIEW_STAGE_HEIGHT,
   defaultDetailsColumnWidths,
-  detailsColumnKeys,
-  detailsColumnMaxWidths,
-  detailsColumnMinWidths,
   type AssetSortKey,
   type AssetViewMode,
   type DetailsColumnKey,
@@ -42,6 +41,53 @@ import {
   type LibraryView,
   type SortDirection,
 } from "./features/assetShelf";
+import {
+  COLLAPSED_SIDE_PANE_WIDTH,
+  DEFAULT_LEFT_PANE_WIDTH,
+  DEFAULT_RIGHT_PANE_WIDTH,
+  DEFAULT_SOURCE_SECTION_HEIGHT,
+  MAX_LEFT_PANE_WIDTH,
+  MAX_RIGHT_PANE_WIDTH,
+  MAX_SOURCE_SECTION_HEIGHT,
+  MIN_LEFT_PANE_WIDTH,
+  MIN_MAIN_PANE_WIDTH,
+  MIN_RIGHT_PANE_WIDTH,
+  MIN_SOURCE_SECTION_HEIGHT,
+  assetShelfStorageKeys,
+  clamp,
+  defaultTreeOpenNodeIds,
+  getWorkspaceGridWidth,
+  isAssetSortKey,
+  isAssetViewMode,
+  isLayoutResizeInProgress,
+  isPrimaryPointer,
+  layoutResizeEndEvent,
+  layoutStorageKeys,
+  normalizeDetailsColumnWidths,
+  normalizeModelTransformOverrides,
+  projectStorageKeys,
+  readStoredAssetSortKey,
+  readStoredAssetViewMode,
+  readStoredBoolean,
+  readStoredDetailsColumnWidths,
+  readStoredNumber,
+  readStoredOptionalNumber,
+  readStoredSortDirection,
+  readStoredString,
+  readStoredStringSet,
+  removeStoredNumber,
+  removeStoredString,
+  storeNumber,
+  storeString,
+  storeStringSet,
+} from "./appLayout";
+import {
+  LibraryNodeContextMenu,
+  SourceFolderContextMenu,
+  type LibraryNodeContextMenuState,
+  type SourceFolderContextMenuState,
+} from "./ContextMenus";
+import { MenuBar } from "./MenuBar";
 import {
   toActiveInventory,
   type ActiveInventory,
@@ -121,7 +167,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Database,
   FileAudio,
   FileImage,
   FileText,
@@ -130,15 +175,10 @@ import {
   FolderPlus,
   FolderSearch,
   ListTree,
-  Pencil,
+  Maximize2,
+  Minimize2,
   Plus,
-  RefreshCw,
-  Redo2,
-  Save,
   Search,
-  Settings,
-  Trash2,
-  Undo2,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -273,24 +313,6 @@ type LibraryNodeRule = {
   value: string;
 };
 
-type LibraryNodeContextMenuState = {
-  x: number;
-  y: number;
-  assetId?: number;
-  folderId?: string | null;
-  isInventoryDocument?: boolean;
-  label: string;
-  target: "asset" | "folder";
-};
-
-type SourceFolderContextMenuState = {
-  x: number;
-  y: number;
-  sourceId: string;
-  label: string;
-  path: string;
-};
-
 type AddLibraryNodePanelState = {
   initialQuery: string;
   parentFolderId: string | null;
@@ -303,6 +325,11 @@ type AddLibraryNodeDraft = {
   rules: LibraryNodeRule[];
   tags: string[];
   templateId: string | null;
+};
+
+type AddLibraryNodeParentOption = {
+  id: string | null;
+  label: string;
 };
 
 type AddFolderSuggestion = {
@@ -337,8 +364,6 @@ const defaultTopLevelLibraryNodeTemplateIds: Record<AssetType, string> = {
   Document: "documents",
   Archive: "archives",
 };
-
-const menuItems = ["Library", "Asset", "Board", "Window", "Help"];
 
 const typeIcons: Record<AssetType, LucideIcon> = {
   Image: FileImage,
@@ -605,45 +630,11 @@ const audioNonSoundEffectTerms = [
 const likelySoundEffectAudioExtensions = new Set(["aif", "aiff", "flac", "ogg", "wav"]);
 const libraryTagDefinitionsByKey = createLibraryTagDefinitionLookup(libraryTagDefinitions);
 
-const DEFAULT_LEFT_PANE_WIDTH = 310;
-const MIN_LEFT_PANE_WIDTH = 220;
-const MAX_LEFT_PANE_WIDTH = 560;
-const DEFAULT_RIGHT_PANE_WIDTH = 360;
-const MIN_RIGHT_PANE_WIDTH = 260;
-const MAX_RIGHT_PANE_WIDTH = 560;
-const COLLAPSED_SIDE_PANE_WIDTH = 40;
-const MIN_MAIN_PANE_WIDTH = 520;
-const DEFAULT_SOURCE_SECTION_HEIGHT = 170;
-const MIN_SOURCE_SECTION_HEIGHT = 96;
-const MAX_SOURCE_SECTION_HEIGHT = 320;
 const modelPolyTagThresholds = {
   low: 5_000,
   high: 50_000,
   veryHigh: 250_000,
 };
-
-const layoutStorageKeys = {
-  leftPaneWidth: "inventory.layout.leftPaneWidth",
-  leftPaneCollapsed: "inventory.layout.leftPaneCollapsed",
-  rightPaneWidth: "inventory.layout.rightPaneWidth",
-  rightPaneCollapsed: "inventory.layout.rightPaneCollapsed",
-  assetShelfHeight: "inventory.layout.assetShelfHeight",
-  assetShelfCollapsed: "inventory.layout.assetShelfCollapsed",
-  sourceSectionCollapsed: "inventory.layout.sourceSectionCollapsed",
-  sourceSectionHeight: "inventory.layout.sourceSectionHeight",
-  treeOpenNodeIds: "inventory.layout.treeOpenNodeIds",
-};
-const assetShelfStorageKeys = {
-  detailsColumnWidths: "inventory.assetShelf.detailsColumnWidths",
-  sortDirection: "inventory.assetShelf.sortDirection",
-  sortKey: "inventory.assetShelf.sortKey",
-  viewMode: "inventory.assetShelf.viewMode",
-};
-const projectStorageKeys = {
-  activeInventoryManifestPath: "inventory.project.activeInventoryManifestPath",
-};
-const layoutResizeEndEvent = "inventory:layout-resize-end";
-const defaultTreeOpenNodeIds = new Set(["library", "inventory-files", "inventory-documents", "inventory-vectors"]);
 
 export function App() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
@@ -705,6 +696,7 @@ export function App() {
   const [themeName, setThemeName] = useState(() => readStoredThemeName());
   const [themeEditorLayout, setThemeEditorLayout] = useState<ThemeEditorLayout>(() => readStoredThemeEditorLayout());
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
   const [libraryNodeContextMenu, setLibraryNodeContextMenu] = useState<LibraryNodeContextMenuState | null>(null);
   const [sourceFolderContextMenu, setSourceFolderContextMenu] = useState<SourceFolderContextMenuState | null>(null);
   const [addLibraryNodePanel, setAddLibraryNodePanel] = useState<AddLibraryNodePanelState | null>(null);
@@ -762,7 +754,6 @@ export function App() {
   );
   const sourceSummary = useMemo(() => getSourceSummary(sourceFolders), [sourceFolders]);
   const activeFolder = selectedFolderId ? findFolder(virtualFolders, selectedFolderId) : null;
-  const addLibraryNodeParentFolder = addLibraryNodePanel?.parentFolderId ? findFolder(virtualFolders, addLibraryNodePanel.parentFolderId) : null;
   const assetTagSuggestions = useMemo(() => getAssetTagSuggestions(masterLibraryAssets, virtualFolders), [masterLibraryAssets, virtualFolders]);
   const visibleAssets = useMemo(
     () => filterAssets(activeView, assets, selectedFolderId, virtualFolders, inventoryDocumentPaths),
@@ -2045,7 +2036,7 @@ export function App() {
     });
   }
 
-  function addLibraryNodeFromDraft(draft: AddLibraryNodeDraft) {
+  function addLibraryNodeFromDraft(draft: AddLibraryNodeDraft, parentFolderId: string | null) {
     if (!addLibraryNodePanel) {
       return;
     }
@@ -2059,8 +2050,15 @@ export function App() {
 
     const folder = createVirtualFolderFromDraft({ ...draft, name: trimmedName });
     const matchedAssetCount = getAssetsForLibraryNode(folder, masterLibraryAssets).length;
-    const parentFolderId = addLibraryNodePanel.parentFolderId;
+    const parentFolder = parentFolderId ? findFolder(virtualFolders, parentFolderId) : null;
+
+    if (parentFolderId && !parentFolder) {
+      setStatusMessage("That parent folder no longer exists.");
+      return;
+    }
+
     const parentPath = parentFolderId ? findFolderPath(virtualFolders, parentFolderId) ?? [] : [];
+    const parentLabel = parentFolder?.name ?? "Master Library";
 
     setVirtualFolders((folders) =>
       parentFolderId
@@ -2072,7 +2070,7 @@ export function App() {
     setActiveView("all");
     setAddLibraryNodePanel(null);
     setStatusMessage(
-      `Added folder "${folder.name}" under "${addLibraryNodePanel.parentLabel}". ${
+      `Added folder "${folder.name}" under "${parentLabel}". ${
         matchedAssetCount > 0
           ? `${matchedAssetCount} loaded asset${matchedAssetCount === 1 ? "" : "s"} currently match its rules.`
           : "No loaded assets match its rules yet."
@@ -3083,6 +3081,7 @@ export function App() {
             paneView={leftPaneView}
             nodes={structure}
             onCreateFolder={createFolder}
+            onOpenTagBrowser={() => setIsTagBrowserOpen(true)}
             onPaneViewChange={changeLeftPaneView}
             onNavigateNvdBlock={navigateToNvdBlock}
             onResizeStart={startLeftPaneResize}
@@ -3365,206 +3364,22 @@ export function App() {
       {addLibraryNodePanel ? (
         <AddLibraryNodePanel
           assets={masterLibraryAssets}
+          folders={virtualFolders}
           panel={addLibraryNodePanel}
-          parentFolder={addLibraryNodeParentFolder}
           templates={libraryNodeTemplates}
           onClose={() => setAddLibraryNodePanel(null)}
           onCreate={addLibraryNodeFromDraft}
         />
       ) : null}
+      {isTagBrowserOpen ? (
+        <TagLibraryBrowser
+          sections={libraryTagSourceSections}
+          tags={libraryTagDefinitions}
+          onClose={() => setIsTagBrowserOpen(false)}
+        />
+      ) : null}
     </main>
   );
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function readStoredNumber(key: string, fallback: number, min: number, max: number) {
-  if (typeof window === "undefined") {
-    return fallback;
-  }
-
-  try {
-    const storedValue = window.localStorage.getItem(key);
-
-    if (storedValue === null) {
-      return fallback;
-    }
-
-    const value = Number(storedValue);
-    return Number.isFinite(value) ? clamp(value, min, max) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function readStoredOptionalNumber(key: string, min: number) {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const storedValue = window.localStorage.getItem(key);
-
-    if (!storedValue) {
-      return null;
-    }
-
-    const value = Number(storedValue);
-    return Number.isFinite(value) ? Math.max(value, min) : null;
-  } catch {
-    return null;
-  }
-}
-
-function readStoredBoolean(key: string, fallback: boolean) {
-  if (typeof window === "undefined") {
-    return fallback;
-  }
-
-  const value = window.localStorage.getItem(key);
-
-  if (value === "true") {
-    return true;
-  }
-
-  if (value === "false") {
-    return false;
-  }
-
-  return fallback;
-}
-
-function storeNumber(key: string, value: number) {
-  try {
-    window.localStorage.setItem(key, String(Math.round(value)));
-  } catch {
-    // Layout persistence is a convenience; the app should keep working without it.
-  }
-}
-
-function removeStoredNumber(key: string) {
-  try {
-    window.localStorage.removeItem(key);
-  } catch {
-    // Layout persistence is a convenience; the app should keep working without it.
-  }
-}
-
-function isPrimaryPointer(event: ReactPointerEvent<HTMLElement>) {
-  return event.isPrimary && (event.pointerType !== "mouse" || event.button === 0);
-}
-
-function getWorkspaceGridWidth(element: HTMLDivElement | null) {
-  return element?.getBoundingClientRect().width ?? window.innerWidth;
-}
-
-function isLayoutResizeInProgress() {
-  return document.body.classList.contains("is-resizing-pane") || document.body.classList.contains("is-resizing-row");
-}
-
-function readStoredAssetSortKey(): AssetSortKey {
-  if (typeof window === "undefined") {
-    return "name";
-  }
-
-  const value = window.localStorage.getItem(assetShelfStorageKeys.sortKey);
-  return isAssetSortKey(value) ? value : "name";
-}
-
-function readStoredSortDirection(): SortDirection {
-  if (typeof window === "undefined") {
-    return "asc";
-  }
-
-  return window.localStorage.getItem(assetShelfStorageKeys.sortDirection) === "desc" ? "desc" : "asc";
-}
-
-function readStoredAssetViewMode(): AssetViewMode {
-  if (typeof window === "undefined") {
-    return "medium";
-  }
-
-  const value = window.localStorage.getItem(assetShelfStorageKeys.viewMode);
-  return isAssetViewMode(value) ? value : "medium";
-}
-
-function readStoredDetailsColumnWidths(): DetailsColumnWidths {
-  if (typeof window === "undefined") {
-    return defaultDetailsColumnWidths;
-  }
-
-  try {
-    const rawWidths = JSON.parse(window.localStorage.getItem(assetShelfStorageKeys.detailsColumnWidths) ?? "{}");
-    return normalizeDetailsColumnWidths(rawWidths);
-  } catch {
-    return defaultDetailsColumnWidths;
-  }
-}
-
-function normalizeDetailsColumnWidths(value: unknown): DetailsColumnWidths {
-  if (!value || typeof value !== "object") {
-    return defaultDetailsColumnWidths;
-  }
-
-  return detailsColumnKeys.reduce<DetailsColumnWidths>((widths, columnKey) => {
-    const rawWidth = (value as Partial<Record<DetailsColumnKey, unknown>>)[columnKey];
-    const width = typeof rawWidth === "number" && Number.isFinite(rawWidth) ? rawWidth : defaultDetailsColumnWidths[columnKey];
-    widths[columnKey] = clamp(width, detailsColumnMinWidths[columnKey], detailsColumnMaxWidths[columnKey]);
-    return widths;
-  }, { ...defaultDetailsColumnWidths });
-}
-
-function normalizeModelTransformOverrides(value: unknown): Record<string, ModelTransform> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.entries(value).reduce<Record<string, ModelTransform>>((overrides, [key, rawTransform]) => {
-    const transform = normalizeModelTransform(rawTransform);
-
-    if (transform) {
-      overrides[key] = transform;
-    }
-
-    return overrides;
-  }, {});
-}
-
-function normalizeModelTransform(value: unknown): ModelTransform | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-
-  const transform = value as Partial<Record<keyof ModelTransform, unknown>>;
-  const position = normalizeModelVector3(transform.position);
-  const rotation = normalizeModelVector3(transform.rotation);
-  const scale = normalizeModelVector3(transform.scale);
-
-  return position && rotation && scale ? { position, rotation, scale } : null;
-}
-
-function normalizeModelVector3(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-
-  const vector = value as Partial<Record<"x" | "y" | "z", unknown>>;
-
-  if (![vector.x, vector.y, vector.z].every((axis) => typeof axis === "number" && Number.isFinite(axis))) {
-    return null;
-  }
-
-  return { x: vector.x as number, y: vector.y as number, z: vector.z as number };
-}
-
-function isAssetSortKey(value: string | null): value is AssetSortKey {
-  return value === "name" || value === "type" || value === "modified" || value === "size";
-}
-
-function isAssetViewMode(value: string | null): value is AssetViewMode {
-  return value === "extra-large" || value === "large" || value === "medium" || value === "details";
 }
 
 function isLibraryView(value: string | null | undefined): value is LibraryView {
@@ -3678,410 +3493,31 @@ function isEditableEventTarget(target: EventTarget | null) {
   );
 }
 
-function storeString(key: string, value: string) {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    // Theme persistence is a convenience; the live app can continue without it.
-  }
-}
-
-function readStoredString(key: string) {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function removeStoredString(key: string) {
-  try {
-    window.localStorage.removeItem(key);
-  } catch {
-    // Persistence is a convenience; the live app can continue without it.
-  }
-}
-
-function readStoredStringSet(key: string, fallback: Set<string>) {
-  if (typeof window === "undefined") {
-    return new Set(fallback);
-  }
-
-  try {
-    const storedValue = window.localStorage.getItem(key);
-
-    if (!storedValue) {
-      return new Set(fallback);
-    }
-
-    const parsedValue = JSON.parse(storedValue);
-
-    if (!Array.isArray(parsedValue)) {
-      return new Set(fallback);
-    }
-
-    return new Set(parsedValue.filter((value): value is string => typeof value === "string"));
-  } catch {
-    return new Set(fallback);
-  }
-}
-
-function storeStringSet(key: string, values: Set<string>) {
-  storeString(key, JSON.stringify([...values]));
-}
-
-function MenuBar({
-  activeInventoryName,
-  canOpenFolder,
-  canRedo,
-  canSaveFile,
-  canUndo,
-  onCloseInventory,
-  onNewInventory,
-  onNewNvdDocument,
-  onNewNvvDocument,
-  onOpenFolder,
-  onOpenInventory,
-  onOpenSettings,
-  onRedo,
-  onSaveFile,
-  onUndo,
-  redoLabel,
-  undoLabel,
-}: {
-  activeInventoryName: string | null;
-  canOpenFolder: boolean;
-  canRedo: boolean;
-  canSaveFile: boolean;
-  canUndo: boolean;
-  onCloseInventory: () => void;
-  onNewInventory: () => void;
-  onNewNvdDocument: () => void;
-  onNewNvvDocument: () => void;
-  onOpenFolder: () => void;
-  onOpenInventory: () => void;
-  onOpenSettings: () => void;
-  onRedo: () => void;
-  onSaveFile: () => void;
-  onUndo: () => void;
-  redoLabel: string;
-  undoLabel: string;
-}) {
-  const [openMenu, setOpenMenu] = useState<"edit" | "file" | "view" | null>(null);
-
-  function handleNewInventory() {
-    setOpenMenu(null);
-    onNewInventory();
-  }
-
-  function handleNewNvdDocument() {
-    setOpenMenu(null);
-    onNewNvdDocument();
-  }
-
-  function handleNewNvvDocument() {
-    setOpenMenu(null);
-    onNewNvvDocument();
-  }
-
-  function handleOpenInventory() {
-    setOpenMenu(null);
-    onOpenInventory();
-  }
-
-  function handleCloseInventory() {
-    setOpenMenu(null);
-    onCloseInventory();
-  }
-
-  function handleOpenFolder() {
-    setOpenMenu(null);
-    onOpenFolder();
-  }
-
-  function handleSaveFile() {
-    setOpenMenu(null);
-    onSaveFile();
-  }
-
-  function handleOpenSettings() {
-    setOpenMenu(null);
-    onOpenSettings();
-  }
-
-  function handleUndo() {
-    setOpenMenu(null);
-    onUndo();
-  }
-
-  function handleRedo() {
-    setOpenMenu(null);
-    onRedo();
-  }
-
-  return (
-    <header className="relative flex h-8 shrink-0 items-center justify-between border-b border-line bg-graphite pl-0 pr-3 text-sm text-ink">
-      <div className="flex h-full items-center gap-3">
-        <nav className="flex h-full items-center">
-          <div className="relative flex h-full">
-            <button className={`menu-item ${openMenu === "file" ? "menu-item-active" : ""}`} onClick={() => setOpenMenu((menu) => (menu === "file" ? null : "file"))}>
-              File
-            </button>
-            {openMenu === "file" ? (
-              <div className="file-menu">
-                <button className="file-menu-item" onClick={handleNewInventory}>
-                  <Plus size={14} aria-hidden="true" />
-                  <span>New Inventory...</span>
-                </button>
-                <button className="file-menu-item" disabled={!activeInventoryName} onClick={handleNewNvdDocument}>
-                  <FileText size={14} aria-hidden="true" />
-                  <span>New NVD Document...</span>
-                </button>
-                <button className="file-menu-item" disabled={!activeInventoryName} onClick={handleNewNvvDocument}>
-                  <FileImage size={14} aria-hidden="true" />
-                  <span>New NVV Vector...</span>
-                </button>
-                <button className="file-menu-item" onClick={handleOpenInventory}>
-                  <Database size={14} aria-hidden="true" />
-                  <span>Open Inventory...</span>
-                </button>
-                <button className="file-menu-item" disabled={!activeInventoryName} onClick={handleCloseInventory}>
-                  <X size={14} aria-hidden="true" />
-                  <span>Close Inventory</span>
-                </button>
-                <div className="my-1 border-t border-line" />
-                <button className="file-menu-item" disabled={!canSaveFile} onClick={handleSaveFile}>
-                  <Save size={14} aria-hidden="true" />
-                  <span>Save File</span>
-                  <span className="ml-auto text-[11px] text-muted">Ctrl+S</span>
-                </button>
-                <div className="my-1 border-t border-line" />
-                <button className="file-menu-item" disabled={!canOpenFolder} onClick={handleOpenFolder}>
-                  <FolderOpen size={14} aria-hidden="true" />
-                  <span>Add Source Folder...</span>
-                </button>
-                <button className="file-menu-item" disabled>
-                  <RefreshCw size={14} aria-hidden="true" />
-                  <span>Rescan Source Folder</span>
-                </button>
-              </div>
-            ) : null}
-          </div>
-          <div className="relative flex h-full">
-            <button className={`menu-item ${openMenu === "edit" ? "menu-item-active" : ""}`} onClick={() => setOpenMenu((menu) => (menu === "edit" ? null : "edit"))}>
-              Edit
-            </button>
-            {openMenu === "edit" ? (
-              <div className="file-menu">
-                <button className="file-menu-item" disabled={!canUndo} onClick={handleUndo}>
-                  <Undo2 size={14} aria-hidden="true" />
-                  <span>{undoLabel}</span>
-                  <span className="ml-auto text-[11px] text-muted">Ctrl+Z</span>
-                </button>
-                <button className="file-menu-item" disabled={!canRedo} onClick={handleRedo}>
-                  <Redo2 size={14} aria-hidden="true" />
-                  <span>{redoLabel}</span>
-                  <span className="ml-auto text-[11px] text-muted">Ctrl+Y</span>
-                </button>
-              </div>
-            ) : null}
-          </div>
-          <div className="relative flex h-full">
-            <button className={`menu-item ${openMenu === "view" ? "menu-item-active" : ""}`} onClick={() => setOpenMenu((menu) => (menu === "view" ? null : "view"))}>
-              View
-            </button>
-            {openMenu === "view" ? (
-              <div className="file-menu">
-                <button className="file-menu-item" onClick={handleOpenSettings}>
-                  <Settings size={14} aria-hidden="true" />
-                  <span>Settings</span>
-                </button>
-              </div>
-            ) : null}
-          </div>
-          {menuItems.map((item) => (
-            <button className="menu-item" key={item}>
-              {item}
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      <div className="flex items-center gap-3 text-xs text-muted">
-        <span className={`inventory-status-pill ${activeInventoryName ? "inventory-status-pill-open" : ""}`}>
-          <span className="inventory-status-light" aria-hidden="true" />
-          <span>{activeInventoryName ? `Inventory / ${activeInventoryName}` : "No Inventory Open"}</span>
-        </span>
-      </div>
-    </header>
-  );
-}
-
-function LibraryNodeContextMenu({
-  menu,
-  onAddChild,
-  onDelete,
-  onRename,
-  onClose,
-}: {
-  menu: LibraryNodeContextMenuState;
-  onAddChild: () => void;
-  onDelete: () => void;
-  onRename: () => void;
-  onClose: () => void;
-}) {
-  const left = typeof window === "undefined" ? menu.x : Math.min(menu.x, window.innerWidth - 220);
-  const menuHeight = menu.target === "folder" && menu.folderId ? 160 : menu.isInventoryDocument ? 136 : 96;
-  const top = typeof window === "undefined" ? menu.y : Math.min(menu.y, window.innerHeight - menuHeight);
-
-  useEffect(() => {
-    function handleClose() {
-      onClose();
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    }
-
-    window.addEventListener("click", handleClose);
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("click", handleClose);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onClose]);
-
-  return (
-    <div
-      className="library-context-menu"
-      style={{ left, top }}
-      onClick={(event) => event.stopPropagation()}
-      onContextMenu={(event) => event.preventDefault()}
-    >
-      <div className="border-b border-line px-3 py-2 text-[11px] font-semibold uppercase text-muted">
-        {menu.label}
-      </div>
-      {menu.target === "folder" ? (
-        <>
-          <button className="library-context-menu-item" type="button" onClick={onAddChild}>
-            <Plus size={14} aria-hidden="true" />
-            <span>Add Child Node</span>
-          </button>
-          {menu.folderId ? (
-            <>
-              <button className="library-context-menu-item" type="button" onClick={onRename}>
-                <Pencil size={14} aria-hidden="true" />
-                <span>Rename</span>
-              </button>
-              <button className="library-context-menu-item library-context-menu-item-danger" type="button" onClick={onDelete}>
-                <Trash2 size={14} aria-hidden="true" />
-                <span>Delete</span>
-              </button>
-            </>
-          ) : null}
-        </>
-      ) : (
-        <>
-          <button className="library-context-menu-item" type="button" onClick={onRename}>
-            <Pencil size={14} aria-hidden="true" />
-            <span>{menu.isInventoryDocument ? "Rename Document..." : "Rename in Inventory"}</span>
-          </button>
-          {menu.isInventoryDocument ? (
-            <button className="library-context-menu-item library-context-menu-item-danger" type="button" onClick={onDelete}>
-              <Trash2 size={14} aria-hidden="true" />
-              <span>Delete Document</span>
-            </button>
-          ) : null}
-        </>
-      )}
-    </div>
-  );
-}
-
-function SourceFolderContextMenu({
-  menu,
-  onClose,
-  onRefresh,
-  onRemove,
-}: {
-  menu: SourceFolderContextMenuState;
-  onClose: () => void;
-  onRefresh: () => void;
-  onRemove: () => void;
-}) {
-  const left = typeof window === "undefined" ? menu.x : Math.min(menu.x, window.innerWidth - 220);
-  const top = typeof window === "undefined" ? menu.y : Math.min(menu.y, window.innerHeight - 128);
-
-  useEffect(() => {
-    function handleClose() {
-      onClose();
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    }
-
-    window.addEventListener("click", handleClose);
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("click", handleClose);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onClose]);
-
-  return (
-    <div
-      className="library-context-menu"
-      style={{ left, top }}
-      onClick={(event) => event.stopPropagation()}
-      onContextMenu={(event) => event.preventDefault()}
-    >
-      <div className="border-b border-line px-3 py-2 text-[11px] font-semibold uppercase text-muted" title={menu.path}>
-        {menu.label}
-      </div>
-      <button className="library-context-menu-item" type="button" onClick={onRefresh}>
-        <RefreshCw size={14} aria-hidden="true" />
-        <span>Refresh</span>
-      </button>
-      <button className="library-context-menu-item library-context-menu-item-danger" type="button" onClick={onRemove}>
-        <Trash2 size={14} aria-hidden="true" />
-        <span>Remove</span>
-      </button>
-    </div>
-  );
-}
-
 function AddLibraryNodePanel({
   assets,
+  folders,
   panel,
-  parentFolder,
   templates,
   onClose,
   onCreate,
 }: {
   assets: Asset[];
+  folders: VirtualFolder[];
   panel: AddLibraryNodePanelState;
-  parentFolder: VirtualFolder | null;
   templates: LibraryNodeTemplate[];
   onClose: () => void;
-  onCreate: (draft: AddLibraryNodeDraft) => void;
+  onCreate: (draft: AddLibraryNodeDraft, parentFolderId: string | null) => void;
 }) {
-  const parentTemplate = useMemo(() => getLibraryNodeTemplateForSuggestionParent(parentFolder, templates), [parentFolder, templates]);
+  const parentOptions = useMemo(() => getAddLibraryNodeParentOptions(folders), [folders]);
+  const [selectedParentFolderId, setSelectedParentFolderId] = useState<string | null>(panel.parentFolderId);
+  const selectedParentFolder = selectedParentFolderId ? findFolder(folders, selectedParentFolderId) : null;
+  const selectedParentLabel = selectedParentFolder?.name ?? "Master Library";
+  const parentTemplate = useMemo(() => getLibraryNodeTemplateForSuggestionParent(selectedParentFolder, templates), [selectedParentFolder, templates]);
   const inheritedFileTypes = useMemo(() => getInheritedSuggestionFileTypes(parentTemplate), [parentTemplate]);
   const [folderName, setFolderName] = useState(panel.initialQuery);
   const [selectedTemplate, setSelectedTemplate] = useState<LibraryNodeTemplate | null>(null);
   const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
   const [selectedFileTypes, setSelectedFileTypes] = useState<LibraryNodeFileType[]>(() => inheritedFileTypes);
-  const [tagsEdited, setTagsEdited] = useState(false);
-  const [tagsText, setTagsText] = useState(() => getDefaultLibraryNodeTagsForName(panel.initialQuery).join(", "));
   const panelRef = useRef<HTMLElement | null>(null);
   const panelDragRef = useRef<{
     height: number;
@@ -4091,13 +3527,16 @@ function AddLibraryNodePanel({
     width: number;
   } | null>(null);
   const [panelPosition, setPanelPosition] = useState<{ x: number; y: number } | null>(null);
-  const suggestions = useMemo(() => getAddFolderSuggestions(templates, parentFolder, folderName), [folderName, parentFolder, templates]);
+  const suggestions = useMemo(() => getAddFolderSuggestions(templates, selectedParentFolder, folderName), [folderName, selectedParentFolder, templates]);
   const selectedSuggestion = selectedSuggestionId ? suggestions.find((suggestion) => suggestion.id === selectedSuggestionId) ?? null : null;
   const draftName = folderName.trim() || selectedTemplate?.name || "New Folder";
-  const matchingTags = useMemo(() => parseLibraryNodeTags(tagsText), [tagsText]);
+  const draftTags = useMemo(
+    () => selectedSuggestion?.tags ?? getDefaultLibraryNodeTagsForName(draftName),
+    [draftName, selectedSuggestion],
+  );
   const draft = useMemo(
-    () => createLibraryNodeDraft(selectedTemplate ?? customLibraryNodeTemplate, draftName, matchingTags, selectedFileTypes),
-    [draftName, matchingTags, selectedFileTypes, selectedTemplate],
+    () => createLibraryNodeDraft(selectedTemplate ?? customLibraryNodeTemplate, draftName, draftTags, selectedFileTypes),
+    [draftName, draftTags, selectedFileTypes, selectedTemplate],
   );
   const previewAssets = useMemo(() => getAssetsForLibraryNode(createVirtualFolderFromDraft(draft), assets), [assets, draft]);
   const previewExamples = previewAssets.slice(0, 5);
@@ -4116,6 +3555,15 @@ function AddLibraryNodePanel({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
+  useEffect(() => {
+    if (selectedParentFolderId && !findFolder(folders, selectedParentFolderId)) {
+      setSelectedParentFolderId(null);
+      setSelectedSuggestionId(null);
+      setSelectedTemplate(null);
+      setSelectedFileTypes(getInheritedSuggestionFileTypes(getLibraryNodeTemplateForSuggestionParent(null, templates)));
+    }
+  }, [folders, selectedParentFolderId, templates]);
+
   function updateFolderName(value: string) {
     const hadSuggestion = Boolean(selectedSuggestionId);
 
@@ -4126,10 +3574,17 @@ function AddLibraryNodePanel({
       setSelectedTemplate(null);
       setSelectedFileTypes(inheritedFileTypes);
     }
+  }
 
-    if (!tagsEdited) {
-      setTagsText(getDefaultLibraryNodeTagsForName(value).join(", "));
-    }
+  function updateParentFolder(value: string) {
+    const parentFolderId = value || null;
+    const nextParentFolder = parentFolderId ? findFolder(folders, parentFolderId) : null;
+    const nextParentTemplate = getLibraryNodeTemplateForSuggestionParent(nextParentFolder, templates);
+
+    setSelectedParentFolderId(parentFolderId);
+    setSelectedSuggestionId(null);
+    setSelectedTemplate(null);
+    setSelectedFileTypes(getInheritedSuggestionFileTypes(nextParentTemplate));
   }
 
   function applySuggestion(suggestion: AddFolderSuggestion) {
@@ -4137,8 +3592,6 @@ function AddLibraryNodePanel({
     setSelectedTemplate(suggestion.template);
     setFolderName(suggestion.name);
     setSelectedFileTypes(normalizeLibraryNodeFileTypes(suggestion.fileTypes));
-    setTagsText(suggestion.tags.join(", "));
-    setTagsEdited(false);
   }
 
   function returnToSuggestions() {
@@ -4146,8 +3599,6 @@ function AddLibraryNodePanel({
     setSelectedTemplate(null);
     setFolderName(panel.initialQuery);
     setSelectedFileTypes(inheritedFileTypes);
-    setTagsText(getDefaultLibraryNodeTagsForName(panel.initialQuery).join(", "));
-    setTagsEdited(false);
   }
 
   function startPanelDrag(event: ReactPointerEvent<HTMLElement>) {
@@ -4227,7 +3678,7 @@ function AddLibraryNodePanel({
         >
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold">Add Folder</h2>
-            <p className="truncate text-xs text-muted">Parent: {panel.parentLabel}</p>
+            <p className="truncate text-xs text-muted">Parent: {selectedParentLabel}</p>
           </div>
           <button className="icon-button" aria-label="Close add folder panel" title="Close" type="button" onClick={onClose}>
             <X size={16} aria-hidden="true" />
@@ -4249,16 +3700,18 @@ function AddLibraryNodePanel({
               </label>
 
               <label className="grid gap-1.5 text-sm">
-                <span className="text-xs font-semibold uppercase text-muted">Matching Tags</span>
-                <input
-                  className="h-10 rounded-sm border border-line bg-canvas px-3 text-sm text-ink outline-none transition placeholder:text-muted focus:border-steel focus:ring-2 focus:ring-steel/20"
-                  placeholder="table, furniture, 3d"
-                  value={tagsText}
-                  onChange={(event) => {
-                    setTagsEdited(true);
-                    setTagsText(event.currentTarget.value);
-                  }}
-                />
+                <span className="text-xs font-semibold uppercase text-muted">Make Subdirectory Of</span>
+                <select
+                  className="h-10 rounded-sm border border-line bg-canvas px-3 text-sm text-ink outline-none transition focus:border-steel focus:ring-2 focus:ring-steel/20"
+                  value={selectedParentFolderId ?? ""}
+                  onChange={(event) => updateParentFolder(event.currentTarget.value)}
+                >
+                  {parentOptions.map((option) => (
+                    <option key={option.id ?? "master-library"} value={option.id ?? ""}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               <div className="rounded-sm border border-line bg-canvas p-3">
@@ -4286,7 +3739,7 @@ function AddLibraryNodePanel({
                 <p className="text-xs text-muted">
                   {selectedSuggestion ? `Suggestion: ${selectedSuggestion.category} / ${selectedSuggestion.name}` : "Custom folder"}
                 </p>
-                <button className="primary-button" type="button" onClick={() => onCreate(draft)}>
+                <button className="primary-button" type="button" onClick={() => onCreate(draft, selectedParentFolderId)}>
                   <FolderPlus size={16} aria-hidden="true" />
                   <span>Create Folder</span>
                 </button>
@@ -4298,7 +3751,7 @@ function AddLibraryNodePanel({
             <div className="flex shrink-0 items-center justify-between gap-2 text-xs font-semibold uppercase text-muted">
               <div className="flex min-w-0 items-center gap-2">
                 <Search size={14} aria-hidden="true" />
-                <span className="truncate">Suggestions for {panel.parentLabel}</span>
+                <span className="truncate">Suggestions for {selectedParentLabel}</span>
               </div>
               {selectedSuggestionId ? (
                 <button className="dark-icon-button h-7 w-7 border-transparent bg-transparent" type="button" title="Back to suggestions" aria-label="Back to suggestions" onClick={returnToSuggestions}>
@@ -4349,6 +3802,25 @@ function AddFolderSuggestionButton({
       </span>
     </button>
   );
+}
+
+function getAddLibraryNodeParentOptions(folders: VirtualFolder[]): AddLibraryNodeParentOption[] {
+  const options: AddLibraryNodeParentOption[] = [{ id: null, label: "Master Library" }];
+
+  function addFolderOptions(currentFolders: VirtualFolder[], parentLabels: string[]) {
+    for (const folder of currentFolders) {
+      const pathLabels = [...parentLabels, folder.name];
+
+      options.push({
+        id: folder.id,
+        label: pathLabels.join(" / "),
+      });
+      addFolderOptions(folder.children, pathLabels);
+    }
+  }
+
+  addFolderOptions(folders, ["Master Library"]);
+  return options;
 }
 
 function getAddFolderSuggestions(templates: LibraryNodeTemplate[], parentFolder: VirtualFolder | null, query: string): AddFolderSuggestion[] {
@@ -4565,6 +4037,7 @@ function LibraryStructure({
   collapsed,
   nodes,
   onCreateFolder,
+  onOpenTagBrowser,
   onNavigateNvdBlock,
   onPaneViewChange,
   onResizeStart,
@@ -4592,6 +4065,7 @@ function LibraryStructure({
   collapsed: boolean;
   nodes: StructureNode[];
   onCreateFolder: () => void;
+  onOpenTagBrowser: () => void;
   onNavigateNvdBlock: (blockIndex: number) => void;
   onPaneViewChange: (view: LeftPaneView) => void;
   onResizeStart: (event: ReactPointerEvent<HTMLDivElement>) => void;
@@ -4686,9 +4160,14 @@ function LibraryStructure({
               <ChevronLeft size={14} aria-hidden="true" />
             </button>
             {isLibraryPane ? (
-              <button className="dark-icon-button" aria-label="Add library node" disabled={!canCreateFolder} title="Add library node" onClick={onCreateFolder}>
-                <Plus size={14} aria-hidden="true" />
-              </button>
+              <>
+                <button className="dark-icon-button" aria-label="Add library node" disabled={!canCreateFolder} title="Add library node" onClick={onCreateFolder}>
+                  <Plus size={14} aria-hidden="true" />
+                </button>
+                <button className="dark-icon-button" aria-label="Browse tag library" title="Browse tag library" type="button" onClick={onOpenTagBrowser}>
+                  <ListTree size={14} aria-hidden="true" />
+                </button>
+              </>
             ) : null}
           </div>
         </div>
@@ -4876,6 +4355,685 @@ function SourceFoldersPanel({
       </div> : null}
     </section>
   );
+}
+
+type TagLibraryResizeHandle = "top" | "right" | "bottom" | "left" | "top-left" | "top-right" | "bottom-right" | "bottom-left";
+
+type TagLibraryWindowRect = {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+};
+
+const tagLibraryWindowPadding = 16;
+const tagLibraryMinHeight = 420;
+const tagLibraryMinWidth = 620;
+const tagLibraryDefaultHeight = 860;
+const tagLibraryDefaultWidth = 1180;
+
+function TagLibraryBrowser({
+  sections,
+  tags,
+  onClose,
+}: {
+  sections: LibraryTagSourceSection[];
+  tags: LibraryTagDefinition[];
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [isMaximized, setIsMaximized] = useState(false);
+  const [isSystemMinimized, setIsSystemMinimized] = useState(true);
+  const [isStylesMinimized, setIsStylesMinimized] = useState(true);
+  const [windowRect, setWindowRect] = useState<TagLibraryWindowRect>(() => getDefaultTagLibraryWindowRect());
+  const windowRef = useRef<HTMLElement | null>(null);
+  const windowInteractionCleanupRef = useRef<(() => void) | null>(null);
+  const normalizedQuery = normalizeLibraryMatchText(query);
+  const visibleSections = useMemo(
+    () => filterTagSourceSections(sections, normalizedQuery),
+    [normalizedQuery, sections],
+  );
+  const systemSection = visibleSections.find((section) => section.id === "system") ?? null;
+  const stylesSection = visibleSections.find((section) => section.id === "styles") ?? null;
+  const contentSections = visibleSections.filter((section) => section.id !== "system" && section.id !== "styles");
+  const visibleCount = useMemo(() => countTagSourceSectionTags(visibleSections), [visibleSections]);
+  const modalClassName = isMaximized
+    ? "relative flex h-full w-full flex-col overflow-hidden border border-line bg-surface text-ink"
+    : "absolute flex flex-col overflow-hidden rounded-sm border border-line bg-surface text-ink";
+  const overlayClassName = isMaximized ? "fixed inset-0 z-[60] bg-black/45 p-0" : "fixed inset-0 z-[60] bg-black/45";
+  const modalStyle = isMaximized
+    ? undefined
+    : ({
+        height: windowRect.height,
+        left: windowRect.x,
+        top: windowRect.y,
+        width: windowRect.width,
+      } satisfies CSSProperties);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  useEffect(() => {
+    function handleWindowResize() {
+      setWindowRect((rect) => constrainTagLibraryWindowRect(rect));
+    }
+
+    window.addEventListener("resize", handleWindowResize);
+    return () => window.removeEventListener("resize", handleWindowResize);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      windowInteractionCleanupRef.current?.();
+    };
+  }, []);
+
+  function startWindowDrag(event: ReactPointerEvent<HTMLElement>) {
+    if (isMaximized || !isPrimaryPointer(event)) {
+      return;
+    }
+
+    const targetElement = event.target instanceof Element ? event.target : null;
+
+    if (targetElement?.closest("button, input, textarea, select, a")) {
+      return;
+    }
+
+    const element = windowRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    event.preventDefault();
+    windowInteractionCleanupRef.current?.();
+
+    const bounds = element.getBoundingClientRect();
+    const dragRect = constrainTagLibraryWindowRect({
+      height: bounds.height,
+      width: bounds.width,
+      x: bounds.left,
+      y: bounds.top,
+    });
+    const offsetX = event.clientX - bounds.left;
+    const offsetY = event.clientY - bounds.top;
+    const pointerId = event.pointerId;
+    setWindowRect(dragRect);
+    document.body.classList.add("is-dragging-tag-library");
+
+    function handlePointerMove(moveEvent: PointerEvent) {
+      if (moveEvent.pointerId !== pointerId) {
+        return;
+      }
+
+      setWindowRect(
+        constrainTagLibraryWindowRect({
+          height: dragRect.height,
+          width: dragRect.width,
+          x: moveEvent.clientX - offsetX,
+          y: moveEvent.clientY - offsetY,
+        }),
+      );
+    }
+
+    function cleanupDrag() {
+      document.body.classList.remove("is-dragging-tag-library");
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopDrag);
+      window.removeEventListener("pointercancel", stopDrag);
+    }
+
+    function stopDrag(pointerEvent: PointerEvent) {
+      if (pointerEvent.pointerId !== pointerId) {
+        return;
+      }
+
+      cleanupDrag();
+
+      if (windowInteractionCleanupRef.current === cleanupDrag) {
+        windowInteractionCleanupRef.current = null;
+      }
+    }
+
+    windowInteractionCleanupRef.current = cleanupDrag;
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopDrag);
+    window.addEventListener("pointercancel", stopDrag);
+  }
+
+  function startWindowResize(event: ReactPointerEvent<HTMLDivElement>, handle: TagLibraryResizeHandle) {
+    if (isMaximized || !isPrimaryPointer(event)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    windowInteractionCleanupRef.current?.();
+
+    const cursorClassName = getTagLibraryResizeCursorClassName(handle);
+    const startRect = constrainTagLibraryWindowRect(windowRect);
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const pointerId = event.pointerId;
+    setWindowRect(startRect);
+    document.body.classList.add("is-resizing-tag-library", cursorClassName);
+
+    function handlePointerMove(moveEvent: PointerEvent) {
+      if (moveEvent.pointerId !== pointerId) {
+        return;
+      }
+
+      setWindowRect(resizeTagLibraryWindowRect(startRect, handle, moveEvent.clientX - startX, moveEvent.clientY - startY));
+    }
+
+    function cleanupResize() {
+      document.body.classList.remove("is-resizing-tag-library", cursorClassName);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResize);
+      window.removeEventListener("pointercancel", stopResize);
+    }
+
+    function stopResize(pointerEvent: PointerEvent) {
+      if (pointerEvent.pointerId !== pointerId) {
+        return;
+      }
+
+      cleanupResize();
+
+      if (windowInteractionCleanupRef.current === cleanupResize) {
+        windowInteractionCleanupRef.current = null;
+      }
+    }
+
+    windowInteractionCleanupRef.current = cleanupResize;
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResize);
+    window.addEventListener("pointercancel", stopResize);
+  }
+
+  function toggleMaximized() {
+    if (isMaximized) {
+      setWindowRect((rect) => constrainTagLibraryWindowRect(rect));
+    }
+
+    setIsMaximized((value) => !value);
+  }
+
+  return (
+    <div className={overlayClassName}>
+      <section
+        aria-label="Tag library browser"
+        aria-modal="true"
+        className={modalClassName}
+        ref={windowRef}
+        role="dialog"
+        style={modalStyle}
+      >
+        {!isMaximized ? (
+          <>
+            <div
+              aria-label="Resize tag library from top edge"
+              aria-orientation="horizontal"
+              className="tag-library-resize-handle tag-library-resize-handle-top"
+              onPointerDown={(event) => startWindowResize(event, "top")}
+              role="separator"
+              title="Resize tag library"
+            />
+            <div
+              aria-label="Resize tag library from right edge"
+              aria-orientation="vertical"
+              className="tag-library-resize-handle tag-library-resize-handle-right"
+              onPointerDown={(event) => startWindowResize(event, "right")}
+              role="separator"
+              title="Resize tag library"
+            />
+            <div
+              aria-label="Resize tag library from bottom edge"
+              aria-orientation="horizontal"
+              className="tag-library-resize-handle tag-library-resize-handle-bottom"
+              onPointerDown={(event) => startWindowResize(event, "bottom")}
+              role="separator"
+              title="Resize tag library"
+            />
+            <div
+              aria-label="Resize tag library from left edge"
+              aria-orientation="vertical"
+              className="tag-library-resize-handle tag-library-resize-handle-left"
+              onPointerDown={(event) => startWindowResize(event, "left")}
+              role="separator"
+              title="Resize tag library"
+            />
+            <div
+              aria-label="Resize tag library from top-left corner"
+              className="tag-library-resize-handle tag-library-resize-handle-top-left"
+              onPointerDown={(event) => startWindowResize(event, "top-left")}
+              role="separator"
+              title="Resize tag library"
+            />
+            <div
+              aria-label="Resize tag library from top-right corner"
+              className="tag-library-resize-handle tag-library-resize-handle-top-right"
+              onPointerDown={(event) => startWindowResize(event, "top-right")}
+              role="separator"
+              title="Resize tag library"
+            />
+            <div
+              aria-label="Resize tag library from bottom-right corner"
+              className="tag-library-resize-handle tag-library-resize-handle-bottom-right"
+              onPointerDown={(event) => startWindowResize(event, "bottom-right")}
+              role="separator"
+              title="Resize tag library"
+            />
+            <div
+              aria-label="Resize tag library from bottom-left corner"
+              className="tag-library-resize-handle tag-library-resize-handle-bottom-left"
+              onPointerDown={(event) => startWindowResize(event, "bottom-left")}
+              role="separator"
+              title="Resize tag library"
+            />
+          </>
+        ) : null}
+        <header
+          className={`${isMaximized ? "" : "tag-library-drag-header"} flex h-12 shrink-0 items-center justify-between gap-4 border-b border-line px-4`}
+          onPointerDown={startWindowDrag}
+        >
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold">Tag Library</h2>
+            <p className="truncate text-[11px] text-muted">
+              {visibleCount}/{tags.length} tags visible
+            </p>
+          </div>
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+            <label className="relative w-[min(360px,45vw)]">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" size={14} aria-hidden="true" />
+              <input
+                autoFocus
+                className="h-8 w-full rounded-sm border border-line bg-canvas pl-8 pr-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-steel focus:ring-2 focus:ring-steel/20"
+                placeholder="Search folders, files, tags..."
+                value={query}
+                onChange={(event) => setQuery(event.currentTarget.value)}
+              />
+            </label>
+            <button
+              className="icon-button"
+              aria-label={isMaximized ? "Restore tag library" : "Maximize tag library"}
+              title={isMaximized ? "Restore" : "Maximize"}
+              type="button"
+              onClick={toggleMaximized}
+            >
+              {isMaximized ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
+            </button>
+            <button className="icon-button" aria-label="Close tag library" title="Close" type="button" onClick={onClose}>
+              <X size={16} aria-hidden="true" />
+            </button>
+          </div>
+        </header>
+
+        <div className="grid min-h-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] overflow-hidden">
+          <TagSourceSidePanel
+            folder={systemSection}
+            isMinimized={isSystemMinimized}
+            label="System"
+            side="left"
+            onToggle={() => setIsSystemMinimized((value) => !value)}
+          />
+          <div className="min-h-0 overflow-auto border-x border-line bg-canvas">
+            <div className="min-w-[520px] py-2">
+              {contentSections.length > 0 ? (
+                <TagSourceTree folders={contentSections} />
+              ) : (
+                <div className="mx-3 rounded-sm border border-line bg-surface p-4 text-sm text-muted">No tags match that search.</div>
+              )}
+            </div>
+          </div>
+          <TagSourceSidePanel
+            folder={stylesSection}
+            isMinimized={isStylesMinimized}
+            label="Styles"
+            side="right"
+            onToggle={() => setIsStylesMinimized((value) => !value)}
+          />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function getDefaultTagLibraryWindowRect(): TagLibraryWindowRect {
+  const constraints = getTagLibraryWindowConstraints();
+  const width = Math.min(tagLibraryDefaultWidth, constraints.maxWidth);
+  const height = Math.min(tagLibraryDefaultHeight, constraints.maxHeight);
+
+  return constrainTagLibraryWindowRect({
+    height,
+    width,
+    x: Math.round((constraints.viewportWidth - width) / 2),
+    y: Math.round((constraints.viewportHeight - height) / 2),
+  });
+}
+
+function constrainTagLibraryWindowRect(rect: TagLibraryWindowRect): TagLibraryWindowRect {
+  const constraints = getTagLibraryWindowConstraints();
+  const width = clamp(rect.width, constraints.minWidth, constraints.maxWidth);
+  const height = clamp(rect.height, constraints.minHeight, constraints.maxHeight);
+  const maxX = Math.max(tagLibraryWindowPadding, constraints.viewportWidth - width - tagLibraryWindowPadding);
+  const maxY = Math.max(tagLibraryWindowPadding, constraints.viewportHeight - height - tagLibraryWindowPadding);
+
+  return {
+    height,
+    width,
+    x: clamp(rect.x, tagLibraryWindowPadding, maxX),
+    y: clamp(rect.y, tagLibraryWindowPadding, maxY),
+  };
+}
+
+function resizeTagLibraryWindowRect(
+  startRect: TagLibraryWindowRect,
+  handle: TagLibraryResizeHandle,
+  deltaX: number,
+  deltaY: number,
+): TagLibraryWindowRect {
+  const constraints = getTagLibraryWindowConstraints();
+  let left = startRect.x;
+  let top = startRect.y;
+  let right = startRect.x + startRect.width;
+  let bottom = startRect.y + startRect.height;
+
+  if (handle.includes("left")) {
+    left = clamp(startRect.x + deltaX, tagLibraryWindowPadding, right - constraints.minWidth);
+  }
+
+  if (handle.includes("right")) {
+    right = clamp(startRect.x + startRect.width + deltaX, left + constraints.minWidth, constraints.viewportWidth - tagLibraryWindowPadding);
+  }
+
+  if (handle.includes("top")) {
+    top = clamp(startRect.y + deltaY, tagLibraryWindowPadding, bottom - constraints.minHeight);
+  }
+
+  if (handle.includes("bottom")) {
+    bottom = clamp(startRect.y + startRect.height + deltaY, top + constraints.minHeight, constraints.viewportHeight - tagLibraryWindowPadding);
+  }
+
+  return constrainTagLibraryWindowRect({
+    height: bottom - top,
+    width: right - left,
+    x: left,
+    y: top,
+  });
+}
+
+function getTagLibraryWindowConstraints() {
+  const viewportWidth = typeof window === "undefined" ? tagLibraryDefaultWidth + tagLibraryWindowPadding * 2 : window.innerWidth;
+  const viewportHeight = typeof window === "undefined" ? tagLibraryDefaultHeight + tagLibraryWindowPadding * 2 : window.innerHeight;
+  const maxWidth = Math.max(240, viewportWidth - tagLibraryWindowPadding * 2);
+  const maxHeight = Math.max(260, viewportHeight - tagLibraryWindowPadding * 2);
+
+  return {
+    maxHeight,
+    maxWidth,
+    minHeight: Math.min(tagLibraryMinHeight, maxHeight),
+    minWidth: Math.min(tagLibraryMinWidth, maxWidth),
+    viewportHeight,
+    viewportWidth,
+  };
+}
+
+function getTagLibraryResizeCursorClassName(handle: TagLibraryResizeHandle) {
+  if (handle === "top-left" || handle === "bottom-right") {
+    return "is-resizing-tag-library-nwse";
+  }
+
+  if (handle === "top-right" || handle === "bottom-left") {
+    return "is-resizing-tag-library-nesw";
+  }
+
+  if (handle === "left" || handle === "right") {
+    return "is-resizing-tag-library-ew";
+  }
+
+  return "is-resizing-tag-library-ns";
+}
+
+function TagSourceSidePanel({
+  folder,
+  isMinimized,
+  label,
+  side,
+  onToggle,
+}: {
+  folder: LibraryTagSourceFolder | null;
+  isMinimized: boolean;
+  label: string;
+  side: "left" | "right";
+  onToggle: () => void;
+}) {
+  const count = folder ? countTagSourceFolderTags(folder) : 0;
+  const chevron = side === "left"
+    ? isMinimized ? <ChevronRight size={14} aria-hidden="true" /> : <ChevronLeft size={14} aria-hidden="true" />
+    : isMinimized ? <ChevronLeft size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />;
+
+  if (isMinimized) {
+    return (
+      <aside className="flex w-10 min-w-10 flex-col items-center border-line bg-surface py-2">
+        <button
+          aria-label={`Show ${label} tags`}
+          className="icon-button"
+          title={`Show ${label}`}
+          type="button"
+          onClick={onToggle}
+        >
+          {chevron}
+        </button>
+        <div className="mt-3 flex flex-1 items-center justify-center">
+          <span className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-semibold uppercase tracking-normal text-muted">
+            {label}
+          </span>
+        </div>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="flex w-64 min-w-64 flex-col overflow-hidden bg-surface">
+      <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-line px-2">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Folder size={13} aria-hidden="true" />
+          <span className="truncate text-[11px] font-semibold uppercase text-muted">{label}</span>
+          <span className="text-[10px] text-muted">{count}</span>
+        </div>
+        <button
+          aria-label={`Minimize ${label} tags`}
+          className="icon-button h-7 w-7"
+          title={`Minimize ${label}`}
+          type="button"
+          onClick={onToggle}
+        >
+          {chevron}
+        </button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto py-2">
+        {folder ? <TagSourceTree folders={[folder]} compact /> : <div className="px-3 text-xs text-muted">No matching tags.</div>}
+      </div>
+    </aside>
+  );
+}
+
+function TagSourceTree({ compact = false, folders }: { compact?: boolean; folders: LibraryTagSourceFolder[] }) {
+  return (
+    <div className={compact ? "text-[11px]" : "text-xs"}>
+      {folders.map((folder) => (
+        <TagSourceFolderNode compact={compact} depth={0} folder={folder} key={folder.id} />
+      ))}
+    </div>
+  );
+}
+
+function TagSourceFolderNode({
+  compact,
+  depth,
+  folder,
+}: {
+  compact: boolean;
+  depth: number;
+  folder: LibraryTagSourceFolder;
+}) {
+  const tagCount = countTagSourceFolderTags(folder);
+
+  return (
+    <details className="group/tag-source-folder" open>
+      <summary className="list-none cursor-pointer [&::-webkit-details-marker]:hidden">
+        <div
+          className="grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-1.5 px-2 py-1 hover:bg-surface-raised"
+          style={{ paddingLeft: `${8 + depth * 14}px` }}
+        >
+          <ChevronRight className="text-muted transition group-open/tag-source-folder:rotate-90" size={12} aria-hidden="true" />
+          <span className="flex min-w-0 items-center gap-1.5 font-semibold text-ink">
+            <Folder size={13} aria-hidden="true" />
+            <span className="truncate">{folder.label}</span>
+          </span>
+          <span className="text-[10px] text-muted">{tagCount}</span>
+        </div>
+      </summary>
+      {folder.files.map((file) => (
+        <TagSourceFileNode compact={compact} depth={depth + 1} file={file} key={`${folder.id}:${file.id}`} />
+      ))}
+      {(folder.folders ?? []).map((childFolder) => (
+        <TagSourceFolderNode compact={compact} depth={depth + 1} folder={childFolder} key={`${folder.id}:${childFolder.id}`} />
+      ))}
+    </details>
+  );
+}
+
+function TagSourceFileNode({
+  compact,
+  depth,
+  file,
+}: {
+  compact: boolean;
+  depth: number;
+  file: LibraryTagSourceFolder["files"][number];
+}) {
+  return (
+    <details className="group/tag-source-file" open>
+      <summary className="list-none cursor-pointer [&::-webkit-details-marker]:hidden">
+        <div
+          className="grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-1.5 px-2 py-1 hover:bg-surface-raised"
+          style={{ paddingLeft: `${8 + depth * 14}px` }}
+        >
+          <ChevronRight className="text-muted transition group-open/tag-source-file:rotate-90" size={12} aria-hidden="true" />
+          <span className="flex min-w-0 items-center gap-1.5 font-mono text-muted">
+            <FileText size={12} aria-hidden="true" />
+            <span className="truncate">{file.label}</span>
+          </span>
+          <span className="text-[10px] text-muted">{file.tags.length}</span>
+        </div>
+      </summary>
+      {file.tags.map((tagDefinition) => (
+        <TagSourceTagRow
+          compact={compact}
+          depth={depth + 1}
+          key={tagDefinition.id}
+          tagDefinition={tagDefinition}
+        />
+      ))}
+    </details>
+  );
+}
+
+function TagSourceTagRow({
+  compact,
+  depth,
+  tagDefinition,
+}: {
+  compact: boolean;
+  depth: number;
+  tagDefinition: LibraryTagDefinition;
+}) {
+  return (
+    <div
+      className="flex min-w-0 items-center gap-1.5 px-2 py-0.5 leading-snug hover:bg-surface-raised"
+      style={{ paddingLeft: `${22 + depth * 14}px` }}
+    >
+      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${getLibraryTagKindDotClass(tagDefinition.kind)}`} aria-hidden="true" />
+      <span className={`truncate font-semibold text-ink ${compact ? "text-[11px]" : "text-xs"}`}>{tagDefinition.label}</span>
+    </div>
+  );
+}
+
+function filterTagSourceSections(sections: LibraryTagSourceSection[], normalizedQuery: string): LibraryTagSourceSection[] {
+  if (!normalizedQuery) {
+    return sections;
+  }
+
+  return sections.flatMap((section) => {
+    const filteredSection = filterTagSourceFolder(section, normalizedQuery);
+    return filteredSection ? [filteredSection] : [];
+  });
+}
+
+function filterTagSourceFolder(folder: LibraryTagSourceFolder, normalizedQuery: string): LibraryTagSourceFolder | null {
+  const folderMatches = normalizedTextIncludesTerm(normalizeLibraryMatchText(folder.label), normalizedQuery);
+  const files = folder.files.flatMap((file) => {
+      const fileMatches = normalizedTextIncludesTerm(normalizeLibraryMatchText(file.label), normalizedQuery);
+      const matchingTags = fileMatches || folderMatches
+        ? file.tags
+        : file.tags.filter((tagDefinition) => tagLibraryDefinitionIncludesText(tagDefinition, normalizedQuery));
+
+      return matchingTags.length > 0 ? [{ ...file, tags: matchingTags }] : [];
+  });
+  const folders = (folder.folders ?? []).flatMap((childFolder) => {
+    const filteredFolder = folderMatches ? childFolder : filterTagSourceFolder(childFolder, normalizedQuery);
+    return filteredFolder ? [filteredFolder] : [];
+  });
+
+  return files.length > 0 || folders.length > 0 ? { ...folder, files, folders } : null;
+}
+
+function countTagSourceSectionTags(sections: LibraryTagSourceSection[]) {
+  return sections.reduce((total, section) => total + countTagSourceFolderTags(section), 0);
+}
+
+function countTagSourceFolderTags(folder: LibraryTagSourceFolder): number {
+  return (
+    folder.files.reduce((total, file) => total + file.tags.length, 0) +
+    (folder.folders ?? []).reduce((total, childFolder) => total + countTagSourceFolderTags(childFolder), 0)
+  );
+}
+
+function tagLibraryDefinitionIncludesText(tagDefinition: LibraryTagDefinition, normalizedQuery: string) {
+  return normalizeLibraryMatchText([
+    tagDefinition.id,
+    tagDefinition.label,
+    tagDefinition.kind,
+    ...(tagDefinition.aliases ?? []),
+    ...(tagDefinition.parents ?? []),
+    ...(tagDefinition.implies ?? []),
+    ...(tagDefinition.related ?? []),
+    ...(tagDefinition.locksToFileTypes ?? []),
+  ].join(" ")).includes(normalizedQuery);
+}
+
+function getLibraryTagKindDotClass(kind: LibraryTagDefinition["kind"]) {
+  switch (kind) {
+    case "system":
+      return "bg-steel";
+    case "style":
+      return "bg-copper";
+    case "workflow":
+      return "bg-muted";
+    case "content":
+    default:
+      return "bg-[rgb(var(--color-brand-blue))]";
+  }
 }
 
 function StructureRow({
@@ -6640,17 +6798,25 @@ function getLibraryTagDefinitionByKey(value: string) {
 function createLibraryTagDefinitionLookup(tagDefinitions: LibraryTagDefinition[]) {
   const lookup = new Map<string, LibraryTagDefinition>();
 
-  for (const tagDefinition of tagDefinitions) {
-    for (const value of [
-      tagDefinition.id,
-      tagDefinition.label,
-      ...(tagDefinition.aliases ?? []),
-    ]) {
-      const key = getLibraryTagKey(value);
+  function addLookupValue(value: string, tagDefinition: LibraryTagDefinition) {
+    const key = getLibraryTagKey(value);
 
-      if (key && !lookup.has(key)) {
-        lookup.set(key, tagDefinition);
-      }
+    if (key && !lookup.has(key)) {
+      lookup.set(key, tagDefinition);
+    }
+  }
+
+  for (const tagDefinition of tagDefinitions) {
+    addLookupValue(tagDefinition.id, tagDefinition);
+  }
+
+  for (const tagDefinition of tagDefinitions) {
+    addLookupValue(tagDefinition.label, tagDefinition);
+  }
+
+  for (const tagDefinition of tagDefinitions) {
+    for (const alias of tagDefinition.aliases ?? []) {
+      addLookupValue(alias, tagDefinition);
     }
   }
 

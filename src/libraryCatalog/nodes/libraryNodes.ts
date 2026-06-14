@@ -477,7 +477,7 @@ export const libraryNodeTemplates: LibraryNodeTemplate[] = [
     aliases: ["photography", "pictures", "camera"],
     suggestedTags: ["photo", "photography", "reference"],
     fileTypes: ["Image"],
-    childSuggestions: ["People", "Places", "Objects", "Nature", "Textures"],
+    childSuggestions: ["People", "Environment", "Objects", "Nature", "Textures"],
     matchRules: [{ field: "name", terms: ["photo", "camera", "dsc", "img"] }],
   }),
   node("textures", "Textures", "Albedo, normal, roughness, metallic, masks, trims, and surface maps.", "Image", Image, {

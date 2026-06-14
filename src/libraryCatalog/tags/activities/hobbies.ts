@@ -1,0 +1,85 @@
+import { tag } from "../../tag";
+
+export const hobbyTags = [
+  tag("collecting", {
+    label: "Collecting",
+    aliases: ["collection", "curating", "gathering"],
+    parents: ["hobby"],
+    implies: ["hobby", "activity"],
+    related: ["archive", "inventory"],
+  }),
+  tag("creative-work", {
+    label: "Creative Work",
+    aliases: ["creative", "artistic work"],
+    parents: ["activity"],
+    implies: ["activity"],
+  }),
+  tag("culinary-arts", {
+    label: "Culinary Arts",
+    aliases: ["cooking", "baking", "meal prep", "culinary"],
+    parents: ["hobby"],
+    implies: ["hobby", "activity"],
+    related: ["food", "kitchen"],
+  }),
+  tag("dancing", {
+    label: "Dancing",
+    aliases: ["dance", "choreography"],
+    parents: ["hobby"],
+    implies: ["hobby", "activity"],
+    related: ["music", "performance"],
+  }),
+  tag("gaming", {
+    label: "Gaming",
+    aliases: ["game", "games", "tabletop", "video game"],
+    parents: ["hobby"],
+    implies: ["hobby", "activity"],
+  }),
+  tag("gardening", {
+    label: "Gardening",
+    aliases: ["garden", "planting", "cultivation"],
+    parents: ["hobby"],
+    implies: ["hobby", "activity"],
+    related: ["plant", "farming"],
+  }),
+  tag("hobby", {
+    label: "Hobby",
+    aliases: ["hobbies", "pastime", "leisure"],
+    parents: ["activity"],
+    implies: ["activity"],
+  }),
+  tag("music", {
+    label: "Music",
+    aliases: ["song", "instrument", "melody"],
+    parents: ["creative-work", "hobby"],
+    implies: ["creative-work", "hobby", "activity"],
+    related: ["audio"],
+  }),
+  tag("painting", {
+    label: "Painting",
+    aliases: ["drawing", "sketch", "illustration", "art"],
+    parents: ["creative-work", "hobby"],
+    implies: ["creative-work", "hobby", "activity"],
+    related: ["image"],
+  }),
+  tag("photography", {
+    label: "Photography",
+    aliases: ["photo", "photoshoot", "camera work"],
+    parents: ["creative-work", "hobby"],
+    implies: ["creative-work", "hobby", "activity"],
+    related: ["image", "camera"],
+  }),
+  tag("reading", {
+    label: "Reading",
+    aliases: ["book reading", "study reading"],
+    parents: ["hobby"],
+    implies: ["hobby", "activity"],
+    related: ["book", "document"],
+  }),
+  tag("writing", {
+    label: "Writing",
+    aliases: ["note", "notes", "manuscript", "letter"],
+    parents: ["creative-work", "hobby"],
+    implies: ["creative-work", "hobby", "activity"],
+    related: ["book", "paper", "document"],
+  }),
+];

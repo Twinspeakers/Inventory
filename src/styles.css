@@ -1074,6 +1074,66 @@ textarea {
     @apply cursor-grabbing;
   }
 
+  .tag-library-drag-header {
+    @apply cursor-grab select-none touch-none;
+  }
+
+  .is-dragging-tag-library .tag-library-drag-header {
+    @apply cursor-grabbing;
+  }
+
+  .tag-library-resize-handle {
+    @apply absolute z-30 touch-none outline-none;
+  }
+
+  .tag-library-resize-handle-top {
+    @apply -top-1 left-3 right-3 h-2 cursor-row-resize;
+  }
+
+  .tag-library-resize-handle-right {
+    @apply -right-1 bottom-3 top-3 w-2 cursor-col-resize;
+  }
+
+  .tag-library-resize-handle-bottom {
+    @apply -bottom-1 left-3 right-3 h-2 cursor-row-resize;
+  }
+
+  .tag-library-resize-handle-left {
+    @apply -left-1 bottom-3 top-3 w-2 cursor-col-resize;
+  }
+
+  .tag-library-resize-handle-top-left {
+    @apply -left-1 -top-1 h-4 w-4 cursor-nwse-resize;
+  }
+
+  .tag-library-resize-handle-top-right {
+    @apply -right-1 -top-1 h-4 w-4 cursor-nesw-resize;
+  }
+
+  .tag-library-resize-handle-bottom-right {
+    @apply -bottom-1 -right-1 h-4 w-4 cursor-nwse-resize;
+  }
+
+  .tag-library-resize-handle-bottom-left {
+    @apply -bottom-1 -left-1 h-4 w-4 cursor-nesw-resize;
+  }
+
+  .tag-library-resize-handle-top::after,
+  .tag-library-resize-handle-bottom::after {
+    content: "";
+    @apply absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-transparent transition-colors;
+  }
+
+  .tag-library-resize-handle-left::after,
+  .tag-library-resize-handle-right::after {
+    content: "";
+    @apply absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-transparent transition-colors;
+  }
+
+  .tag-library-resize-handle:hover::after {
+    @apply bg-copper;
+  }
+
   .add-folder-suggestion-row {
     @apply flex w-full items-center gap-2 rounded-sm border border-transparent p-2 text-left text-ink transition hover:border-steel hover:bg-surface;
   }
@@ -1693,6 +1753,37 @@ body.is-resizing-row,
 body.is-resizing-row * {
   cursor: row-resize !important;
   user-select: none !important;
+}
+
+body.is-dragging-tag-library,
+body.is-dragging-tag-library * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+body.is-resizing-tag-library,
+body.is-resizing-tag-library * {
+  user-select: none !important;
+}
+
+body.is-resizing-tag-library-ew,
+body.is-resizing-tag-library-ew * {
+  cursor: ew-resize !important;
+}
+
+body.is-resizing-tag-library-ns,
+body.is-resizing-tag-library-ns * {
+  cursor: ns-resize !important;
+}
+
+body.is-resizing-tag-library-nwse,
+body.is-resizing-tag-library-nwse * {
+  cursor: nwse-resize !important;
+}
+
+body.is-resizing-tag-library-nesw,
+body.is-resizing-tag-library-nesw * {
+  cursor: nesw-resize !important;
 }
 
 @keyframes nvd-navigation-attention {

@@ -10,7 +10,7 @@ export {
   normalizedTextIncludesTerm,
   parseLibraryNodeTags,
 } from "./normalization";
-export { libraryTagDefinitions } from "./tags";
+export { libraryTagDefinitions, libraryTagSourceSections } from "./tags";
 export { libraryNodeTemplates } from "./nodes";
 export type {
   LibraryNodeFileType,
@@ -20,3 +20,4 @@ export type {
   LibraryTagDefinition,
   LibraryTagKind,
 } from "./types";
+export type { LibraryTagSourceFile, LibraryTagSourceFolder, LibraryTagSourceSection } from "./tags";
