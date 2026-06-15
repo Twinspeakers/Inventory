@@ -28,7 +28,7 @@ export const attractionTags = [
     label: "Coastal Attraction",
     aliases: ["seaside attraction", "waterfront attraction"],
     parents: ["attraction"],
-    implies: ["attraction", "coastal-biome"],
+    implies: ["attraction", "coastal"],
   }),
   tag("festival-ground", {
     label: "Festival Ground",

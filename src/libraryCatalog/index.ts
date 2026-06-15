@@ -11,7 +11,7 @@ export {
   parseLibraryNodeTags,
 } from "./normalization";
 export { libraryTagDefinitions, libraryTagSourceSections } from "./tags";
-export { libraryNodeTemplates } from "./nodes";
+export { allLibraryNodeTemplates, libraryNodeTemplates } from "./nodes";
 export type {
   LibraryNodeFileType,
   LibraryNodeMatchField,

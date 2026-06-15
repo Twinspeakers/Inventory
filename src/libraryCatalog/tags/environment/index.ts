@@ -1,6 +1,5 @@
 import type { LibraryTagDefinition } from "../../types";
 import { attractionTags } from "./attractions";
-import { biomeTags } from "./biomes";
 import { buildingTags } from "./buildings";
 import { cityTags } from "./cities";
 import { countryTags } from "./countries";
@@ -16,12 +15,10 @@ export const environmentTags: LibraryTagDefinition[] = [
   ...countryTags,
   ...attractionTags,
   ...destinationTags,
-  ...biomeTags,
 ];
 
 export {
   attractionTags,
-  biomeTags,
   buildingTags,
   cityTags,
   countryTags,

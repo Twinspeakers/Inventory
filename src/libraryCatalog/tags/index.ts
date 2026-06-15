@@ -1,8 +1,59 @@
 import type { LibraryTagDefinition } from "../types";
-import { hobbyTags, professionTags, skillTags, sportTags } from "./activities";
+import { hobbyTags, skillTags, sportTags } from "./activities";
+import {
+  amphibianTags,
+  birdTags,
+  fishTags,
+  insectTags,
+  invertebrateTags,
+  mammalTags,
+  reptileTags,
+  rootAnimalTags,
+} from "./animals";
+import {
+  animalProductTags,
+  beverageTags,
+  courseTags,
+  dietNutritionTags,
+  foodTags,
+  mealTags,
+  pantryIngredientTags,
+  produceTags,
+  savouryTags,
+  snackTags,
+  storageTags,
+  sweetTags,
+} from "./food";
+import {
+  accessoryTags,
+  artSupplyTags,
+  bottomTags,
+  containerTags,
+  decorTags,
+  documentTags,
+  electronicsTags,
+  footwearTags,
+  fullBodyClothingTags,
+  furnitureTags,
+  handwearTags,
+  headwearTags,
+  householdItemTags,
+  industrialTags,
+  kitchenwareTags,
+  medicalTags,
+  musicalInstrumentTags,
+  objectTags,
+  officeTags,
+  topTags,
+  toolTags,
+  toyGameTags,
+  underwearTags,
+  vehicleTags,
+  weaponTags,
+} from "./objects";
+import { ageGroupTags, humanoidTags, relationshipTags, roleTags } from "./people";
 import {
   attractionTags,
-  biomeTags,
   buildingTags,
   cityTags,
   countryTags,
@@ -11,46 +62,22 @@ import {
   roomTags,
 } from "./environment";
 import {
-  beverageTags,
-  berryTags,
-  courseTags,
-  dairyTags,
-  daypartTags,
-  foodTags,
-  fruitTags,
-  householdTags,
-  mealTags,
-  meatTags,
-  pantryTags,
-  poultryTags,
-  preserveTags,
-  savouryTags,
-  snackTags,
-  spiceTags,
-  sweetTags,
-  vegetableTags,
-} from "./food";
-import { clothesTags, footwearTags, furnitureTags, houseRoomTags } from "./household";
-import { materialTags } from "./materials/materials";
-import { landscapeTags } from "./nature/landscapes";
-import { naturalObjectTags } from "./nature/naturalObjects";
-import { natureGroupTags } from "./nature/natureGroups";
-import { plantTags } from "./nature/plants";
-import { skyWeatherWaterTags } from "./nature/skyWeatherWater";
-import { objectTags } from "./objects/objects";
+  celestialTags,
+  ecosystemTags,
+  flowerTags,
+  foliageTags,
+  rockTags,
+  terrainTags,
+  treeTags,
+} from "./natural-world";
 import {
-  amphibianTags,
-  birdTags,
-  ethnicityTags,
-  fishTags,
-  genderTags,
-  humanoidTags,
-  insectTags,
-  invertebrateTags,
-  mammalTags,
-  reptileTags,
-  rootAnimalTags,
-} from "./species";
+  animalMaterialTags,
+  craftedMaterialTags,
+  fabricTags,
+  generalMaterialTags,
+  metalTags,
+  naturalMaterialTags,
+} from "./materials";
 import { styleTags } from "./styles/styles";
 import { systemTags } from "./system/system";
 
@@ -76,156 +103,88 @@ export const libraryTagSourceSections: LibraryTagSourceSection[] = [
     files: [{ id: "system", label: "system.ts", tags: systemTags }],
   },
   {
-    id: "species",
-    label: "Species",
-    files: [],
-    folders: [
-      {
-        id: "animals",
-        label: "Animals",
-        files: [{ id: "animals", label: "animals.ts", tags: rootAnimalTags }],
-        folders: [
-          {
-            id: "amphibians",
-            label: "Amphibians",
-            files: [{ id: "amphibians", label: "amphibians.ts", tags: amphibianTags }],
-          },
-          {
-            id: "birds",
-            label: "Birds",
-            files: [{ id: "birds", label: "birds.ts", tags: birdTags }],
-          },
-          {
-            id: "fish",
-            label: "Fish",
-            files: [{ id: "fish", label: "fish.ts", tags: fishTags }],
-          },
-          {
-            id: "insects",
-            label: "Insects",
-            files: [{ id: "insects", label: "insects.ts", tags: insectTags }],
-          },
-          {
-            id: "invertebrates",
-            label: "Invertebrates",
-            files: [{ id: "invertebrates", label: "invertebrates.ts", tags: invertebrateTags }],
-          },
-          {
-            id: "mammals",
-            label: "Mammals",
-            files: [{ id: "mammals", label: "mammals.ts", tags: mammalTags }],
-          },
-          {
-            id: "reptiles",
-            label: "Reptiles",
-            files: [{ id: "reptiles", label: "reptiles.ts", tags: reptileTags }],
-          },
-        ],
-      },
-      {
-        id: "people",
-        label: "People",
-        files: [
-          { id: "ethnicities", label: "ethnicities.ts", tags: ethnicityTags },
-          { id: "genders", label: "genders.ts", tags: genderTags },
-          { id: "humanoids", label: "humanoids.ts", tags: humanoidTags },
-        ],
-      },
+    id: "people",
+    label: "People",
+    files: [
+      { id: "age-groups", label: "age-groups.ts", tags: ageGroupTags },
+      { id: "humanoids", label: "humanoids.ts", tags: humanoidTags },
+      { id: "relationships", label: "relationships.ts", tags: relationshipTags },
+      { id: "roles", label: "roles.ts", tags: roleTags },
     ],
   },
   {
-    id: "nature",
-    label: "Nature",
-    files: [
-      { id: "landscapes", label: "landscapes.ts", tags: landscapeTags },
-      { id: "naturalObjects", label: "naturalObjects.ts", tags: naturalObjectTags },
-      { id: "natureGroups", label: "natureGroups.ts", tags: natureGroupTags },
-      { id: "plants", label: "plants.ts", tags: plantTags },
-      { id: "skyWeatherWater", label: "skyWeatherWater.ts", tags: skyWeatherWaterTags },
+    id: "animals",
+    label: "Animals",
+    files: [{ id: "animals", label: "animals.ts", tags: rootAnimalTags }],
+    folders: [
+      {
+        id: "amphibians",
+        label: "Amphibians",
+        files: [{ id: "amphibians", label: "amphibians.ts", tags: amphibianTags }],
+      },
+      {
+        id: "birds",
+        label: "Birds",
+        files: [{ id: "birds", label: "birds.ts", tags: birdTags }],
+      },
+      {
+        id: "fish",
+        label: "Fish",
+        files: [{ id: "fish", label: "fish.ts", tags: fishTags }],
+      },
+      {
+        id: "insects",
+        label: "Insects",
+        files: [{ id: "insects", label: "insects.ts", tags: insectTags }],
+      },
+      {
+        id: "invertebrates",
+        label: "Invertebrates",
+        files: [{ id: "invertebrates", label: "invertebrates.ts", tags: invertebrateTags }],
+      },
+      {
+        id: "mammals",
+        label: "Mammals",
+        files: [{ id: "mammals", label: "mammals.ts", tags: mammalTags }],
+      },
+      {
+        id: "reptiles",
+        label: "Reptiles",
+        files: [{ id: "reptiles", label: "reptiles.ts", tags: reptileTags }],
+      },
     ],
   },
   {
     id: "food",
     label: "Food",
     files: [
-      { id: "food", label: "food.ts", tags: foodTags },
-      { id: "courses", label: "courses.ts", tags: courseTags },
-      { id: "dayparts", label: "dayparts.ts", tags: daypartTags },
-      { id: "meals", label: "meals.ts", tags: mealTags },
-      { id: "savoury", label: "savoury.ts", tags: savouryTags },
-      { id: "sweet", label: "sweet.ts", tags: sweetTags },
+      { id: "general", label: "general.ts", tags: foodTags },
+      { id: "beverages", label: "beverages.ts", tags: beverageTags },
+      { id: "diets-nutrition", label: "diets-nutrition.ts", tags: dietNutritionTags },
+      { id: "storage", label: "storage.ts", tags: storageTags },
     ],
     folders: [
       {
-        id: "perishables",
-        label: "Perishables",
+        id: "ingredients",
+        label: "Ingredients",
         files: [
-          { id: "berries", label: "berries.ts", tags: berryTags },
-          { id: "dairy", label: "dairy.ts", tags: dairyTags },
-          { id: "fruits", label: "fruits.ts", tags: fruitTags },
-          { id: "vegetables", label: "vegetables.ts", tags: vegetableTags },
-          { id: "meat", label: "meat.ts", tags: meatTags },
-          { id: "poultry", label: "poultry.ts", tags: poultryTags },
+          { id: "produce", label: "produce.ts", tags: produceTags },
+          { id: "animal-products", label: "animal-products.ts", tags: animalProductTags },
+          { id: "pantry", label: "pantry.ts", tags: pantryIngredientTags },
         ],
       },
       {
-        id: "non-perishables",
-        label: "Non-Perishables",
+        id: "dishes",
+        label: "Dishes",
         files: [
-          { id: "pantry", label: "pantry.ts", tags: pantryTags },
-          { id: "spices", label: "spices.ts", tags: spiceTags },
-          { id: "preserves", label: "preserves.ts", tags: preserveTags },
-          { id: "beverages", label: "beverages.ts", tags: beverageTags },
+          { id: "courses", label: "courses.ts", tags: courseTags },
+          { id: "meals", label: "meals.ts", tags: mealTags },
+          { id: "savoury", label: "savoury.ts", tags: savouryTags },
+          { id: "sweet", label: "sweet.ts", tags: sweetTags },
           { id: "snacks", label: "snacks.ts", tags: snackTags },
-          { id: "household", label: "household.ts", tags: householdTags },
         ],
       },
     ],
-  },
-  {
-    id: "materials",
-    label: "Materials",
-    files: [{ id: "materials", label: "materials.ts", tags: materialTags }],
-  },
-  {
-    id: "household",
-    label: "Household",
-    files: [
-      { id: "furniture", label: "furniture.ts", tags: furnitureTags },
-      { id: "house-rooms", label: "house-rooms.ts", tags: houseRoomTags },
-    ],
-    folders: [
-      {
-        id: "bedroom",
-        label: "Bedroom",
-        files: [],
-        folders: [
-          {
-            id: "wardrobe",
-            label: "Wardrobe",
-            files: [
-              { id: "clothes", label: "clothes.ts", tags: clothesTags },
-              { id: "footwear", label: "footwear.ts", tags: footwearTags },
-            ],
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: "activities",
-    label: "Activities",
-    files: [
-      { id: "hobbies", label: "hobbies.ts", tags: hobbyTags },
-      { id: "professions", label: "professions.ts", tags: professionTags },
-      { id: "sports", label: "sports.ts", tags: sportTags },
-      { id: "skills", label: "skills.ts", tags: skillTags },
-    ],
-  },
-  {
-    id: "objects",
-    label: "Objects",
-    files: [{ id: "objects", label: "objects.ts", tags: objectTags }],
   },
   {
     id: "environment",
@@ -238,7 +197,79 @@ export const libraryTagSourceSections: LibraryTagSourceSection[] = [
       { id: "countries", label: "countries.ts", tags: countryTags },
       { id: "attractions", label: "attractions.ts", tags: attractionTags },
       { id: "destinations", label: "destinations.ts", tags: destinationTags },
-      { id: "biomes", label: "biomes.ts", tags: biomeTags },
+    ],
+  },
+  {
+    id: "natural-world",
+    label: "Natural World",
+    files: [
+      { id: "celestial", label: "celestial.ts", tags: celestialTags },
+      { id: "ecosystems", label: "ecosystems.ts", tags: ecosystemTags },
+      { id: "flowers", label: "flowers.ts", tags: flowerTags },
+      { id: "foliage", label: "foliage.ts", tags: foliageTags },
+      { id: "rocks", label: "rocks.ts", tags: rockTags },
+      { id: "terrain", label: "terrain.ts", tags: terrainTags },
+      { id: "trees", label: "trees.ts", tags: treeTags },
+    ],
+  },
+  {
+    id: "objects",
+    label: "Objects",
+    files: [
+      { id: "objects", label: "objects.ts", tags: objectTags },
+      { id: "containers", label: "containers.ts", tags: containerTags },
+      { id: "tools", label: "tools.ts", tags: toolTags },
+      { id: "vehicles", label: "vehicles.ts", tags: vehicleTags },
+      { id: "kitchenware", label: "kitchenware.ts", tags: kitchenwareTags },
+      { id: "office", label: "office.ts", tags: officeTags },
+      { id: "documents", label: "documents.ts", tags: documentTags },
+      { id: "electronics", label: "electronics.ts", tags: electronicsTags },
+      { id: "toys-games", label: "toys-games.ts", tags: toyGameTags },
+      { id: "musical-instruments", label: "musical-instruments.ts", tags: musicalInstrumentTags },
+      { id: "art-supplies", label: "art-supplies.ts", tags: artSupplyTags },
+      { id: "weapons", label: "weapons.ts", tags: weaponTags },
+      { id: "medical", label: "medical.ts", tags: medicalTags },
+      { id: "decor", label: "decor.ts", tags: decorTags },
+      { id: "household-items", label: "household-items.ts", tags: householdItemTags },
+      { id: "industrial", label: "industrial.ts", tags: industrialTags },
+      { id: "furniture", label: "furniture.ts", tags: furnitureTags },
+    ],
+    folders: [
+      {
+        id: "clothing",
+        label: "Clothing",
+        files: [
+          { id: "accessories", label: "accessories.ts", tags: accessoryTags },
+          { id: "headwear", label: "headwear.ts", tags: headwearTags },
+          { id: "tops", label: "tops.ts", tags: topTags },
+          { id: "handwear", label: "handwear.ts", tags: handwearTags },
+          { id: "bottoms", label: "bottoms.ts", tags: bottomTags },
+          { id: "underwear", label: "underwear.ts", tags: underwearTags },
+          { id: "full-body-clothing", label: "full-body-clothing.ts", tags: fullBodyClothingTags },
+          { id: "footwear", label: "footwear.ts", tags: footwearTags },
+        ],
+      },
+    ],
+  },
+  {
+    id: "materials",
+    label: "Materials",
+    files: [
+      { id: "general", label: "general.ts", tags: generalMaterialTags },
+      { id: "animal-materials", label: "animal-materials.ts", tags: animalMaterialTags },
+      { id: "crafted-materials", label: "crafted-materials.ts", tags: craftedMaterialTags },
+      { id: "fabrics", label: "fabrics.ts", tags: fabricTags },
+      { id: "metals", label: "metals.ts", tags: metalTags },
+      { id: "natural-materials", label: "natural-materials.ts", tags: naturalMaterialTags },
+    ],
+  },
+  {
+    id: "activities",
+    label: "Activities",
+    files: [
+      { id: "hobbies", label: "hobbies.ts", tags: hobbyTags },
+      { id: "sports", label: "sports.ts", tags: sportTags },
+      { id: "skills", label: "skills.ts", tags: skillTags },
     ],
   },
   {

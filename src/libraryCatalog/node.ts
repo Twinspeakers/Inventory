@@ -7,7 +7,8 @@ export function node(
   description: string,
   category: string,
   icon: LucideIcon,
-  options: Omit<LibraryNodeTemplate, "id" | "name" | "description" | "category" | "icon" | "childSuggestions"> & {
+  options: Omit<LibraryNodeTemplate, "id" | "name" | "description" | "category" | "icon" | "childSuggestionIds" | "childSuggestions"> & {
+    childSuggestionIds?: string[];
     childSuggestions?: string[];
   },
 ): LibraryNodeTemplate {
@@ -20,6 +21,7 @@ export function node(
     aliases: options.aliases,
     suggestedTags: options.suggestedTags,
     fileTypes: options.fileTypes,
+    childSuggestionIds: options.childSuggestionIds ?? [],
     childSuggestions: options.childSuggestions ?? [],
     matchRules: options.matchRules,
   };

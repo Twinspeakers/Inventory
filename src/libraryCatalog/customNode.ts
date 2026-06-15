@@ -10,6 +10,7 @@ export const customLibraryNodeTemplate: LibraryNodeTemplate = {
   icon: Folder,
   suggestedTags: [],
   fileTypes: ["Any"],
+  childSuggestionIds: [],
   childSuggestions: [],
   matchRules: [],
 };

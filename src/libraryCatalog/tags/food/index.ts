@@ -1,61 +1,62 @@
 import type { LibraryTagDefinition } from "../../types";
-import { courseTags } from "./courses";
-import { daypartTags } from "./dayparts";
-import { mealTags } from "./meals";
-import { beverageTags } from "./non-perishables/beverages";
-import { householdTags } from "./non-perishables/household";
-import { pantryTags } from "./non-perishables/pantry";
-import { preserveTags } from "./non-perishables/preserves";
-import { snackTags } from "./non-perishables/snacks";
-import { spiceTags } from "./non-perishables/spices";
-import { foodTags } from "./food";
-import { savouryTags } from "./savoury";
-import { sweetTags } from "./sweet";
-import { berryTags } from "./perishables/berries";
-import { dairyTags } from "./perishables/dairy";
-import { fruitTags } from "./perishables/fruits";
-import { meatTags } from "./perishables/meat";
-import { poultryTags } from "./perishables/poultry";
-import { vegetableTags } from "./perishables/vegetables";
+import { beverageTags } from "./beverages";
+import { dietNutritionTags } from "./diets-nutrition";
+import { courseTags } from "./dishes/courses";
+import { mealTags } from "./dishes/meals";
+import { savouryTags } from "./dishes/savoury";
+import { snackTags } from "./dishes/snacks";
+import { sweetTags } from "./dishes/sweet";
+import { foodTags } from "./general";
+import {
+  animalProductTags,
+  dairyTags,
+  meatTags,
+  poultryTags,
+} from "./ingredients/animal-products";
+import {
+  pantryIngredientTags,
+  pantryTags,
+  preserveTags,
+  spiceTags,
+} from "./ingredients/pantry";
+import { berryTags, fruitTags, produceTags, vegetableTags } from "./ingredients/produce";
+import { storageTags } from "./storage";
 
 export const allFoodTags: LibraryTagDefinition[] = [
   ...foodTags,
+  ...produceTags,
+  ...animalProductTags,
+  ...pantryIngredientTags,
   ...courseTags,
-  ...daypartTags,
   ...mealTags,
-  ...sweetTags,
   ...savouryTags,
-  ...berryTags,
-  ...dairyTags,
-  ...fruitTags,
-  ...vegetableTags,
-  ...meatTags,
-  ...poultryTags,
-  ...pantryTags,
-  ...spiceTags,
-  ...preserveTags,
-  ...beverageTags,
+  ...sweetTags,
   ...snackTags,
-  ...householdTags,
+  ...beverageTags,
+  ...dietNutritionTags,
+  ...storageTags,
 ];
 
 export {
+  animalProductTags,
   beverageTags,
   berryTags,
   courseTags,
   dairyTags,
-  daypartTags,
+  dietNutritionTags,
   foodTags,
   fruitTags,
-  householdTags,
   mealTags,
   meatTags,
+  pantryIngredientTags,
   pantryTags,
   poultryTags,
   preserveTags,
+  produceTags,
   savouryTags,
   snackTags,
   spiceTags,
+  storageTags,
   sweetTags,
   vegetableTags,
 };

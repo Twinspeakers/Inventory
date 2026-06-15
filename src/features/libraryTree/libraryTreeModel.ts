@@ -4,6 +4,7 @@ import {
   customLibraryNodeTemplate,
   getDefaultLibraryNodeTagsForName,
   isIgnoredLibraryMatchTerm,
+  allLibraryNodeTemplates,
   libraryTagDefinitions,
   libraryNodeTemplates,
   normalizeLibraryMatchText,
@@ -607,6 +608,10 @@ export function getLibraryNodeChildSuggestionTemplates(parentTemplate: LibraryNo
     templates.push(template);
   }
 
+  for (const childTemplateId of parentTemplate.childSuggestionIds) {
+    addTemplate(findLibraryNodeTemplateById(libraryNodeTemplates, childTemplateId));
+  }
+
   for (const childName of parentTemplate.childSuggestions) {
     addTemplate(findLibraryNodeTemplateByName(libraryNodeTemplates, childName));
   }
@@ -962,7 +967,7 @@ export function compareLibraryRuleValue(candidate: string, operator: LibraryNode
 }
 
 export function getLibraryNodeTemplateForFolder(folder: VirtualFolder) {
-  return folder.templateId ? libraryNodeTemplates.find((template) => template.id === folder.templateId) ?? customLibraryNodeTemplate : customLibraryNodeTemplate;
+  return folder.templateId ? allLibraryNodeTemplates.find((template) => template.id === folder.templateId) ?? customLibraryNodeTemplate : customLibraryNodeTemplate;
 }
 
 export function getLibraryNodeRules(folder: VirtualFolder): LibraryNodeRule[] {
@@ -1378,18 +1383,34 @@ export function getAddLibraryNodeParentOptions(folders: VirtualFolder[]): AddLib
   return options;
 }
 
-export function getAddFolderSuggestions(templates: LibraryNodeTemplate[], parentFolder: VirtualFolder | null, query: string): AddFolderSuggestion[] {
+export function getAddFolderSuggestions(
+  templates: LibraryNodeTemplate[],
+  parentFolder: VirtualFolder | null,
+  query: string,
+  folders: VirtualFolder[] = [],
+): AddFolderSuggestion[] {
   const search = normalizeLibraryMatchText(query);
   const parentTemplate = getLibraryNodeTemplateForSuggestionParent(parentFolder, templates);
   const parentLabel = parentFolder?.name ?? "Master Library";
   const parentFileTypes = getInheritedSuggestionFileTypes(parentTemplate);
   const suggestions: AddFolderSuggestion[] = [];
   const seenNames = new Set<string>();
+  const currentParentChildren = getSuggestionParentChildren(parentFolder, folders);
+  const existingChildNames = new Set(currentParentChildren.map((child) => normalizeLibraryMatchText(child.name)).filter(Boolean));
+  const existingChildTemplateIds = new Set(
+    currentParentChildren
+      .map((child) => getLibraryNodeTemplateForFolder(child).id)
+      .filter((templateId) => templateId && templateId !== "custom"),
+  );
 
   function addSuggestion(suggestion: AddFolderSuggestion) {
     const key = normalizeLibraryMatchText(suggestion.name);
 
-    if (!key || seenNames.has(key)) {
+    if (!key || seenNames.has(key) || existingChildNames.has(key)) {
+      return;
+    }
+
+    if (suggestion.template && existingChildTemplateIds.has(suggestion.template.id)) {
       return;
     }
 
@@ -1399,6 +1420,16 @@ export function getAddFolderSuggestions(templates: LibraryNodeTemplate[], parent
 
     seenNames.add(key);
     suggestions.push(suggestion);
+  }
+
+  for (const childTemplateId of parentTemplate.childSuggestionIds) {
+    const childTemplate = findLibraryNodeTemplateById(templates, childTemplateId);
+
+    if (!childTemplate) {
+      continue;
+    }
+
+    addSuggestion(createSuggestionFromTemplate(childTemplate, "parent", parentFileTypes));
   }
 
   for (const childName of parentTemplate.childSuggestions) {
@@ -1413,7 +1444,10 @@ export function getAddFolderSuggestions(templates: LibraryNodeTemplate[], parent
 
   const rankedTemplates = templates
     .filter((template) => template.id !== parentTemplate.id && template.id !== "all-assets")
-    .map((template) => ({ rank: rankTemplateForParentSuggestion(template, parentTemplate, search), template }))
+    .map((template) => ({
+      rank: rankTemplateForSuggestionContext(template, parentTemplate, parentFolder, search, folders),
+      template,
+    }))
     .filter(({ rank }) => rank < 500)
     .sort((first, second) => first.rank - second.rank || compareText(first.template.name, second.template.name));
 
@@ -1426,6 +1460,22 @@ export function getAddFolderSuggestions(templates: LibraryNodeTemplate[], parent
   }
 
   return suggestions.slice(0, search ? 24 : 14);
+}
+
+function rankTemplateForSuggestionContext(
+  template: LibraryNodeTemplate,
+  parentTemplate: LibraryNodeTemplate,
+  parentFolder: VirtualFolder | null,
+  search: string,
+  folders: VirtualFolder[],
+) {
+  const baseRank = rankTemplateForParentSuggestion(template, parentTemplate, search);
+
+  if (baseRank >= 600) {
+    return baseRank;
+  }
+
+  return baseRank + getStructureAwareSuggestionAdjustment(template, parentTemplate, parentFolder, search, folders);
 }
 
 export function createSuggestionFromTemplate(
@@ -1472,27 +1522,288 @@ export function rankTemplateForParentSuggestion(template: LibraryNodeTemplate, p
     return 600;
   }
 
+  const childSuggestionIdIndex = parentTemplate.childSuggestionIds.findIndex((childTemplateId) => childTemplateId === template.id);
+
+  if (childSuggestionIdIndex >= 0) {
+    return childSuggestionIdIndex;
+  }
+
   const childSuggestionIndex = parentTemplate.childSuggestions.findIndex(
     (childName) => normalizeLibraryMatchText(childName) === normalizeLibraryMatchText(template.name),
   );
 
   if (childSuggestionIndex >= 0) {
-    return childSuggestionIndex;
+    return 20 + childSuggestionIndex;
   }
 
-  if (search) {
-    return templateText.startsWith(search) || normalizeLibraryMatchText(template.name).includes(search) ? 100 : 180;
+  const taxonomyRank = getTagTemplateSuggestionRank(template, parentTemplate);
+
+  if (taxonomyRank < 600) {
+    return taxonomyRank + getTemplateSearchAdjustment(template, templateText, search);
   }
 
   if (libraryNodeFileTypesOverlap(parentTemplate.fileTypes, template.fileTypes)) {
-    return parentTemplate.category === template.category ? 170 : 220;
+    const baseRank = template.id.startsWith("tag:")
+      ? parentTemplate.category === template.category
+        ? 210
+        : 240
+      : parentTemplate.category === template.category
+        ? 260
+        : 300;
+
+    return baseRank + getTemplateSearchAdjustment(template, templateText, search);
   }
 
   if (parentTemplate.fileTypes.includes("Any") || template.fileTypes.includes("Any")) {
-    return 260;
+    return 360 + getTemplateSearchAdjustment(template, templateText, search);
+  }
+
+  if (search) {
+    return 420 + getTemplateSearchAdjustment(template, templateText, search);
   }
 
   return 600;
+}
+
+function getStructureAwareSuggestionAdjustment(
+  template: LibraryNodeTemplate,
+  parentTemplate: LibraryNodeTemplate,
+  parentFolder: VirtualFolder | null,
+  search: string,
+  folders: VirtualFolder[],
+) {
+  let adjustment = 0;
+  const templatePath = getTagTemplatePath(template.id);
+
+  if (!search && !parentFolder && folders.length === 0 && templatePath.length > 1) {
+    adjustment += 90 + templatePath.length * 8;
+  }
+
+  const existingTemplateIds = collectExistingFolderTemplateIds(folders);
+
+  if (existingTemplateIds.has(template.id)) {
+    adjustment += parentFolder ? 24 : 40;
+  }
+
+  if (!parentFolder) {
+    adjustment += getRootSuggestionAdjustment(template, parentTemplate, search, folders);
+  }
+
+  if (parentFolder) {
+    const childTemplatePaths = parentFolder.children
+      .map((child) => getTagTemplatePath(getLibraryNodeTemplateForFolder(child).id))
+      .filter((path) => path.length > 0);
+
+    adjustment += getExistingChildBranchAdjustment(templatePath, childTemplatePaths);
+  }
+
+  return adjustment;
+}
+
+function getRootSuggestionAdjustment(
+  template: LibraryNodeTemplate,
+  parentTemplate: LibraryNodeTemplate,
+  search: string,
+  folders: VirtualFolder[],
+) {
+  if (search || parentTemplate.id !== "all-assets") {
+    return 0;
+  }
+
+  let adjustment = 0;
+  const rootTemplateIds = new Set(
+    folders
+      .map((folder) => getLibraryNodeTemplateForFolder(folder).id)
+      .filter((templateId) => templateId && templateId !== "custom"),
+  );
+  const templatePath = getTagTemplatePath(template.id);
+  const directRootSuggestionIndex = parentTemplate.childSuggestionIds.findIndex((childTemplateId) => childTemplateId === template.id);
+
+  if (directRootSuggestionIndex >= 0 && !rootTemplateIds.has(template.id)) {
+    adjustment -= Math.max(22, 80 - directRootSuggestionIndex * 3);
+  }
+
+  if (templatePath.length > 1) {
+    const topLevelTemplateId = `tag:${templatePath[0]}`;
+
+    if (!rootTemplateIds.has(topLevelTemplateId)) {
+      adjustment += 96 + templatePath.length * 10;
+    } else {
+      adjustment += 14;
+    }
+  }
+
+  return adjustment;
+}
+
+function getExistingChildBranchAdjustment(templatePath: string[], childTemplatePaths: string[][]) {
+  if (templatePath.length === 0 || childTemplatePaths.length === 0) {
+    return 0;
+  }
+
+  let bestAdjustment = 0;
+
+  for (const childPath of childTemplatePaths) {
+    if (isDirectTagTemplateChild(templatePath, childPath)) {
+      bestAdjustment = Math.min(bestAdjustment, -80);
+      continue;
+    }
+
+    if (isTagTemplateDescendant(templatePath, childPath)) {
+      bestAdjustment = Math.min(bestAdjustment, -60);
+      continue;
+    }
+
+    const sharedPrefixLength = getSharedTagTemplatePrefixLength(templatePath, childPath);
+
+    if (sharedPrefixLength > 0) {
+      bestAdjustment = Math.min(bestAdjustment, -(18 + sharedPrefixLength * 12));
+    }
+  }
+
+  return bestAdjustment;
+}
+
+function getSuggestionParentChildren(parentFolder: VirtualFolder | null, folders: VirtualFolder[]) {
+  return parentFolder ? parentFolder.children : folders;
+}
+
+function collectExistingFolderTemplateIds(folders: VirtualFolder[]) {
+  const templateIds = new Set<string>();
+
+  function visit(currentFolders: VirtualFolder[]) {
+    for (const folder of currentFolders) {
+      const templateId = getLibraryNodeTemplateForFolder(folder).id;
+
+      if (templateId && templateId !== "custom") {
+        templateIds.add(templateId);
+      }
+
+      visit(folder.children);
+    }
+  }
+
+  visit(folders);
+  return templateIds;
+}
+
+function getTagTemplateSuggestionRank(template: LibraryNodeTemplate, parentTemplate: LibraryNodeTemplate) {
+  const templatePath = getTagTemplatePath(template.id);
+
+  if (templatePath.length === 0) {
+    return 600;
+  }
+
+  const parentPath = getTagTemplatePath(parentTemplate.id);
+
+  if (parentPath.length > 0) {
+    if (isDirectTagTemplateChild(templatePath, parentPath)) {
+      return 60;
+    }
+
+    if (isTagTemplateDescendant(templatePath, parentPath)) {
+      return 90 + (templatePath.length - parentPath.length);
+    }
+
+    if (templatePath[0] === parentPath[0]) {
+      return 150 + templatePath.length;
+    }
+  }
+
+  let bestRank = 600;
+
+  for (const [scopeIndex, childTemplateId] of parentTemplate.childSuggestionIds.entries()) {
+    const scopePath = getTagTemplatePath(childTemplateId);
+
+    if (scopePath.length === 0) {
+      continue;
+    }
+
+    if (isDirectTagTemplateChild(templatePath, scopePath)) {
+      bestRank = Math.min(bestRank, 120 + scopeIndex * 12);
+      continue;
+    }
+
+    if (isTagTemplateDescendant(templatePath, scopePath)) {
+      bestRank = Math.min(bestRank, 160 + scopeIndex * 12 + (templatePath.length - scopePath.length));
+      continue;
+    }
+
+    if (templatePath[0] === scopePath[0]) {
+      bestRank = Math.min(bestRank, 230 + scopeIndex * 8 + templatePath.length);
+    }
+  }
+
+  return bestRank;
+}
+
+function getTagTemplatePath(templateId: string) {
+  if (!templateId.startsWith("tag:")) {
+    return [] as string[];
+  }
+
+  return templateId
+    .slice(4)
+    .split("/")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function isDirectTagTemplateChild(templatePath: string[], parentPath: string[]) {
+  return templatePath.length === parentPath.length + 1 && hasTagTemplatePathPrefix(templatePath, parentPath);
+}
+
+function isTagTemplateDescendant(templatePath: string[], parentPath: string[]) {
+  return templatePath.length > parentPath.length && hasTagTemplatePathPrefix(templatePath, parentPath);
+}
+
+function hasTagTemplatePathPrefix(candidatePath: string[], prefixPath: string[]) {
+  return prefixPath.every((segment, index) => candidatePath[index] === segment);
+}
+
+function getSharedTagTemplatePrefixLength(firstPath: string[], secondPath: string[]) {
+  let prefixLength = 0;
+
+  while (prefixLength < firstPath.length && prefixLength < secondPath.length && firstPath[prefixLength] === secondPath[prefixLength]) {
+    prefixLength += 1;
+  }
+
+  return prefixLength;
+}
+
+function getTemplateSearchAdjustment(template: LibraryNodeTemplate, templateText: string, search: string) {
+  if (!search) {
+    return 0;
+  }
+
+  const normalizedName = normalizeLibraryMatchText(template.name);
+  const normalizedAliases = template.aliases.map((alias) => normalizeLibraryMatchText(alias));
+
+  if (normalizedName === search) {
+    return -70;
+  }
+
+  if (normalizedAliases.includes(search)) {
+    return -60;
+  }
+
+  if (normalizedName.startsWith(search)) {
+    return -40;
+  }
+
+  if (normalizedName.includes(search)) {
+    return -24;
+  }
+
+  if (normalizedAliases.some((alias) => alias.startsWith(search))) {
+    return -18;
+  }
+
+  if (templateText.startsWith(search)) {
+    return -12;
+  }
+
+  return 0;
 }
 
 export function getAddFolderSuggestionSearchText(suggestion: AddFolderSuggestion) {
@@ -1523,6 +1834,10 @@ export function getLibraryNodeTemplateForSuggestionParent(parentFolder: VirtualF
 export function findLibraryNodeTemplateByName(templates: LibraryNodeTemplate[], name: string) {
   const normalizedName = normalizeLibraryMatchText(name);
   return templates.find((template) => normalizeLibraryMatchText(template.name) === normalizedName);
+}
+
+export function findLibraryNodeTemplateById(templates: LibraryNodeTemplate[], templateId: string) {
+  return templates.find((template) => template.id === templateId);
 }
 
 export function getInheritedSuggestionFileTypes(template: LibraryNodeTemplate) {

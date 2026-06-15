@@ -18,6 +18,7 @@ export type LibraryNodeTemplate = {
   icon: LucideIcon;
   suggestedTags: string[];
   fileTypes: LibraryNodeFileType[];
+  childSuggestionIds: string[];
   childSuggestions: string[];
   matchRules: LibraryNodeMatchRule[];
 };

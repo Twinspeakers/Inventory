@@ -46,7 +46,7 @@ export const locationTags = [
   tag("countryside", {
     label: "Countryside",
     aliases: ["rural area", "country landscape"],
-    related: ["village", "farm", "grassland-biome"],
+    related: ["village", "farm", "grassland"],
   }),
   tag("county", {
     label: "County",
@@ -64,7 +64,7 @@ export const locationTags = [
     label: "Desert Country",
     aliases: ["arid country", "desert nation"],
     parents: ["country"],
-    implies: ["country", "desert-biome"],
+    implies: ["country", "desert"],
   }),
   tag("district", {
     label: "District",
@@ -88,7 +88,7 @@ export const locationTags = [
     label: "Island Nation",
     aliases: ["island country", "archipelago nation"],
     parents: ["country"],
-    implies: ["country", "coastal-biome"],
+    implies: ["country", "coastal", "island"],
   }),
   tag("location", {
     label: "Location",
@@ -138,8 +138,8 @@ export const locationTags = [
   tag("seaside-town", {
     label: "Seaside Town",
     aliases: ["coastal town", "beach town"],
-    parents: ["town", "coastal-biome"],
-    implies: ["town", "coastal-biome"],
+    parents: ["town", "coastal"],
+    implies: ["town", "coastal"],
   }),
   tag("skyline", {
     label: "Skyline",
@@ -187,6 +187,6 @@ export const locationTags = [
     label: "Wilderness Area",
     aliases: ["wild area", "remote country"],
     parents: ["region"],
-    related: ["forest-biome", "mountain-biome", "nature"],
+    related: ["forest", "mountain", "nature"],
   }),
 ];

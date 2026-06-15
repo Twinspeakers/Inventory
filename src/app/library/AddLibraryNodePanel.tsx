@@ -60,7 +60,10 @@ export function AddLibraryNodePanel({
     width: number;
   } | null>(null);
   const [panelPosition, setPanelPosition] = useState<{ x: number; y: number } | null>(null);
-  const suggestions = useMemo(() => getAddFolderSuggestions(templates, selectedParentFolder, folderName), [folderName, selectedParentFolder, templates]);
+  const suggestions = useMemo(
+    () => getAddFolderSuggestions(templates, selectedParentFolder, folderName, folders),
+    [folderName, folders, selectedParentFolder, templates],
+  );
   const selectedSuggestion = selectedSuggestionId ? suggestions.find((suggestion) => suggestion.id === selectedSuggestionId) ?? null : null;
   const draftName = folderName.trim() || selectedTemplate?.name || "New Folder";
   const draftTags = useMemo(

@@ -98,7 +98,7 @@ export const buildingTags = [
     aliases: ["beacon tower"],
     parents: ["tower", "coastal-attraction"],
     implies: ["building", "architecture"],
-    related: ["coastal-biome"],
+    related: ["coastal"],
   }),
   tag("palace", {
     label: "Palace",
