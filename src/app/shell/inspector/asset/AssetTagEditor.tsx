@@ -7,11 +7,13 @@ import type { InspectorAsset } from "../inspectorTypes";
 export function AssetTagEditor({
   asset,
   onKeptTagsChange,
+  onOpenTagBrowser,
   onTagsChange,
   suggestions,
 }: {
   asset: InspectorAsset;
   onKeptTagsChange: (tags: string[]) => void;
+  onOpenTagBrowser: () => void;
   onTagsChange: (tags: string[]) => void;
   suggestions: string[];
 }) {
@@ -26,14 +28,17 @@ export function AssetTagEditor({
       const normalizedTag = normalizeLibraryMatchText(tag);
       return !normalizedKeptTags.has(normalizedTag) && !normalizedSystemTags.has(normalizedTag) && !normalizedUserTags.has(normalizedTag);
     })
-    .slice(0, 80);
+    .slice(0, 16);
+  const availableSuggestionsByKey = new Map(availableSuggestions.map((tag) => [normalizeLibraryMatchText(tag), tag]));
+  const selectedSuggestionTag = availableSuggestionsByKey.get(normalizeLibraryMatchText(draftTag)) ?? null;
   const keptOnlyTags = asset.keptTags.filter((tag) => {
     const normalizedTag = normalizeLibraryMatchText(tag);
     return !normalizedSystemTags.has(normalizedTag) && !normalizedUserTags.has(normalizedTag);
   });
 
   function addTag(value: string) {
-    const [tag] = normalizeLibraryNodeTagValues([value]);
+    const suggestedTag = availableSuggestionsByKey.get(normalizeLibraryMatchText(value));
+    const [tag] = normalizeLibraryNodeTagValues(suggestedTag ? [suggestedTag] : []);
 
     if (!tag || normalizedKeptTags.has(tag) || normalizedSystemTags.has(tag) || normalizedUserTags.has(tag)) {
       setDraftTag("");
@@ -104,11 +109,11 @@ export function AssetTagEditor({
           </button>
         ))}
       </div>
-      <form className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-1.5" onSubmit={handleSubmit}>
+      <form className="mt-2 grid grid-cols-[minmax(0,1fr)_auto_auto] gap-1.5" onSubmit={handleSubmit}>
         <input
           className="tag-input"
           list={suggestionId}
-          placeholder="Add tag..."
+          placeholder="Add suggested tag..."
           value={draftTag}
           onChange={(event) => setDraftTag(event.currentTarget.value)}
         />
@@ -117,11 +122,17 @@ export function AssetTagEditor({
             <option key={tag} value={tag} />
           ))}
         </datalist>
-        <button className="tag-add-button" type="submit">
+        <button className="tag-add-button" disabled={!selectedSuggestionTag} type="submit">
           <Plus size={14} aria-hidden="true" />
           <span>Add</span>
         </button>
+        <button className="tag-add-button" type="button" onClick={onOpenTagBrowser}>
+          <span>Browse Tags</span>
+        </button>
       </form>
+      {availableSuggestions.length === 0 ? (
+        <p className="mt-1.5 text-[11px] text-muted">No smart suggestions yet. Use Browse Tags to explore the full library.</p>
+      ) : null}
     </section>
   );
 }

@@ -48,6 +48,7 @@ type InspectorProps<TPlacementSuggestion extends InspectorAssetPlacementSuggesti
   onAssetNotesChange: (assetId: number, notes: string) => void;
   onAssetPlacementSuggestionAccept: (suggestion: TPlacementSuggestion) => void;
   onAssetTagsChange: (assetId: number, tags: string[]) => void;
+  onOpenTagBrowser: () => void;
   onModelTransformChange: (transform: ModelTransform) => void;
   onModelTransformReset: () => void;
   onNvdLineHeightChange: (lineHeight: number, finalizeStyle?: boolean) => void;
@@ -83,6 +84,7 @@ export function Inspector<TPlacementSuggestion extends InspectorAssetPlacementSu
   onAssetNotesChange,
   onAssetPlacementSuggestionAccept,
   onAssetTagsChange,
+  onOpenTagBrowser,
   onModelTransformChange,
   onModelTransformReset,
   onNvdLineHeightChange,
@@ -174,6 +176,7 @@ export function Inspector<TPlacementSuggestion extends InspectorAssetPlacementSu
           <AssetTagEditor
             asset={selectedAsset}
             onKeptTagsChange={(tags) => onAssetKeptTagsChange(selectedAsset.id, tags)}
+            onOpenTagBrowser={onOpenTagBrowser}
             onTagsChange={(tags) => onAssetTagsChange(selectedAsset.id, tags)}
             suggestions={tagSuggestions}
           />

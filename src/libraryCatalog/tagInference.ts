@@ -1,6 +1,5 @@
 import type { Asset, AssetType, ScannedAsset } from "../app/appTypes";
 import type { ModelInspectorResult } from "../sceneReaders/threeModelReader";
-import { libraryNodeTemplates } from "./nodes";
 import {
   addNormalizedLibraryMatchTerm,
   canonicalizeLibraryTag,
@@ -11,7 +10,7 @@ import {
   normalizedTextIncludesTerm,
 } from "./normalization";
 import { libraryTagDefinitions } from "./tags";
-import type { LibraryNodeTemplate, LibraryTagDefinition } from "./types";
+import type { LibraryTagDefinition } from "./types";
 
 export const sourceFileExtensions = new Set([
   "ai",
@@ -114,9 +113,6 @@ const typeColors: Record<AssetType, string> = {
 };
 
 const MAX_AUTOMATIC_REGISTRY_TAGS = 24;
-const MAX_AUTOMATIC_CATALOG_TAGS = 18;
-const MAX_CATALOG_EXPANSION_TAGS_PER_TEMPLATE = 4;
-
 const audioSoundEffectTerms = [
   "sfx",
   "fx",
@@ -256,7 +252,7 @@ const modelPolyTagThresholds = {
 
 export function toAsset(asset: ScannedAsset, modelResult?: ModelInspectorResult): Asset {
   const systemTags = normalizeLibraryNodeTagValues(getAutomaticAssetTags(asset, modelResult));
-  const defaultKeptTags = getDefaultKeptAssetTags(asset).filter((tag) => systemTags.includes(tag));
+  const defaultKeptTags = normalizeLibraryNodeTagValues(getDefaultKeptAssetTags(asset)).filter((tag) => systemTags.includes(tag));
   const keptTags = normalizeLibraryNodeTagValues([...defaultKeptTags, ...(asset.kept_tags ?? [])]);
   const userTags = normalizeLibraryNodeTagValues(asset.tags ?? []);
 
@@ -295,60 +291,19 @@ function getAutomaticAssetTags(asset: ScannedAsset, modelResult?: ModelInspector
     ...fileTypeAutomaticTags[asset.file_type],
     ...(extensionAutomaticTags[extension] ?? []),
   ]) {
-    addNormalizedLibraryMatchTerm(tags, normalizeLibraryMatchText(tag));
+    addKnownLibraryTag(tags, tag);
   }
 
   for (const tag of getAutomaticAudioTags(asset)) {
-    addNormalizedLibraryMatchTerm(tags, tag);
+    addKnownLibraryTag(tags, tag);
   }
 
   for (const tag of getAutomaticModelInspectorTags(modelResult)) {
-    addNormalizedLibraryMatchTerm(tags, tag);
+    addKnownLibraryTag(tags, tag);
   }
 
   for (const tag of getAutomaticLibraryRegistryTags(asset)) {
-    addNormalizedLibraryMatchTerm(tags, tag);
-  }
-
-  const searchText = getScannedAssetTagSearchText(asset);
-  let catalogTagCount = 0;
-  const matchedTemplates: LibraryNodeTemplate[] = [];
-
-  for (const template of libraryNodeTemplates) {
-    if (template.id === "all-assets" || !scannedAssetCanMatchTemplate(asset, template)) {
-      continue;
-    }
-
-    const triggerTerms = getMatchingTemplateAutomaticTagTerms(template, searchText);
-
-    if (triggerTerms.length === 0) {
-      continue;
-    }
-
-    matchedTemplates.push(template);
-
-    for (const term of triggerTerms) {
-      if (catalogTagCount >= MAX_AUTOMATIC_CATALOG_TAGS) {
-        break;
-      }
-
-      catalogTagCount += addAutomaticCatalogTag(tags, term) ? 1 : 0;
-    }
-  }
-
-  for (const template of getLeafMostMatchedCatalogTemplates(matchedTemplates)) {
-    let expansionCount = 0;
-
-    for (const tag of getTemplateAutomaticExpansionTags(template)) {
-      if (catalogTagCount >= MAX_AUTOMATIC_CATALOG_TAGS || expansionCount >= MAX_CATALOG_EXPANSION_TAGS_PER_TEMPLATE) {
-        break;
-      }
-
-      if (addAutomaticCatalogTag(tags, tag)) {
-        catalogTagCount += 1;
-        expansionCount += 1;
-      }
-    }
+    addAutomaticRegistryTag(tags, tag);
   }
 
   return [...tags];
@@ -427,14 +382,13 @@ function addLibraryRegistryTriggerTerm(terms: Set<string>, value: string) {
   addNormalizedLibraryMatchTerm(terms, normalized);
 }
 
-function addLibraryTagDefinitionTags(tags: Set<string>, tagDefinition: LibraryTagDefinition, visitedTagKeys = new Set<string>()) {
+function addLibraryTagDefinitionTags(tags: Set<string>, tagDefinition: LibraryTagDefinition) {
   const tagKey = getLibraryTagDefinitionKey(tagDefinition);
 
-  if (!tagKey || visitedTagKeys.has(tagKey) || tags.size >= MAX_AUTOMATIC_REGISTRY_TAGS) {
+  if (!tagKey || tags.size >= MAX_AUTOMATIC_REGISTRY_TAGS) {
     return;
   }
 
-  visitedTagKeys.add(tagKey);
   addAutomaticRegistryTag(tags, tagDefinition.id);
 
   for (const relatedTagId of [...(tagDefinition.parents ?? []), ...(tagDefinition.implies ?? [])]) {
@@ -442,13 +396,7 @@ function addLibraryTagDefinitionTags(tags: Set<string>, tagDefinition: LibraryTa
       break;
     }
 
-    const relatedTag = getLibraryTagDefinitionByKey(relatedTagId);
-
-    if (relatedTag) {
-      addLibraryTagDefinitionTags(tags, relatedTag, visitedTagKeys);
-    } else {
-      addAutomaticRegistryTag(tags, relatedTagId);
-    }
+    addAutomaticRegistryTag(tags, relatedTagId);
   }
 }
 
@@ -461,6 +409,18 @@ function addAutomaticRegistryTag(tags: Set<string>, value: string) {
 
   const size = tags.size;
   addNormalizedLibraryMatchTerm(tags, normalized);
+  return tags.size > size;
+}
+
+function addKnownLibraryTag(tags: Set<string>, value: string) {
+  const tagDefinition = getLibraryTagDefinitionByKey(value);
+
+  if (!tagDefinition) {
+    return false;
+  }
+
+  const size = tags.size;
+  addLibraryTagDefinitionTags(tags, tagDefinition);
   return tags.size > size;
 }
 
@@ -570,129 +530,6 @@ function getAssetDirectoryPath(path: string) {
 
 function normalizedTextIncludesAnyTerm(text: string, terms: string[]) {
   return terms.some((term) => normalizedTextIncludesTerm(text, normalizeLibraryMatchText(term)));
-}
-
-function scannedAssetCanMatchTemplate(asset: ScannedAsset, template: LibraryNodeTemplate) {
-  if (template.fileTypes.includes("Any")) {
-    return true;
-  }
-
-  return template.fileTypes.some((fileType) => fileType === asset.file_type || (fileType === "Source" && sourceFileExtensions.has(asset.extension)));
-}
-
-function getMatchingTemplateAutomaticTagTerms(template: LibraryNodeTemplate, searchText: string) {
-  return getTemplateAutomaticTagTriggerTerms(template).filter(
-    (term) => !automaticCatalogTagIgnoredTerms.has(term) && !isIgnoredLibraryMatchTerm(term) && normalizedTextIncludesTerm(searchText, term),
-  );
-}
-
-function addAutomaticCatalogTag(tags: Set<string>, value: string) {
-  const normalized = canonicalizeLibraryTag(normalizeLibraryMatchText(value));
-
-  if (!normalized || automaticCatalogTagIgnoredTerms.has(normalized) || isIgnoredLibraryMatchTerm(normalized)) {
-    return false;
-  }
-
-  const size = tags.size;
-  addNormalizedLibraryMatchTerm(tags, normalized);
-  return tags.size > size;
-}
-
-function getLeafMostMatchedCatalogTemplates(templates: LibraryNodeTemplate[]) {
-  return templates.filter((template) => !templates.some((candidate) => candidate.id !== template.id && libraryNodeTemplateIsAncestor(template, candidate)));
-}
-
-function libraryNodeTemplateIsAncestor(ancestor: LibraryNodeTemplate, descendant: LibraryNodeTemplate, visitedTemplateIds = new Set<string>()): boolean {
-  if (visitedTemplateIds.has(descendant.id)) {
-    return false;
-  }
-
-  visitedTemplateIds.add(descendant.id);
-
-  for (const parent of getLibraryNodeTemplateParents(descendant)) {
-    if (parent.id === ancestor.id || libraryNodeTemplateIsAncestor(ancestor, parent, visitedTemplateIds)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-function getLibraryNodeTemplateParents(template: LibraryNodeTemplate) {
-  const templateName = normalizeLibraryMatchText(template.name);
-
-  return libraryNodeTemplates.filter(
-    (candidate) =>
-      candidate.id !== template.id &&
-      candidate.childSuggestions.some((childSuggestion) => normalizeLibraryMatchText(childSuggestion) === templateName),
-  );
-}
-
-function getTemplateAutomaticExpansionTags(template: LibraryNodeTemplate) {
-  const terms = new Set<string>();
-
-  addLibraryMatchTerm(terms, template.name);
-
-  for (const parent of getLibraryNodeTemplateParents(template).filter((parentTemplate) => parentTemplate.category !== "Asset Type" && parentTemplate.category !== "Foundation")) {
-    addLibraryMatchTerm(terms, parent.name);
-  }
-
-  if (template.category !== "Asset Type" && template.category !== "Foundation" && template.childSuggestions.length <= 6) {
-    for (const tag of template.suggestedTags) {
-      addLibraryMatchTerm(terms, tag);
-    }
-  }
-
-  return [...terms];
-}
-
-function getTemplateAutomaticTagTriggerTerms(template: LibraryNodeTemplate) {
-  const terms = new Set<string>();
-
-  for (const value of [
-    template.name,
-    ...template.aliases,
-    ...template.suggestedTags,
-  ]) {
-    addLibraryMatchTerm(terms, value);
-  }
-
-  for (const rule of template.matchRules) {
-    for (const term of rule.terms) {
-      addAutomaticMatchRuleTriggerTerm(terms, term);
-    }
-  }
-
-  return [...terms];
-}
-
-function addAutomaticMatchRuleTriggerTerm(terms: Set<string>, value: string) {
-  const normalized = normalizeLibraryMatchText(value);
-
-  if (!normalized) {
-    return;
-  }
-
-  if (normalized.includes(" ")) {
-    addNormalizedLibraryMatchTerm(terms, normalized);
-    return;
-  }
-
-  addLibraryMatchTerm(terms, normalized);
-}
-
-function addLibraryMatchTerm(terms: Set<string>, value: string) {
-  const normalized = normalizeLibraryMatchText(value);
-
-  if (!normalized || isIgnoredLibraryMatchTerm(normalized)) {
-    return;
-  }
-
-  addNormalizedLibraryMatchTerm(terms, normalized);
-
-  for (const part of normalized.split(" ")) {
-    addNormalizedLibraryMatchTerm(terms, part);
-  }
 }
 
 function formatBytes(bytes: number) {

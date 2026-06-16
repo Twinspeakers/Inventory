@@ -22,6 +22,12 @@ Work well with them:
 - Restate unusual interactions in plain language before building.
 - Keep the app calm, dense, and DAW-like. Avoid marketing-page padding inside the app.
 - Preserve delight. This project is being built with a lot of warmth.
+- Keep token use disciplined during iterative UI work:
+  - Prefer narrow, single-problem passes over broad rewrites.
+  - Keep commentary terse once shared context is established.
+  - Avoid repeating long recaps unless the situation materially changed.
+  - Batch closely related edits into one pass when practical.
+  - Only restart/rebuild when needed for real verification, not by habit.
 
 ## Hard Design Rule
 
@@ -81,6 +87,9 @@ Selecting Inventory, Write, or Draw opens a hub. Selecting a native file opens i
 - File-type boundaries prevent unrelated media from sharing folders just because they share a tag.
 - A file appears once at its most specific matching visible tree location.
 - Suggested folder placement appears in the Inspector.
+- Inspector tag adding now has two layers:
+  - Quick Add uses suggestion-only tags from the bundled library.
+  - Browse Tags opens the full tag library browser.
 
 ### Preview Readers
 
@@ -180,9 +189,28 @@ Important paths:
 - `src/features/nvvEditor/`: Draw editor, zoom, SVG preview utilities.
 - `src/features/sceneViewer/`: Preview Stage and scene toolbar.
 - `src/features/settings/`: General, Themes, Notifications.
+- `src/features/tagLibrary/`: tag browser window, bridge, and browser UI.
 - `src/libraryCatalog/`: bundled node/tag vocabulary and normalization.
 - `src/sceneReaders/`: file preview engines.
 - `src-tauri/src/lib.rs`: Rust commands for scanning, Inventory lifecycle, native documents, and tests.
+
+## Tag Library Notes
+
+- The full tag browser is no longer just a DOM modal. It now opens as a separate Tauri child window because a normal React modal cannot escape the native app window bounds.
+- Main wiring:
+  - `src/App.tsx` opens and syncs the tag-library window.
+  - `src/main.tsx` routes the child window into its own React entry surface.
+  - `src/features/tagLibrary/TagLibraryWindowApp.tsx` is the child-window app shell.
+  - `src/features/tagLibrary/tagLibraryWindowBridge.ts` holds the shared labels, event names, and route param.
+  - `src/features/tagLibrary/TagLibraryBrowser.tsx` renders both modes: in-app modal fallback and native child window mode.
+- Tauri capability gotcha:
+  - `src-tauri/capabilities/default.json` must include both `main` and `tag-library` in `windows`.
+  - The child window needs explicit permissions beyond `core:default`, including create/show/focus/close/maximize/unmaximize/start-dragging/start-resize-dragging and `core:webview:allow-create-webview-window`.
+  - If Browse Tags stops opening after window work, check capabilities first.
+- Layout gotcha:
+  - The browser has a deliberate two-column umbrella-card layout.
+  - A too-broad responsive breakpoint caused the child window to collapse back into stacked rows.
+  - If the UI suddenly looks like long rows again, check `src/styles.css` media queries before assuming the component logic regressed.
 
 ## Current Docs Contract
 
@@ -239,6 +267,7 @@ Be careful around:
 - NVD pagination and typography. Run frontend tests when touching them.
 - NVV path state and undo history. Pen/Direct Select/Transform edits should remain undoable and not unexpectedly switch tools.
 - SVG source assets are not `.nvv`; editing user-owned SVG should require an explicit import or `Edit as NVV` flow later.
+- The tag-library browser now spans app state plus a native Tauri child window. If it breaks, inspect both the React wiring and Tauri capability permissions.
 
 ## Verification
 
@@ -267,6 +296,8 @@ Start-Process -FilePath 'npm.cmd' -ArgumentList @('run','tauri','dev') -WorkingD
 Start-Sleep -Seconds 10
 Get-Process inventory -ErrorAction SilentlyContinue | Select-Object Id, ProcessName
 ```
+
+On Windows, prefer `npm.cmd` rather than `npm` when relaunching through `Start-Process`.
 
 Before finishing a visual feature, restart or inspect the running app if possible. Before finishing native persistence work, add or update Rust tests.
 

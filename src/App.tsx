@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   type AssetSortKey,
   type AssetViewMode,
@@ -63,6 +65,16 @@ import {
 import type { SceneMode } from "./features/sceneViewer";
 import { isPlayableAudioAsset, isWaveAudioAsset, playAssetAudioOnce } from "./sceneReaders/audioReader";
 import type { ModelTransform } from "./sceneReaders/threeModelReader";
+import {
+  TAG_LIBRARY_WINDOW_ADD_TAG_EVENT,
+  TAG_LIBRARY_WINDOW_LABEL,
+  TAG_LIBRARY_WINDOW_READY_EVENT,
+  TAG_LIBRARY_WINDOW_STATE_EVENT,
+  buildTagLibraryWindowUrl,
+  isTauriRuntime,
+  toTagLibraryWindowAssetSnapshot,
+  type TagLibraryWindowAddTagPayload,
+} from "./features/tagLibrary/tagLibraryWindowBridge";
 export function App() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [sourceFolders, setSourceFolders] = useState<SourceFolder[]>([]);
@@ -498,6 +510,63 @@ export function App() {
     }
   }, [selectedAsset?.id, selectedAsset?.path]);
 
+  useEffect(() => {
+    if (!isTauriRuntime()) {
+      return;
+    }
+
+    let disposed = false;
+    let unlistenReady: (() => void) | null = null;
+    let unlistenAddTag: (() => void) | null = null;
+    const currentWindow = getCurrentWindow();
+
+    void currentWindow
+      .listen(TAG_LIBRARY_WINDOW_READY_EVENT, () => {
+        void syncTagLibraryWindowState(selectedAsset);
+      })
+      .then((unlisten) => {
+        if (disposed) {
+          unlisten();
+          return;
+        }
+
+        unlistenReady = unlisten;
+      });
+
+    void currentWindow
+      .listen<TagLibraryWindowAddTagPayload>(TAG_LIBRARY_WINDOW_ADD_TAG_EVENT, ({ payload }) => {
+        const asset = assets.find((entry) => entry.id === payload.assetId);
+
+        if (!asset) {
+          return;
+        }
+
+        updateAssetTags(payload.assetId, [...asset.userTags, payload.tag]);
+      })
+      .then((unlisten) => {
+        if (disposed) {
+          unlisten();
+          return;
+        }
+
+        unlistenAddTag = unlisten;
+      });
+
+    return () => {
+      disposed = true;
+      unlistenReady?.();
+      unlistenAddTag?.();
+    };
+  }, [assets, selectedAsset, updateAssetTags]);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) {
+      return;
+    }
+
+    void syncTagLibraryWindowState(selectedAsset);
+  }, [selectedAsset]);
+
   function cancelPendingLibrarySave() {
     if (saveTimer.current) {
       window.clearTimeout(saveTimer.current);
@@ -523,6 +592,62 @@ export function App() {
 
   function resetSelectedModelTransform() {
     resetModelTransformOverride(selectedModelKey);
+  }
+
+  async function syncTagLibraryWindowState(asset: Asset | null) {
+    const tagBrowserWindow = await WebviewWindow.getByLabel(TAG_LIBRARY_WINDOW_LABEL);
+
+    if (!tagBrowserWindow) {
+      return;
+    }
+
+    await tagBrowserWindow.emit(TAG_LIBRARY_WINDOW_STATE_EVENT, {
+      selectedAsset: toTagLibraryWindowAssetSnapshot(asset),
+    });
+  }
+
+  async function openTagLibraryWindow(asset: Asset | null) {
+    const existingWindow = await WebviewWindow.getByLabel(TAG_LIBRARY_WINDOW_LABEL);
+
+    if (existingWindow) {
+      await existingWindow.show();
+      await existingWindow.setFocus();
+      await syncTagLibraryWindowState(asset);
+      return;
+    }
+
+    const currentWindow = getCurrentWindow();
+    const [position, size, scaleFactor] = await Promise.all([
+      currentWindow.outerPosition(),
+      currentWindow.outerSize(),
+      currentWindow.scaleFactor(),
+    ]);
+    const width = 870;
+    const height = 600;
+    const logicalX = position.x / scaleFactor;
+    const logicalY = position.y / scaleFactor;
+    const logicalWidth = size.width / scaleFactor;
+    const logicalHeight = size.height / scaleFactor;
+
+    const tagBrowserWindow = new WebviewWindow(TAG_LIBRARY_WINDOW_LABEL, {
+      url: buildTagLibraryWindowUrl(),
+      title: "Tag Library",
+      width,
+      height,
+      minWidth: 760,
+      minHeight: 420,
+      x: Math.round(logicalX + Math.max(24, (logicalWidth - width) / 2)),
+      y: Math.round(logicalY + Math.max(24, (logicalHeight - height) / 2)),
+      decorations: false,
+      focus: true,
+      resizable: true,
+      alwaysOnTop: true,
+      skipTaskbar: true,
+    });
+
+    void tagBrowserWindow.once("tauri://error", () => {
+      setStatusMessage("Could not open the Tag Library window.");
+    });
   }
 
   const activeInspectorNvvDocument =
@@ -568,7 +693,6 @@ export function App() {
         onNavigateNvdBlock: navigateToNvdBlock,
         onOpenNodeContextMenu: openLibraryNodeContextMenu,
         onOpenSourceFolderContextMenu: openSourceFolderContextMenu,
-        onOpenTagBrowser: () => setIsTagBrowserOpen(true),
         onPaneViewChange: changeLeftPaneView,
         onResetWidth: () => setLeftPaneWidth(DEFAULT_LEFT_PANE_WIDTH),
         onResizeStart: startLeftPaneResize,
@@ -661,6 +785,14 @@ export function App() {
         onAssetNotesChange: updateAssetNotes,
         onAssetPlacementSuggestionAccept: acceptAssetPlacementSuggestion,
         onAssetTagsChange: updateAssetTags,
+        onOpenTagBrowser: () => {
+          if (isTauriRuntime()) {
+            void openTagLibraryWindow(selectedAsset);
+            return;
+          }
+
+          setIsTagBrowserOpen(true);
+        },
         onModelTransformChange: updateSelectedModelTransform,
         onModelTransformReset: resetSelectedModelTransform,
         onNvdCharacterSpacingPtChange: changeNvdCharacterSpacingPt,
@@ -693,6 +825,7 @@ export function App() {
         pendingNvdStyleResetRole,
         selectedThemeId,
         selectedThemeIsBuiltin,
+        selectedAsset,
         sourceFolderContextMenu,
         themeColors,
         themeEditorLayout,
@@ -722,6 +855,13 @@ export function App() {
         onSettingsClose: () => setIsSettingsOpen(false),
         onSourceFolderContextMenuClose: () => setSourceFolderContextMenu(null),
         onTagBrowserClose: () => setIsTagBrowserOpen(false),
+        onTagBrowserAddTag: (tag) => {
+          if (!selectedAsset) {
+            return;
+          }
+
+          updateAssetTags(selectedAsset.id, [...selectedAsset.userTags, tag]);
+        },
         onThemeColorChange: updateThemeColor,
         onThemeEditorLayoutChange: setThemeEditorLayout,
         onThemeNameChange: setThemeName,

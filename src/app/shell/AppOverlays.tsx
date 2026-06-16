@@ -41,6 +41,7 @@ export function AppOverlays({
   pendingNvdStyleResetRole,
   selectedThemeId,
   selectedThemeIsBuiltin,
+  selectedAsset,
   sourceFolderContextMenu,
   themeColors,
   themeEditorLayout,
@@ -69,6 +70,7 @@ export function AppOverlays({
   onSettingsClose,
   onSourceFolderContextMenuClose,
   onTagBrowserClose,
+  onTagBrowserAddTag,
   onThemeColorChange,
   onThemeEditorLayoutChange,
   onThemeNameChange,
@@ -91,6 +93,7 @@ export function AppOverlays({
   pendingNvdStyleResetRole: NvdStyleRole | null;
   selectedThemeId: string;
   selectedThemeIsBuiltin: boolean;
+  selectedAsset: Asset | null;
   sourceFolderContextMenu: SourceFolderContextMenuState | null;
   themeColors: ThemeColors;
   themeEditorLayout: ThemeEditorLayout;
@@ -119,6 +122,7 @@ export function AppOverlays({
   onSettingsClose: () => void;
   onSourceFolderContextMenuClose: () => void;
   onTagBrowserClose: () => void;
+  onTagBrowserAddTag: (tag: string) => void;
   onThemeColorChange: (key: keyof ThemeColors, value: string) => void;
   onThemeEditorLayoutChange: (layout: ThemeEditorLayout) => void;
   onThemeNameChange: (name: string) => void;
@@ -300,8 +304,10 @@ export function AppOverlays({
       ) : null}
       {isTagBrowserOpen ? (
         <TagLibraryBrowser
+          selectedAsset={selectedAsset}
           sections={libraryTagSourceSections}
           tags={libraryTagDefinitions}
+          onAddTag={onTagBrowserAddTag}
           onClose={onTagBrowserClose}
         />
       ) : null}

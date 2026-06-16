@@ -1134,6 +1134,52 @@ textarea {
     @apply bg-copper;
   }
 
+  .tag-library-browser-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  }
+
+  .tag-library-umbrella-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: start;
+  }
+
+  .tag-library-umbrella-column {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+
+  .tag-library-umbrella-card {
+    @apply overflow-hidden rounded-sm border border-line bg-surface;
+  }
+
+  .tag-library-file-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    gap: 0.5rem;
+  }
+
+  .tag-library-file-button {
+    @apply w-full rounded-sm border px-3 py-2 text-left transition;
+  }
+
+  @media (max-width: 780px) {
+    .tag-library-browser-layout {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) minmax(280px, 0.95fr);
+    }
+  }
+
+  @media (max-width: 620px) {
+    .tag-library-umbrella-columns {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
   .add-folder-suggestion-row {
     @apply flex w-full items-center gap-2 rounded-sm border border-transparent p-2 text-left text-ink transition hover:border-steel hover:bg-surface;
   }

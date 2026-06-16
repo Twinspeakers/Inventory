@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo } from "react";
+import { useDeferredValue, useMemo, useRef } from "react";
 import { clamp } from "../workspace/appLayout";
 import type {
   Asset,
@@ -86,10 +86,63 @@ export function useAppDerivedState({
   treeOpenNodeIds: Set<string>;
   virtualFolders: VirtualFolder[];
 }) {
-  const allAssets = useMemo(
-    () => scanResult?.assets.map((asset) => toAsset(asset, modelInspectorResults[getScannedAssetModelKey(asset)])) ?? [],
-    [modelInspectorResults, scanResult, TAG_INFERENCE_VERSION],
+  const assetConversionCacheRef = useRef(
+    new Map<number, {
+      asset: ScanResult["assets"][number];
+      builtAsset: Asset;
+      modelResult?: ModelInspectorResult;
+    }>(),
   );
+  const previousAllAssetsRef = useRef<Asset[]>([]);
+  const allAssets = useMemo(() => {
+    if (!scanResult) {
+      assetConversionCacheRef.current.clear();
+      previousAllAssetsRef.current = [];
+      return [];
+    }
+
+    const nextAssets: Asset[] = [];
+    const seenAssetIds = new Set<number>();
+    let hasChanges = previousAllAssetsRef.current.length !== scanResult.assets.length;
+
+    scanResult.assets.forEach((asset, index) => {
+      const modelResult = modelInspectorResults[getScannedAssetModelKey(asset)];
+      const cachedEntry = assetConversionCacheRef.current.get(asset.id);
+      const builtAsset =
+        cachedEntry && cachedEntry.asset === asset && cachedEntry.modelResult === modelResult
+          ? cachedEntry.builtAsset
+          : toAsset(asset, modelResult);
+
+      if (!cachedEntry || cachedEntry.asset !== asset || cachedEntry.modelResult !== modelResult || cachedEntry.builtAsset !== builtAsset) {
+        assetConversionCacheRef.current.set(asset.id, {
+          asset,
+          builtAsset,
+          modelResult,
+        });
+      }
+
+      seenAssetIds.add(asset.id);
+      nextAssets.push(builtAsset);
+
+      if (!hasChanges && previousAllAssetsRef.current[index] !== builtAsset) {
+        hasChanges = true;
+      }
+    });
+
+    for (const cachedAssetId of assetConversionCacheRef.current.keys()) {
+      if (!seenAssetIds.has(cachedAssetId)) {
+        assetConversionCacheRef.current.delete(cachedAssetId);
+        hasChanges = true;
+      }
+    }
+
+    if (!hasChanges) {
+      return previousAllAssetsRef.current;
+    }
+
+    previousAllAssetsRef.current = nextAssets;
+    return nextAssets;
+  }, [modelInspectorResults, scanResult, TAG_INFERENCE_VERSION]);
   const inventoryDocumentPaths = useMemo(
     () => new Set([...inventoryDocuments.nvdDocuments, ...inventoryDocuments.nvvDocuments].map((document) => normalizePath(document.path))),
     [inventoryDocuments],
@@ -121,7 +174,6 @@ export function useAppDerivedState({
   );
   const sourceSummary = useMemo(() => getSourceSummary(sourceFolders ?? []), [sourceFolders]);
   const activeFolder = selectedFolderId ? findFolder(virtualFolders, selectedFolderId) : null;
-  const assetTagSuggestions = useMemo(() => getAssetTagSuggestions(masterLibraryAssets, virtualFolders), [masterLibraryAssets, virtualFolders]);
   const visibleAssets = useMemo(
     () => filterAssets(activeView, assets, selectedFolderId, virtualFolders, inventoryDocumentPaths),
     [activeView, assets, inventoryDocumentPaths, selectedFolderId, virtualFolders],
@@ -145,6 +197,10 @@ export function useAppDerivedState({
       : selectedFolderId
         ? selectedVisibleAsset ?? sortedVisibleAssets[0] ?? null
         : assets.find((asset) => asset.id === selectedId) ?? sortedVisibleAssets[0] ?? null;
+  const assetTagSuggestions = useMemo(
+    () => getAssetTagSuggestions(selectedAsset, masterLibraryAssets, virtualFolders),
+    [masterLibraryAssets, selectedAsset, virtualFolders],
+  );
   const currentWorkspaceState = useMemo(
     () =>
       ({

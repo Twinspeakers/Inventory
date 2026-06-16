@@ -1,14 +1,22 @@
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, FileText, Folder, Maximize2, Minimize2, Search, X } from "lucide-react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { createPortal } from "react-dom";
+import { Check, ChevronDown, ChevronRight, FileText, Folder, Maximize2, Minimize2, Plus, Search, X } from "lucide-react";
 import { clamp, isPrimaryPointer } from "../../app/workspace/appLayout";
 import {
   normalizeLibraryMatchText,
+  normalizeLibraryNodeTagValues,
   normalizedTextIncludesTerm,
   type LibraryTagDefinition,
+  type LibraryTagSourceFile,
   type LibraryTagSourceFolder,
   type LibraryTagSourceSection,
 } from "../../libraryCatalog";
+import {
+  isTauriRuntime,
+  type TagLibraryWindowAssetSnapshot,
+} from "./tagLibraryWindowBridge";
 
 type TagLibraryResizeHandle = "top" | "right" | "bottom" | "left" | "top-left" | "top-right" | "bottom-right" | "bottom-left";
 
@@ -19,40 +27,82 @@ type TagLibraryWindowRect = {
   y: number;
 };
 
+type TagLibraryFileEntry = {
+  id: string;
+  label: string;
+  pathLabels: string[];
+  searchText: string;
+  tagCount: number;
+  tags: LibraryTagDefinition[];
+};
+
+type TagLibrarySectionEntry = {
+  description: string;
+  fileCount: number;
+  files: TagLibraryFileEntry[];
+  id: string;
+  label: string;
+  searchText: string;
+  tagCount: number;
+};
+
 const tagLibraryWindowPadding = 16;
 const tagLibraryMinHeight = 420;
-const tagLibraryMinWidth = 620;
-const tagLibraryDefaultHeight = 860;
-const tagLibraryDefaultWidth = 1180;
+const tagLibraryMinWidth = 760;
+const tagLibraryDefaultHeight = 600;
+const tagLibraryDefaultWidth = 870;
 
 export function TagLibraryBrowser({
+  mode = "modal",
+  selectedAsset,
   sections,
   tags,
+  onAddTag,
   onClose,
 }: {
+  mode?: "modal" | "window";
+  selectedAsset: TagLibraryWindowAssetSnapshot | null;
   sections: LibraryTagSourceSection[];
   tags: LibraryTagDefinition[];
+  onAddTag: (tag: string) => void;
   onClose: () => void;
 }) {
+  const isNativeWindowMode = mode === "window";
   const [query, setQuery] = useState("");
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
+  const [expandedSectionIds, setExpandedSectionIds] = useState<string[]>([]);
   const [isMaximized, setIsMaximized] = useState(false);
-  const [isSystemMinimized, setIsSystemMinimized] = useState(true);
-  const [isStylesMinimized, setIsStylesMinimized] = useState(true);
   const [windowRect, setWindowRect] = useState<TagLibraryWindowRect>(() => getDefaultTagLibraryWindowRect());
   const windowRef = useRef<HTMLElement | null>(null);
   const windowInteractionCleanupRef = useRef<(() => void) | null>(null);
   const normalizedQuery = normalizeLibraryMatchText(query);
+  const sectionEntries = useMemo(() => buildTagLibrarySectionEntries(sections), [sections]);
   const visibleSections = useMemo(
-    () => filterTagSourceSections(sections, normalizedQuery),
-    [normalizedQuery, sections],
+    () => filterTagLibrarySectionEntries(sectionEntries, normalizedQuery),
+    [normalizedQuery, sectionEntries],
   );
-  const systemSection = visibleSections.find((section) => section.id === "system") ?? null;
-  const stylesSection = visibleSections.find((section) => section.id === "styles") ?? null;
-  const contentSections = visibleSections.filter((section) => section.id !== "system" && section.id !== "styles");
-  const visibleCount = useMemo(() => countTagSourceSectionTags(visibleSections), [visibleSections]);
-  const modalClassName = isMaximized
+  const sectionColumns = useMemo(() => splitSectionsIntoColumns(visibleSections, 2), [visibleSections]);
+  const fileEntriesById = useMemo(
+    () => new Map(visibleSections.flatMap((section) => section.files.map((file) => [file.id, file] as const))),
+    [visibleSections],
+  );
+  const visibleCount = useMemo(
+    () => visibleSections.reduce((total, section) => total + section.tagCount, 0),
+    [visibleSections],
+  );
+  const selectedAssetTagIds = useMemo(
+    () => new Set(normalizeLibraryNodeTagValues(selectedAsset?.tags ?? [])),
+    [selectedAsset?.tags],
+  );
+  const selectedFile = selectedFileId ? fileEntriesById.get(selectedFileId) ?? null : null;
+  const selectedTagDefinition = selectedFile?.tags.find((tagDefinition) => tagDefinition.id === selectedTagId) ?? null;
+  const autoExpandResults = Boolean(normalizedQuery);
+  const modalClassName = isNativeWindowMode
     ? "relative flex h-full w-full flex-col overflow-hidden border border-line bg-surface text-ink"
-    : "absolute flex flex-col overflow-hidden rounded-sm border border-line bg-surface text-ink";
+    : isMaximized
+      ? "relative flex h-full w-full flex-col overflow-hidden border border-line bg-surface text-ink"
+      : "absolute flex flex-col overflow-hidden rounded-sm border border-line bg-surface text-ink";
   const overlayClassName = isMaximized ? "fixed inset-0 z-[60] bg-black/45 p-0" : "fixed inset-0 z-[60] bg-black/45";
   const modalStyle = isMaximized
     ? undefined
@@ -79,9 +129,51 @@ export function TagLibraryBrowser({
       setWindowRect((rect) => constrainTagLibraryWindowRect(rect));
     }
 
+    if (isNativeWindowMode) {
+      return;
+    }
+
     window.addEventListener("resize", handleWindowResize);
     return () => window.removeEventListener("resize", handleWindowResize);
-  }, []);
+  }, [isNativeWindowMode]);
+
+  useEffect(() => {
+    if (!isNativeWindowMode || !isTauriRuntime()) {
+      return;
+    }
+
+    let disposed = false;
+    let unlistenResize: (() => void) | null = null;
+    const currentWindow = getCurrentWindow();
+
+    void currentWindow.isMaximized().then((value) => {
+      if (!disposed) {
+        setIsMaximized(value);
+      }
+    });
+
+    void currentWindow
+      .onResized(async () => {
+        const maximized = await currentWindow.isMaximized();
+
+        if (!disposed) {
+          setIsMaximized(maximized);
+        }
+      })
+      .then((unlisten) => {
+        if (disposed) {
+          unlisten();
+          return;
+        }
+
+        unlistenResize = unlisten;
+      });
+
+    return () => {
+      disposed = true;
+      unlistenResize?.();
+    };
+  }, [isNativeWindowMode]);
 
   useEffect(() => {
     return () => {
@@ -89,8 +181,24 @@ export function TagLibraryBrowser({
     };
   }, []);
 
+  useEffect(() => {
+    if (selectedFileId && fileEntriesById.has(selectedFileId)) {
+      return;
+    }
+
+    setSelectedFileId(visibleSections[0]?.files[0]?.id ?? null);
+  }, [fileEntriesById, selectedFileId, visibleSections]);
+
+  useEffect(() => {
+    if (selectedFile?.tags.some((tagDefinition) => tagDefinition.id === selectedTagId)) {
+      return;
+    }
+
+    setSelectedTagId(selectedFile?.tags[0]?.id ?? null);
+  }, [selectedFile, selectedTagId]);
+
   function startWindowDrag(event: ReactPointerEvent<HTMLElement>) {
-    if (isMaximized || !isPrimaryPointer(event)) {
+    if (!isPrimaryPointer(event)) {
       return;
     }
 
@@ -107,6 +215,16 @@ export function TagLibraryBrowser({
     }
 
     event.preventDefault();
+
+    if (isNativeWindowMode && isTauriRuntime()) {
+      void getCurrentWindow().startDragging();
+      return;
+    }
+
+    if (isMaximized) {
+      return;
+    }
+
     windowInteractionCleanupRef.current?.();
 
     const bounds = element.getBoundingClientRect();
@@ -163,12 +281,22 @@ export function TagLibraryBrowser({
   }
 
   function startWindowResize(event: ReactPointerEvent<HTMLDivElement>, handle: TagLibraryResizeHandle) {
-    if (isMaximized || !isPrimaryPointer(event)) {
+    if (!isPrimaryPointer(event)) {
       return;
     }
 
     event.preventDefault();
     event.stopPropagation();
+
+    if (isNativeWindowMode && isTauriRuntime()) {
+      void getCurrentWindow().startResizeDragging(getTagLibraryResizeDirection(handle));
+      return;
+    }
+
+    if (isMaximized) {
+      return;
+    }
+
     windowInteractionCleanupRef.current?.();
 
     const cursorClassName = getTagLibraryResizeCursorClassName(handle);
@@ -213,6 +341,18 @@ export function TagLibraryBrowser({
   }
 
   function toggleMaximized() {
+    if (isNativeWindowMode && isTauriRuntime()) {
+      const currentWindow = getCurrentWindow();
+
+      if (isMaximized) {
+        void currentWindow.unmaximize();
+      } else {
+        void currentWindow.maximize();
+      }
+
+      return;
+    }
+
     if (isMaximized) {
       setWindowRect((rect) => constrainTagLibraryWindowRect(rect));
     }
@@ -220,15 +360,27 @@ export function TagLibraryBrowser({
     setIsMaximized((value) => !value);
   }
 
-  return (
-    <div className={overlayClassName}>
+  function toggleSection(sectionId: string) {
+    setExpandedSectionIds((ids) => (ids.includes(sectionId) ? ids.filter((id) => id !== sectionId) : [...ids, sectionId]));
+  }
+
+  function addSelectedTag() {
+    if (!selectedAsset || !selectedTagDefinition || selectedAssetTagIds.has(normalizeLibraryMatchText(selectedTagDefinition.id))) {
+      return;
+    }
+
+    onAddTag(selectedTagDefinition.id);
+  }
+
+  const content = (
+    <div className={isNativeWindowMode ? "h-screen w-screen bg-app p-px" : overlayClassName}>
       <section
         aria-label="Tag library browser"
         aria-modal="true"
         className={modalClassName}
         ref={windowRef}
         role="dialog"
-        style={modalStyle}
+        style={isNativeWindowMode ? undefined : modalStyle}
       >
         {!isMaximized ? (
           <>
@@ -294,6 +446,7 @@ export function TagLibraryBrowser({
             />
           </>
         ) : null}
+
         <header
           className={`${isMaximized ? "" : "tag-library-drag-header"} flex h-12 shrink-0 items-center justify-between gap-4 border-b border-line px-4`}
           onPointerDown={startWindowDrag}
@@ -301,16 +454,27 @@ export function TagLibraryBrowser({
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold">Tag Library</h2>
             <p className="truncate text-[11px] text-muted">
+              {selectedAsset ? `Adding tags to ${selectedAsset.name} - ` : ""}
               {visibleCount}/{tags.length} tags visible
             </p>
           </div>
           <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+            <button
+              className="tag-add-button"
+              disabled={!selectedAsset || !selectedTagDefinition || selectedAssetTagIds.has(normalizeLibraryMatchText(selectedTagDefinition.id))}
+              title={selectedTagDefinition ? `Add ${selectedTagDefinition.label}` : "Select a tag to add"}
+              type="button"
+              onClick={addSelectedTag}
+            >
+              <Plus size={14} aria-hidden="true" />
+              <span>Add</span>
+            </button>
             <label className="relative w-[min(360px,45vw)]">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" size={14} aria-hidden="true" />
               <input
                 autoFocus
                 className="h-8 w-full rounded-sm border border-line bg-canvas pl-8 pr-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-steel focus:ring-2 focus:ring-steel/20"
-                placeholder="Search folders, files, tags..."
+                placeholder="Search umbrellas, files, tags..."
                 value={query}
                 onChange={(event) => setQuery(event.currentTarget.value)}
               />
@@ -330,34 +494,232 @@ export function TagLibraryBrowser({
           </div>
         </header>
 
-        <div className="grid min-h-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] overflow-hidden">
-          <TagSourceSidePanel
-            folder={systemSection}
-            isMinimized={isSystemMinimized}
-            label="System"
-            side="left"
-            onToggle={() => setIsSystemMinimized((value) => !value)}
-          />
-          <div className="min-h-0 overflow-auto border-x border-line bg-canvas">
-            <div className="min-w-[520px] py-2">
-              {contentSections.length > 0 ? (
-                <TagSourceTree folders={contentSections} />
-              ) : (
-                <div className="mx-3 rounded-sm border border-line bg-surface p-4 text-sm text-muted">No tags match that search.</div>
-              )}
+        <div className="tag-library-browser-layout min-h-0 flex-1 overflow-hidden">
+          <section className="min-h-0 border-r border-line bg-canvas">
+            <div className="flex h-full min-h-0 flex-col">
+              <div className="min-h-0 flex-1 overflow-auto p-3">
+                {visibleSections.length > 0 ? (
+                  <div className="tag-library-umbrella-columns">
+                    {sectionColumns.map((columnSections, columnIndex) => (
+                      <div className="tag-library-umbrella-column" key={`column-${columnIndex}`}>
+                        {columnSections.map((section) => {
+                          const isExpanded = autoExpandResults || expandedSectionIds.includes(section.id);
+
+                          return (
+                            <section className="tag-library-umbrella-card" key={section.id}>
+                              <div className="flex items-start justify-between gap-3 border-b border-line px-3 py-3">
+                                <button className="min-w-0 flex-1 text-left" type="button" onClick={() => toggleSection(section.id)}>
+                                  <div className="flex items-center gap-2">
+                                    <Folder size={14} aria-hidden="true" />
+                                    <span className="truncate text-sm font-semibold text-ink">{section.label}</span>
+                                  </div>
+                                  <p className="mt-1 text-xs text-muted">{section.description}</p>
+                                </button>
+                                <div className="flex shrink-0 items-center gap-2">
+                                  <span className="tag-small">{section.tagCount}</span>
+                                  <button
+                                    aria-expanded={isExpanded}
+                                    className="icon-button h-7 w-7"
+                                    title={isExpanded ? `Collapse ${section.label}` : `Expand ${section.label}`}
+                                    type="button"
+                                    onClick={() => toggleSection(section.id)}
+                                  >
+                                    {isExpanded ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
+                                  </button>
+                                </div>
+                              </div>
+
+                              {isExpanded ? (
+                                <div className="tag-library-file-grid px-3 py-3">
+                                  {section.files.map((file) => {
+                                    const isSelected = selectedFile?.id === file.id;
+
+                                    return (
+                                      <button
+                                        className={`tag-library-file-button ${
+                                          isSelected ? "border-steel bg-canvas" : "border-line bg-surface hover:border-steel hover:bg-canvas"
+                                        }`}
+                                        key={file.id}
+                                        type="button"
+                                        onClick={() => setSelectedFileId(file.id)}
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <FileText size={13} aria-hidden="true" />
+                                          <span className="truncate text-sm font-medium text-ink">{file.label}</span>
+                                        </div>
+                                        <p className="mt-1 text-[11px] text-muted">{file.tagCount} tags</p>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              ) : null}
+                            </section>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-sm border border-line bg-surface p-4 text-sm text-muted">No tags match that search.</div>
+                )}
+              </div>
             </div>
-          </div>
-          <TagSourceSidePanel
-            folder={stylesSection}
-            isMinimized={isStylesMinimized}
-            label="Styles"
-            side="right"
-            onToggle={() => setIsStylesMinimized((value) => !value)}
-          />
+          </section>
+
+          <aside className="min-h-0 bg-surface">
+            {selectedFile ? (
+              <div className="flex h-full min-h-0 flex-col">
+                <div className="border-b border-line px-4 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="break-words text-lg font-semibold text-ink">{selectedFile.label}</h3>
+                      <p className="mt-1 text-xs text-muted">{selectedFile.pathLabels.join(" / ")}</p>
+                    </div>
+                    <span className="tag-small">{selectedFile.tagCount} tags</span>
+                  </div>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-auto p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-normal text-muted">Tags</div>
+                      <p className="mt-1 text-xs text-muted">
+                        {selectedAsset ? "Select a tag, then add it to the current file." : "Select a file in the inspector to add tags."}
+                      </p>
+                    </div>
+                    <button
+                      className="tag-add-button"
+                      disabled={!selectedAsset || !selectedTagDefinition || selectedAssetTagIds.has(normalizeLibraryMatchText(selectedTagDefinition.id))}
+                      type="button"
+                      onClick={addSelectedTag}
+                    >
+                      <Plus size={14} aria-hidden="true" />
+                      <span>Add</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {selectedFile.tags.map((tagDefinition) => {
+                      const isSelected = selectedTagId === tagDefinition.id;
+                      const isAdded = selectedAssetTagIds.has(normalizeLibraryMatchText(tagDefinition.id));
+
+                      return (
+                        <button
+                          className={`flex w-full items-center gap-3 rounded-sm border px-3 py-2 text-left transition ${
+                            isSelected ? "border-steel bg-canvas" : "border-line bg-surface hover:border-steel hover:bg-canvas"
+                          }`}
+                          key={tagDefinition.id}
+                          type="button"
+                          onClick={() => setSelectedTagId(tagDefinition.id)}
+                        >
+                          <span className={`h-2 w-2 shrink-0 rounded-full ${getLibraryTagKindDotClass(tagDefinition.kind)}`} aria-hidden="true" />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-medium text-ink">{tagDefinition.label}</div>
+                            <div className="truncate text-[11px] text-muted">{tagDefinition.id}</div>
+                          </div>
+                          {isAdded ? <Check className="shrink-0 text-steel" size={14} aria-hidden="true" /> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {selectedTagDefinition ? (
+                    <div className="mt-4 rounded-sm border border-line bg-canvas p-3">
+                      <div className="flex items-center gap-2">
+                        <span className={`h-2 w-2 rounded-full ${getLibraryTagKindDotClass(selectedTagDefinition.kind)}`} aria-hidden="true" />
+                        <h4 className="text-sm font-semibold text-ink">{selectedTagDefinition.label}</h4>
+                        <span className="tag-small">{selectedTagDefinition.kind}</span>
+                      </div>
+                      {selectedTagDefinition.description ? (
+                        <p className="mt-2 text-xs leading-relaxed text-muted">{selectedTagDefinition.description}</p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <div className="flex h-full items-center justify-center p-5 text-center text-sm text-muted">
+                Select a file button from one of the umbrella cards.
+              </div>
+            )}
+          </aside>
         </div>
       </section>
     </div>
   );
+
+  if (typeof document === "undefined" || isNativeWindowMode) {
+    return content;
+  }
+
+  return createPortal(content, document.body);
+}
+
+function buildTagLibrarySectionEntries(sections: LibraryTagSourceSection[]): TagLibrarySectionEntry[] {
+  return sections
+    .map((section) => {
+      const files = flattenTagLibraryFiles(section, [section.label]);
+      const tagCount = files.reduce((total, file) => total + file.tagCount, 0);
+
+      return {
+        description: `${files.length} files`,
+        fileCount: files.length,
+        files,
+        id: section.id,
+        label: section.label,
+        searchText: normalizeLibraryMatchText([
+          section.label,
+          ...files.map((file) => file.searchText),
+        ].join(" ")),
+        tagCount,
+      } satisfies TagLibrarySectionEntry;
+    })
+    .sort((first, second) => first.label.localeCompare(second.label));
+}
+
+function flattenTagLibraryFiles(folder: LibraryTagSourceFolder, pathLabels: string[]): TagLibraryFileEntry[] {
+  const currentFiles = folder.files.map((file) => {
+    const filePathLabels = [...pathLabels, file.label];
+
+    return {
+      id: `${folder.id}:${file.id}`,
+      label: file.label,
+      pathLabels: filePathLabels,
+      searchText: normalizeLibraryMatchText([
+        ...filePathLabels,
+        ...file.tags.map((tag) => `${tag.id} ${tag.label} ${(tag.aliases ?? []).join(" ")}`),
+      ].join(" ")),
+      tagCount: file.tags.length,
+      tags: file.tags,
+    } satisfies TagLibraryFileEntry;
+  });
+
+  const descendantFiles = (folder.folders ?? []).flatMap((childFolder) => flattenTagLibraryFiles(childFolder, [...pathLabels, childFolder.label]));
+
+  return [...currentFiles, ...descendantFiles].sort((first, second) => first.label.localeCompare(second.label));
+}
+
+function filterTagLibrarySectionEntries(sections: TagLibrarySectionEntry[], normalizedQuery: string) {
+  if (!normalizedQuery) {
+    return sections;
+  }
+
+  return sections.flatMap((section) => {
+    const sectionMatches = normalizedTextIncludesTerm(normalizeLibraryMatchText(section.label), normalizedQuery);
+    const files = sectionMatches ? section.files : section.files.filter((file) => file.searchText.includes(normalizedQuery));
+
+    return files.length > 0 ? [{ ...section, files, fileCount: files.length, tagCount: files.reduce((total, file) => total + file.tagCount, 0) }] : [];
+  });
+}
+
+function splitSectionsIntoColumns(sections: TagLibrarySectionEntry[], columnCount: number) {
+  const columns = Array.from({ length: columnCount }, () => [] as TagLibrarySectionEntry[]);
+
+  sections.forEach((section, index) => {
+    columns[index % columnCount].push(section);
+  });
+
+  return columns;
 }
 
 function getDefaultTagLibraryWindowRect(): TagLibraryWindowRect {
@@ -377,14 +739,12 @@ function constrainTagLibraryWindowRect(rect: TagLibraryWindowRect): TagLibraryWi
   const constraints = getTagLibraryWindowConstraints();
   const width = clamp(rect.width, constraints.minWidth, constraints.maxWidth);
   const height = clamp(rect.height, constraints.minHeight, constraints.maxHeight);
-  const maxX = Math.max(tagLibraryWindowPadding, constraints.viewportWidth - width - tagLibraryWindowPadding);
-  const maxY = Math.max(tagLibraryWindowPadding, constraints.viewportHeight - height - tagLibraryWindowPadding);
 
   return {
     height,
     width,
-    x: clamp(rect.x, tagLibraryWindowPadding, maxX),
-    y: clamp(rect.y, tagLibraryWindowPadding, maxY),
+    x: rect.x,
+    y: rect.y,
   };
 }
 
@@ -456,223 +816,26 @@ function getTagLibraryResizeCursorClassName(handle: TagLibraryResizeHandle) {
   return "is-resizing-tag-library-ns";
 }
 
-function TagSourceSidePanel({
-  folder,
-  isMinimized,
-  label,
-  side,
-  onToggle,
-}: {
-  folder: LibraryTagSourceFolder | null;
-  isMinimized: boolean;
-  label: string;
-  side: "left" | "right";
-  onToggle: () => void;
-}) {
-  const count = folder ? countTagSourceFolderTags(folder) : 0;
-  const chevron = side === "left"
-    ? isMinimized ? <ChevronRight size={14} aria-hidden="true" /> : <ChevronLeft size={14} aria-hidden="true" />
-    : isMinimized ? <ChevronLeft size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />;
-
-  if (isMinimized) {
-    return (
-      <aside className="flex w-10 min-w-10 flex-col items-center border-line bg-surface py-2">
-        <button
-          aria-label={`Show ${label} tags`}
-          className="icon-button"
-          title={`Show ${label}`}
-          type="button"
-          onClick={onToggle}
-        >
-          {chevron}
-        </button>
-        <div className="mt-3 flex flex-1 items-center justify-center">
-          <span className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-semibold uppercase tracking-normal text-muted">
-            {label}
-          </span>
-        </div>
-      </aside>
-    );
+function getTagLibraryResizeDirection(handle: TagLibraryResizeHandle) {
+  switch (handle) {
+    case "top":
+      return "North";
+    case "right":
+      return "East";
+    case "bottom":
+      return "South";
+    case "left":
+      return "West";
+    case "top-left":
+      return "NorthWest";
+    case "top-right":
+      return "NorthEast";
+    case "bottom-right":
+      return "SouthEast";
+    case "bottom-left":
+    default:
+      return "SouthWest";
   }
-
-  return (
-    <aside className="flex w-64 min-w-64 flex-col overflow-hidden bg-surface">
-      <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-line px-2">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <Folder size={13} aria-hidden="true" />
-          <span className="truncate text-[11px] font-semibold uppercase text-muted">{label}</span>
-          <span className="text-[10px] text-muted">{count}</span>
-        </div>
-        <button
-          aria-label={`Minimize ${label} tags`}
-          className="icon-button h-7 w-7"
-          title={`Minimize ${label}`}
-          type="button"
-          onClick={onToggle}
-        >
-          {chevron}
-        </button>
-      </div>
-      <div className="min-h-0 flex-1 overflow-auto py-2">
-        {folder ? <TagSourceTree folders={[folder]} compact /> : <div className="px-3 text-xs text-muted">No matching tags.</div>}
-      </div>
-    </aside>
-  );
-}
-
-function TagSourceTree({ compact = false, folders }: { compact?: boolean; folders: LibraryTagSourceFolder[] }) {
-  return (
-    <div className={compact ? "text-[11px]" : "text-xs"}>
-      {folders.map((folder) => (
-        <TagSourceFolderNode compact={compact} depth={0} folder={folder} key={folder.id} />
-      ))}
-    </div>
-  );
-}
-
-function TagSourceFolderNode({
-  compact,
-  depth,
-  folder,
-}: {
-  compact: boolean;
-  depth: number;
-  folder: LibraryTagSourceFolder;
-}) {
-  const tagCount = countTagSourceFolderTags(folder);
-
-  return (
-    <details className="group/tag-source-folder" open>
-      <summary className="list-none cursor-pointer [&::-webkit-details-marker]:hidden">
-        <div
-          className="grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-1.5 px-2 py-1 hover:bg-surface-raised"
-          style={{ paddingLeft: `${8 + depth * 14}px` }}
-        >
-          <ChevronRight className="text-muted transition group-open/tag-source-folder:rotate-90" size={12} aria-hidden="true" />
-          <span className="flex min-w-0 items-center gap-1.5 font-semibold text-ink">
-            <Folder size={13} aria-hidden="true" />
-            <span className="truncate">{folder.label}</span>
-          </span>
-          <span className="text-[10px] text-muted">{tagCount}</span>
-        </div>
-      </summary>
-      {folder.files.map((file) => (
-        <TagSourceFileNode compact={compact} depth={depth + 1} file={file} key={`${folder.id}:${file.id}`} />
-      ))}
-      {(folder.folders ?? []).map((childFolder) => (
-        <TagSourceFolderNode compact={compact} depth={depth + 1} folder={childFolder} key={`${folder.id}:${childFolder.id}`} />
-      ))}
-    </details>
-  );
-}
-
-function TagSourceFileNode({
-  compact,
-  depth,
-  file,
-}: {
-  compact: boolean;
-  depth: number;
-  file: LibraryTagSourceFolder["files"][number];
-}) {
-  return (
-    <details className="group/tag-source-file" open>
-      <summary className="list-none cursor-pointer [&::-webkit-details-marker]:hidden">
-        <div
-          className="grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-1.5 px-2 py-1 hover:bg-surface-raised"
-          style={{ paddingLeft: `${8 + depth * 14}px` }}
-        >
-          <ChevronRight className="text-muted transition group-open/tag-source-file:rotate-90" size={12} aria-hidden="true" />
-          <span className="flex min-w-0 items-center gap-1.5 font-mono text-muted">
-            <FileText size={12} aria-hidden="true" />
-            <span className="truncate">{file.label}</span>
-          </span>
-          <span className="text-[10px] text-muted">{file.tags.length}</span>
-        </div>
-      </summary>
-      {file.tags.map((tagDefinition) => (
-        <TagSourceTagRow
-          compact={compact}
-          depth={depth + 1}
-          key={tagDefinition.id}
-          tagDefinition={tagDefinition}
-        />
-      ))}
-    </details>
-  );
-}
-
-function TagSourceTagRow({
-  compact,
-  depth,
-  tagDefinition,
-}: {
-  compact: boolean;
-  depth: number;
-  tagDefinition: LibraryTagDefinition;
-}) {
-  return (
-    <div
-      className="flex min-w-0 items-center gap-1.5 px-2 py-0.5 leading-snug hover:bg-surface-raised"
-      style={{ paddingLeft: `${22 + depth * 14}px` }}
-    >
-      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${getLibraryTagKindDotClass(tagDefinition.kind)}`} aria-hidden="true" />
-      <span className={`truncate font-semibold text-ink ${compact ? "text-[11px]" : "text-xs"}`}>{tagDefinition.label}</span>
-    </div>
-  );
-}
-
-function filterTagSourceSections(sections: LibraryTagSourceSection[], normalizedQuery: string): LibraryTagSourceSection[] {
-  if (!normalizedQuery) {
-    return sections;
-  }
-
-  return sections.flatMap((section) => {
-    const filteredSection = filterTagSourceFolder(section, normalizedQuery);
-    return filteredSection ? [filteredSection] : [];
-  });
-}
-
-function filterTagSourceFolder(folder: LibraryTagSourceFolder, normalizedQuery: string): LibraryTagSourceFolder | null {
-  const folderMatches = normalizedTextIncludesTerm(normalizeLibraryMatchText(folder.label), normalizedQuery);
-  const files = folder.files.flatMap((file) => {
-      const fileMatches = normalizedTextIncludesTerm(normalizeLibraryMatchText(file.label), normalizedQuery);
-      const matchingTags = fileMatches || folderMatches
-        ? file.tags
-        : file.tags.filter((tagDefinition) => tagLibraryDefinitionIncludesText(tagDefinition, normalizedQuery));
-
-      return matchingTags.length > 0 ? [{ ...file, tags: matchingTags }] : [];
-  });
-  const folders = (folder.folders ?? []).flatMap((childFolder) => {
-    const filteredFolder = folderMatches ? childFolder : filterTagSourceFolder(childFolder, normalizedQuery);
-    return filteredFolder ? [filteredFolder] : [];
-  });
-
-  return files.length > 0 || folders.length > 0 ? { ...folder, files, folders } : null;
-}
-
-function countTagSourceSectionTags(sections: LibraryTagSourceSection[]) {
-  return sections.reduce((total, section) => total + countTagSourceFolderTags(section), 0);
-}
-
-function countTagSourceFolderTags(folder: LibraryTagSourceFolder): number {
-  return (
-    folder.files.reduce((total, file) => total + file.tags.length, 0) +
-    (folder.folders ?? []).reduce((total, childFolder) => total + countTagSourceFolderTags(childFolder), 0)
-  );
-}
-
-function tagLibraryDefinitionIncludesText(tagDefinition: LibraryTagDefinition, normalizedQuery: string) {
-  return normalizeLibraryMatchText([
-    tagDefinition.id,
-    tagDefinition.label,
-    tagDefinition.kind,
-    ...(tagDefinition.aliases ?? []),
-    ...(tagDefinition.parents ?? []),
-    ...(tagDefinition.implies ?? []),
-    ...(tagDefinition.related ?? []),
-    ...(tagDefinition.locksToFileTypes ?? []),
-  ].join(" ")).includes(normalizedQuery);
 }
 
 function getLibraryTagKindDotClass(kind: LibraryTagDefinition["kind"]) {
@@ -688,4 +851,3 @@ function getLibraryTagKindDotClass(kind: LibraryTagDefinition["kind"]) {
       return "bg-[rgb(var(--color-brand-blue))]";
   }
 }
-

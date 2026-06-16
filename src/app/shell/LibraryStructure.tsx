@@ -17,7 +17,6 @@ export function LibraryStructure({
   collapsed,
   nodes,
   onCreateFolder,
-  onOpenTagBrowser,
   onNavigateNvdBlock,
   onPaneViewChange,
   onResizeStart,
@@ -45,7 +44,6 @@ export function LibraryStructure({
   collapsed: boolean;
   nodes: StructureNode[];
   onCreateFolder: () => void;
-  onOpenTagBrowser: () => void;
   onNavigateNvdBlock: (blockIndex: number) => void;
   onPaneViewChange: (view: LeftPaneView) => void;
   onResizeStart: (event: ReactPointerEvent<HTMLDivElement>) => void;
@@ -143,9 +141,6 @@ export function LibraryStructure({
               <>
                 <button className="dark-icon-button" aria-label="Add library node" disabled={!canCreateFolder} title="Add library node" onClick={onCreateFolder}>
                   <Plus size={14} aria-hidden="true" />
-                </button>
-                <button className="dark-icon-button" aria-label="Browse tag library" title="Browse tag library" type="button" onClick={onOpenTagBrowser}>
-                  <ListTree size={14} aria-hidden="true" />
                 </button>
               </>
             ) : null}
