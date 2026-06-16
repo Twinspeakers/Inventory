@@ -13,6 +13,7 @@ import type {
   AddLibraryNodeDraft,
   AddLibraryNodePanelState,
   Asset,
+  ProjectTagGroup,
   VirtualFolder,
 } from "../appTypes";
 import type { NvdStyleRole } from "../../features/nvdEditor";
@@ -39,6 +40,7 @@ export function AppOverlays({
   nvdStyleResetConfirmationEnabled,
   openedNvdDocumentTitle,
   pendingNvdStyleResetRole,
+  projectTagGroups,
   selectedThemeId,
   selectedThemeIsBuiltin,
   selectedAsset,
@@ -77,6 +79,9 @@ export function AppOverlays({
   onToggleFutureNvdStyleResetConfirmations,
   onClearPendingNvdStyleResetRole,
   onCreateLibraryNode,
+  onCreateProjectTag,
+  onCreateProjectTagGroup,
+  onDeleteProjectTagGroup,
 }: {
   addLibraryNodePanel: AddLibraryNodePanelState | null;
   availableThemes: ThemeDefinition[];
@@ -91,6 +96,7 @@ export function AppOverlays({
   nvdStyleResetConfirmationEnabled: boolean;
   openedNvdDocumentTitle: string | null;
   pendingNvdStyleResetRole: NvdStyleRole | null;
+  projectTagGroups: ProjectTagGroup[];
   selectedThemeId: string;
   selectedThemeIsBuiltin: boolean;
   selectedAsset: Asset | null;
@@ -129,6 +135,9 @@ export function AppOverlays({
   onToggleFutureNvdStyleResetConfirmations: (enabled: boolean) => void;
   onClearPendingNvdStyleResetRole: () => void;
   onCreateLibraryNode: (draft: AddLibraryNodeDraft, parentFolderId: string | null) => void;
+  onCreateProjectTag: (groupId: string, label: string) => void;
+  onCreateProjectTagGroup: (label: string) => void;
+  onDeleteProjectTagGroup: (groupId: string) => void;
 }) {
   return (
     <>
@@ -304,9 +313,13 @@ export function AppOverlays({
       ) : null}
       {isTagBrowserOpen ? (
         <TagLibraryBrowser
+          projectTagGroups={projectTagGroups}
           selectedAsset={selectedAsset}
           sections={libraryTagSourceSections}
           tags={libraryTagDefinitions}
+          onCreateProjectTag={onCreateProjectTag}
+          onCreateProjectTagGroup={onCreateProjectTagGroup}
+          onDeleteProjectTagGroup={onDeleteProjectTagGroup}
           onAddTag={onTagBrowserAddTag}
           onClose={onTagBrowserClose}
         />

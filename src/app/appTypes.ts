@@ -66,10 +66,23 @@ export type SourceFolder = {
   enabled: boolean;
 };
 
+export type ProjectTagDefinition = {
+  id: string;
+  label: string;
+};
+
+export type ProjectTagGroup = {
+  id: string;
+  label: string;
+  tags: ProjectTagDefinition[];
+};
+
 export type PersistedLibraryState = {
   rootPath: string | null;
   assets: ScannedAsset[];
   sourceFolders?: SourceFolder[];
+  projectTagGroups?: ProjectTagGroup[];
+  recentUserTagIds?: string[];
   virtualFolders: VirtualFolder[];
 };
 

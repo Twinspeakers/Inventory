@@ -82,7 +82,27 @@ struct LibraryState {
     assets: Vec<AssetRecord>,
     #[serde(default)]
     source_folders: Vec<SourceFolderState>,
+    #[serde(default)]
+    project_tag_groups: Vec<ProjectTagGroupState>,
+    #[serde(default)]
+    recent_user_tag_ids: Vec<String>,
     virtual_folders: Vec<VirtualFolderState>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectTagDefinitionState {
+    id: String,
+    label: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectTagGroupState {
+    id: String,
+    label: String,
+    #[serde(default)]
+    tags: Vec<ProjectTagDefinitionState>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -187,6 +207,10 @@ struct InventoryManifest {
     assets: Vec<AssetRecord>,
     #[serde(default)]
     library_tree: Vec<VirtualFolderState>,
+    #[serde(default)]
+    project_tag_groups: Vec<ProjectTagGroupState>,
+    #[serde(default)]
+    recent_user_tag_ids: Vec<String>,
     #[serde(default = "default_inventory_workspace_state")]
     workspace_state: InventoryWorkspaceState,
     #[serde(default = "default_inventory_documents_state")]
@@ -218,6 +242,10 @@ struct InventoryManifestWire {
     assets: Option<Vec<AssetRecord>>,
     #[serde(default)]
     library_tree: Option<Vec<VirtualFolderState>>,
+    #[serde(default)]
+    project_tag_groups: Option<Vec<ProjectTagGroupState>>,
+    #[serde(default)]
+    recent_user_tag_ids: Option<Vec<String>>,
     #[serde(default)]
     library_state: Option<LibraryState>,
     #[serde(default)]
@@ -562,6 +590,8 @@ fn load_library_state(app: AppHandle) -> Result<LibraryState, String> {
     Ok(LibraryState {
         root_path,
         assets,
+        project_tag_groups: Vec::new(),
+        recent_user_tag_ids: Vec::new(),
         source_folders,
         virtual_folders,
     })
@@ -675,6 +705,8 @@ fn create_inventory(app: AppHandle, name: String) -> Result<OpenedInventory, Str
         source_folders: Vec::new(),
         assets: Vec::new(),
         library_tree: Vec::new(),
+        project_tag_groups: Vec::new(),
+        recent_user_tag_ids: Vec::new(),
         workspace_state: default_inventory_workspace_state(),
         documents: default_inventory_documents_state(),
         export_settings: default_inventory_export_settings(),
@@ -717,6 +749,8 @@ fn save_inventory(
         source_folders: state.source_folders,
         assets: state.assets,
         library_tree: state.virtual_folders,
+        project_tag_groups: state.project_tag_groups,
+        recent_user_tag_ids: state.recent_user_tag_ids,
         workspace_state,
         documents: existing_manifest.documents,
         export_settings: existing_manifest.export_settings,
@@ -2027,6 +2061,8 @@ fn empty_library_state() -> LibraryState {
     LibraryState {
         root_path: None,
         assets: Vec::new(),
+        project_tag_groups: Vec::new(),
+        recent_user_tag_ids: Vec::new(),
         source_folders: Vec::new(),
         virtual_folders: Vec::new(),
     }
@@ -2076,6 +2112,12 @@ fn inventory_manifest_from_wire(wire: InventoryManifestWire) -> InventoryManifes
         source_folders: wire.source_folders.unwrap_or(library_state.source_folders),
         assets: wire.assets.unwrap_or(library_state.assets),
         library_tree: wire.library_tree.unwrap_or(library_state.virtual_folders),
+        project_tag_groups: wire
+            .project_tag_groups
+            .unwrap_or(library_state.project_tag_groups),
+        recent_user_tag_ids: wire
+            .recent_user_tag_ids
+            .unwrap_or(library_state.recent_user_tag_ids),
         workspace_state: wire
             .workspace_state
             .unwrap_or_else(default_inventory_workspace_state),
@@ -2666,6 +2708,8 @@ mod tests {
             source_folders: Vec::new(),
             assets: Vec::new(),
             library_tree: Vec::new(),
+            project_tag_groups: Vec::new(),
+            recent_user_tag_ids: Vec::new(),
             workspace_state: default_inventory_workspace_state(),
             documents: InventoryDocumentsState {
                 nvd_documents: vec![document_entry],
@@ -2737,6 +2781,8 @@ mod tests {
             source_folders: Vec::new(),
             assets: Vec::new(),
             library_tree: Vec::new(),
+            project_tag_groups: Vec::new(),
+            recent_user_tag_ids: Vec::new(),
             workspace_state: default_inventory_workspace_state(),
             documents: InventoryDocumentsState {
                 nvd_documents: Vec::new(),
@@ -2829,6 +2875,8 @@ mod tests {
             source_folders: Vec::new(),
             assets: Vec::new(),
             library_tree: Vec::new(),
+            project_tag_groups: Vec::new(),
+            recent_user_tag_ids: Vec::new(),
             workspace_state: default_inventory_workspace_state(),
             documents: default_inventory_documents_state(),
             export_settings: default_inventory_export_settings(),
@@ -2943,6 +2991,8 @@ mod tests {
                 tags: Vec::new(),
                 template_id: None,
             }],
+            project_tag_groups: Vec::new(),
+            recent_user_tag_ids: Vec::new(),
             workspace_state: InventoryWorkspaceState {
                 selected_asset_id: Some(original_entry.asset_id),
                 active_nvd_document_path: Some(original_entry.path.clone()),
@@ -3115,6 +3165,8 @@ mod tests {
             source_folders: Vec::new(),
             assets: Vec::new(),
             library_tree: Vec::new(),
+            project_tag_groups: Vec::new(),
+            recent_user_tag_ids: Vec::new(),
             workspace_state: default_inventory_workspace_state(),
             documents: default_inventory_documents_state(),
             export_settings: default_inventory_export_settings(),
@@ -3230,6 +3282,8 @@ mod tests {
                 tags: Vec::new(),
                 template_id: None,
             }],
+            project_tag_groups: Vec::new(),
+            recent_user_tag_ids: Vec::new(),
             workspace_state: default_inventory_workspace_state(),
             documents: InventoryDocumentsState {
                 nvd_documents: vec![InventoryDocumentEntry {

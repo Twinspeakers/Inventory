@@ -1,24 +1,24 @@
-import type { FormEvent as ReactFormEvent } from "react";
-import { useState } from "react";
-import { Plus, Save, X } from "lucide-react";
+import { Save, X } from "lucide-react";
 import { normalizeLibraryMatchText, normalizeLibraryNodeTagValues } from "../../../../libraryCatalog";
 import type { InspectorAsset } from "../inspectorTypes";
 
 export function AssetTagEditor({
   asset,
+  onAddTag,
   onKeptTagsChange,
   onOpenTagBrowser,
+  onRemoveRecentTag,
   onTagsChange,
   suggestions,
 }: {
   asset: InspectorAsset;
+  onAddTag: (tag: string) => void;
   onKeptTagsChange: (tags: string[]) => void;
   onOpenTagBrowser: () => void;
+  onRemoveRecentTag: (tag: string) => void;
   onTagsChange: (tags: string[]) => void;
   suggestions: string[];
 }) {
-  const [draftTag, setDraftTag] = useState("");
-  const suggestionId = `tag-suggestions-${asset.id}`;
   const normalizedDefaultKeptTags = new Set(asset.defaultKeptTags.map(normalizeLibraryMatchText));
   const normalizedKeptTags = new Set(asset.keptTags.map(normalizeLibraryMatchText));
   const normalizedSystemTags = new Set(asset.systemTags.map(normalizeLibraryMatchText));
@@ -28,26 +28,11 @@ export function AssetTagEditor({
       const normalizedTag = normalizeLibraryMatchText(tag);
       return !normalizedKeptTags.has(normalizedTag) && !normalizedSystemTags.has(normalizedTag) && !normalizedUserTags.has(normalizedTag);
     })
-    .slice(0, 16);
-  const availableSuggestionsByKey = new Map(availableSuggestions.map((tag) => [normalizeLibraryMatchText(tag), tag]));
-  const selectedSuggestionTag = availableSuggestionsByKey.get(normalizeLibraryMatchText(draftTag)) ?? null;
+    .slice(0, 12);
   const keptOnlyTags = asset.keptTags.filter((tag) => {
     const normalizedTag = normalizeLibraryMatchText(tag);
     return !normalizedSystemTags.has(normalizedTag) && !normalizedUserTags.has(normalizedTag);
   });
-
-  function addTag(value: string) {
-    const suggestedTag = availableSuggestionsByKey.get(normalizeLibraryMatchText(value));
-    const [tag] = normalizeLibraryNodeTagValues(suggestedTag ? [suggestedTag] : []);
-
-    if (!tag || normalizedKeptTags.has(tag) || normalizedSystemTags.has(tag) || normalizedUserTags.has(tag)) {
-      setDraftTag("");
-      return;
-    }
-
-    onTagsChange([...asset.userTags, tag]);
-    setDraftTag("");
-  }
 
   function removeTag(tagToRemove: string) {
     const normalizedTag = normalizeLibraryMatchText(tagToRemove);
@@ -69,70 +54,69 @@ export function AssetTagEditor({
     onKeptTagsChange([...asset.keptTags, normalizedTag]);
   }
 
-  function handleSubmit(event: ReactFormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    addTag(draftTag);
-  }
-
   return (
     <section className="mt-4">
-      <div className="section-label">File Tags</div>
-      <div className="mt-1.5 flex flex-wrap gap-1.5">
-        {asset.systemTags.map((tag) => {
-          const normalizedTag = normalizeLibraryMatchText(tag);
-          const isKept = normalizedKeptTags.has(normalizedTag);
-          const isDefaultKept = normalizedDefaultKeptTags.has(normalizedTag);
+      <div className="mt-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-[11px] font-semibold uppercase tracking-normal text-muted">Tags</div>
+          <button className="tag-add-button" type="button" onClick={onOpenTagBrowser}>
+            <span>Browse Tags</span>
+          </button>
+        </div>
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {asset.systemTags.map((tag) => {
+            const normalizedTag = normalizeLibraryMatchText(tag);
+            const isKept = normalizedKeptTags.has(normalizedTag);
+            const isDefaultKept = normalizedDefaultKeptTags.has(normalizedTag);
 
-          return (
-            <button
-              className={`tag tag-system tag-keep-button ${isKept ? "tag-kept" : ""}`}
-              key={tag}
-              title={isDefaultKept ? `${tag} is kept by default` : isKept ? `Stop keeping ${tag}` : `Keep ${tag}`}
-              type="button"
-              onClick={() => toggleKeptTag(tag)}
-            >
+            return (
+              <button
+                className={`tag tag-system tag-keep-button ${isKept ? "tag-kept" : ""}`}
+                key={tag}
+                title={isDefaultKept ? `${tag} is kept by default` : isKept ? `Stop keeping ${tag}` : `Keep ${tag}`}
+                type="button"
+                onClick={() => toggleKeptTag(tag)}
+              >
+                <span>{tag}</span>
+                {isKept ? <Save size={10} aria-hidden="true" /> : null}
+              </button>
+            );
+          })}
+          {keptOnlyTags.map((tag) => (
+            <button className="tag tag-keep-button tag-kept" key={tag} title={`Stop keeping ${tag}`} type="button" onClick={() => toggleKeptTag(tag)}>
               <span>{tag}</span>
-              {isKept ? <Save size={10} aria-hidden="true" /> : null}
+              <Save size={10} aria-hidden="true" />
             </button>
-          );
-        })}
-        {keptOnlyTags.map((tag) => (
-          <button className="tag tag-keep-button tag-kept" key={tag} title={`Stop keeping ${tag}`} type="button" onClick={() => toggleKeptTag(tag)}>
-            <span>{tag}</span>
-            <Save size={10} aria-hidden="true" />
-          </button>
-        ))}
-        {asset.userTags.map((tag) => (
-          <button className="tag tag-editable" key={tag} title={`Remove ${tag}`} type="button" onClick={() => removeTag(tag)}>
-            <span>{tag}</span>
-            <X size={11} aria-hidden="true" />
-          </button>
-        ))}
-      </div>
-      <form className="mt-2 grid grid-cols-[minmax(0,1fr)_auto_auto] gap-1.5" onSubmit={handleSubmit}>
-        <input
-          className="tag-input"
-          list={suggestionId}
-          placeholder="Add suggested tag..."
-          value={draftTag}
-          onChange={(event) => setDraftTag(event.currentTarget.value)}
-        />
-        <datalist id={suggestionId}>
-          {availableSuggestions.map((tag) => (
-            <option key={tag} value={tag} />
           ))}
-        </datalist>
-        <button className="tag-add-button" disabled={!selectedSuggestionTag} type="submit">
-          <Plus size={14} aria-hidden="true" />
-          <span>Add</span>
-        </button>
-        <button className="tag-add-button" type="button" onClick={onOpenTagBrowser}>
-          <span>Browse Tags</span>
-        </button>
-      </form>
-      {availableSuggestions.length === 0 ? (
-        <p className="mt-1.5 text-[11px] text-muted">No smart suggestions yet. Use Browse Tags to explore the full library.</p>
-      ) : null}
+          {asset.userTags.length > 0 ? (
+            asset.userTags.map((tag) => (
+              <button className="tag tag-editable tag-custom" key={tag} title={`Remove ${tag}`} type="button" onClick={() => removeTag(tag)}>
+                <span>{tag}</span>
+                <X size={11} aria-hidden="true" />
+              </button>
+            ))
+          ) : null}
+        </div>
+      </div>
+      <div className="mt-3">
+        <div className="text-[11px] font-semibold uppercase tracking-normal text-muted">Recent Tags</div>
+        {availableSuggestions.length > 0 ? (
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {availableSuggestions.map((tag) => (
+              <div className="tag tag-chip-shell" key={tag}>
+                <button className="tag-chip-main tag-editable" type="button" onClick={() => onAddTag(tag)}>
+                  <span>{tag}</span>
+                </button>
+                <button className="tag-chip-action" title={`Remove ${tag} from recent tags`} type="button" onClick={() => onRemoveRecentTag(tag)}>
+                  <X size={11} aria-hidden="true" />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-1.5 text-[11px] text-muted">Tags you add manually will appear here for quick reuse.</p>
+        )}
+      </div>
     </section>
   );
 }

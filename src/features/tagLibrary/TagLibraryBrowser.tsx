@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, ChevronRight, FileText, Folder, Maximize2, Minimize2, Plus, Search, X } from "lucide-react";
+import type { ProjectTagGroup } from "../../app/appTypes";
 import { clamp, isPrimaryPointer } from "../../app/workspace/appLayout";
 import {
   normalizeLibraryMatchText,
@@ -29,7 +30,9 @@ type TagLibraryWindowRect = {
 
 type TagLibraryFileEntry = {
   id: string;
+  kind: "library" | "project";
   label: string;
+  leadingIcon?: "file" | "plus";
   pathLabels: string[];
   searchText: string;
   tagCount: number;
@@ -52,37 +55,67 @@ const tagLibraryMinWidth = 760;
 const tagLibraryDefaultHeight = 600;
 const tagLibraryDefaultWidth = 870;
 
+function formatTagLibraryFileDisplayLabel(file: Pick<TagLibraryFileEntry, "kind" | "label">) {
+  if (file.kind !== "library") {
+    return file.label;
+  }
+
+  const labelWithoutExtension = file.label.replace(/\.[^.]+$/, "");
+  return labelWithoutExtension
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatTagLibraryPathLabels(file: Pick<TagLibraryFileEntry, "kind" | "label" | "pathLabels">) {
+  if (file.kind !== "library" || file.pathLabels.length === 0) {
+    return file.pathLabels;
+  }
+
+  return [...file.pathLabels.slice(0, -1), formatTagLibraryFileDisplayLabel(file)];
+}
+
 export function TagLibraryBrowser({
   mode = "modal",
+  projectTagGroups,
   selectedAsset,
   sections,
   tags,
+  onCreateProjectTag,
+  onCreateProjectTagGroup,
+  onDeleteProjectTagGroup,
   onAddTag,
   onClose,
 }: {
   mode?: "modal" | "window";
+  projectTagGroups: ProjectTagGroup[];
   selectedAsset: TagLibraryWindowAssetSnapshot | null;
   sections: LibraryTagSourceSection[];
   tags: LibraryTagDefinition[];
+  onCreateProjectTag: (groupId: string, label: string) => void;
+  onCreateProjectTagGroup: (label: string) => void;
+  onDeleteProjectTagGroup: (groupId: string) => void;
   onAddTag: (tag: string) => void;
   onClose: () => void;
 }) {
   const isNativeWindowMode = mode === "window";
   const [query, setQuery] = useState("");
+  const [draftProjectTag, setDraftProjectTag] = useState("");
+  const [draftProjectTagGroup, setDraftProjectTagGroup] = useState("");
+  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
-  const [expandedSectionIds, setExpandedSectionIds] = useState<string[]>([]);
   const [isMaximized, setIsMaximized] = useState(false);
   const [windowRect, setWindowRect] = useState<TagLibraryWindowRect>(() => getDefaultTagLibraryWindowRect());
   const windowRef = useRef<HTMLElement | null>(null);
   const windowInteractionCleanupRef = useRef<(() => void) | null>(null);
   const normalizedQuery = normalizeLibraryMatchText(query);
-  const sectionEntries = useMemo(() => buildTagLibrarySectionEntries(sections), [sections]);
+  const sectionEntries = useMemo(() => buildTagLibrarySectionEntries(sections, projectTagGroups), [projectTagGroups, sections]);
   const visibleSections = useMemo(
     () => filterTagLibrarySectionEntries(sectionEntries, normalizedQuery),
     [normalizedQuery, sectionEntries],
   );
-  const sectionColumns = useMemo(() => splitSectionsIntoColumns(visibleSections, 2), [visibleSections]);
   const fileEntriesById = useMemo(
     () => new Map(visibleSections.flatMap((section) => section.files.map((file) => [file.id, file] as const))),
     [visibleSections],
@@ -91,13 +124,15 @@ export function TagLibraryBrowser({
     () => visibleSections.reduce((total, section) => total + section.tagCount, 0),
     [visibleSections],
   );
+  const selectedSection = selectedSectionId ? visibleSections.find((section) => section.id === selectedSectionId) ?? null : visibleSections[0] ?? null;
   const selectedAssetTagIds = useMemo(
     () => new Set(normalizeLibraryNodeTagValues(selectedAsset?.tags ?? [])),
     [selectedAsset?.tags],
   );
   const selectedFile = selectedFileId ? fileEntriesById.get(selectedFileId) ?? null : null;
   const selectedTagDefinition = selectedFile?.tags.find((tagDefinition) => tagDefinition.id === selectedTagId) ?? null;
-  const autoExpandResults = Boolean(normalizedQuery);
+  const isCreateProjectGroupCardSelected = selectedFile?.id === "project-file:new-group";
+  const isProjectSectionSelected = selectedSection?.id === "project-tags";
   const modalClassName = isNativeWindowMode
     ? "relative flex h-full w-full flex-col overflow-hidden border border-line bg-surface text-ink"
     : isMaximized
@@ -182,12 +217,25 @@ export function TagLibraryBrowser({
   }, []);
 
   useEffect(() => {
-    if (selectedFileId && fileEntriesById.has(selectedFileId)) {
+    if (selectedSectionId && visibleSections.some((section) => section.id === selectedSectionId)) {
       return;
     }
 
-    setSelectedFileId(visibleSections[0]?.files[0]?.id ?? null);
-  }, [fileEntriesById, selectedFileId, visibleSections]);
+    setSelectedSectionId(visibleSections[0]?.id ?? null);
+  }, [selectedSectionId, visibleSections]);
+
+  useEffect(() => {
+    if (!selectedFileId) {
+      return;
+    }
+
+    if (fileEntriesById.has(selectedFileId)) {
+      return;
+    }
+
+    const nextSelectedSection = selectedSectionId ? visibleSections.find((section) => section.id === selectedSectionId) ?? null : visibleSections[0] ?? null;
+    setSelectedFileId(nextSelectedSection?.id === "project-tags" ? nextSelectedSection.files[0]?.id ?? null : null);
+  }, [fileEntriesById, selectedFileId, selectedSectionId, visibleSections]);
 
   useEffect(() => {
     if (selectedFile?.tags.some((tagDefinition) => tagDefinition.id === selectedTagId)) {
@@ -360,16 +408,50 @@ export function TagLibraryBrowser({
     setIsMaximized((value) => !value);
   }
 
-  function toggleSection(sectionId: string) {
-    setExpandedSectionIds((ids) => (ids.includes(sectionId) ? ids.filter((id) => id !== sectionId) : [...ids, sectionId]));
-  }
-
   function addSelectedTag() {
     if (!selectedAsset || !selectedTagDefinition || selectedAssetTagIds.has(normalizeLibraryMatchText(selectedTagDefinition.id))) {
       return;
     }
 
     onAddTag(selectedTagDefinition.id);
+  }
+
+  function addTag(tagId: string) {
+    if (!selectedAsset || selectedAssetTagIds.has(normalizeLibraryMatchText(tagId))) {
+      return;
+    }
+
+    onAddTag(tagId);
+  }
+
+  function handleCreateProjectTagGroup() {
+    const label = draftProjectTagGroup.trim();
+
+    if (!label) {
+      return;
+    }
+
+    onCreateProjectTagGroup(label);
+    setDraftProjectTagGroup("");
+  }
+
+  function handleCreateProjectTag() {
+    if (!selectedFile || selectedFile.kind !== "project") {
+      return;
+    }
+
+    const label = draftProjectTag.trim();
+
+    if (!label) {
+      return;
+    }
+
+    onCreateProjectTag(selectedFile.id.replace("project-file:", ""), label);
+    setDraftProjectTag("");
+  }
+
+  function handleDeleteProjectTagGroup(groupId: string) {
+    onDeleteProjectTagGroup(groupId);
   }
 
   const content = (
@@ -451,12 +533,9 @@ export function TagLibraryBrowser({
           className={`${isMaximized ? "" : "tag-library-drag-header"} flex h-12 shrink-0 items-center justify-between gap-4 border-b border-line px-4`}
           onPointerDown={startWindowDrag}
         >
-          <div className="min-w-0">
+          <div className="min-w-0 flex items-center gap-2">
             <h2 className="truncate text-sm font-semibold">Tag Library</h2>
-            <p className="truncate text-[11px] text-muted">
-              {selectedAsset ? `Adding tags to ${selectedAsset.name} - ` : ""}
-              {visibleCount}/{tags.length} tags visible
-            </p>
+            <span className="tag-small">{visibleCount}</span>
           </div>
           <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
             <button
@@ -474,7 +553,7 @@ export function TagLibraryBrowser({
               <input
                 autoFocus
                 className="h-8 w-full rounded-sm border border-line bg-canvas pl-8 pr-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-steel focus:ring-2 focus:ring-steel/20"
-                placeholder="Search umbrellas, files, tags..."
+                placeholder="..."
                 value={query}
                 onChange={(event) => setQuery(event.currentTarget.value)}
               />
@@ -498,66 +577,115 @@ export function TagLibraryBrowser({
           <section className="min-h-0 border-r border-line bg-canvas">
             <div className="flex h-full min-h-0 flex-col">
               <div className="min-h-0 flex-1 overflow-auto p-3">
+                {selectedAsset ? (
+                  <div className="mb-3 border-b border-line pb-3 pl-2">
+                    <div className="text-base font-semibold text-ink">
+                      {selectedAsset.name}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {selectedAsset.tags.length > 0 ? (
+                        selectedAsset.tags.map((tag) => (
+                          <span className="tag tag-system" key={tag}>
+                            {tag}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[11px] text-muted">No tags assigned yet.</span>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
                 {visibleSections.length > 0 ? (
                   <div className="tag-library-umbrella-columns">
-                    {sectionColumns.map((columnSections, columnIndex) => (
-                      <div className="tag-library-umbrella-column" key={`column-${columnIndex}`}>
-                        {columnSections.map((section) => {
-                          const isExpanded = autoExpandResults || expandedSectionIds.includes(section.id);
+                    {visibleSections.flatMap((section) => {
+                      const isProjectSection = section.id === "project-tags";
+
+                      if (isProjectSection) {
+                        return section.files.map((file) => {
+                          const isSelected = selectedFile?.id === file.id;
+                          const isCreateCard = file.leadingIcon === "plus";
 
                           return (
-                            <section className="tag-library-umbrella-card" key={section.id}>
-                              <div className="flex items-start justify-between gap-3 border-b border-line px-3 py-3">
-                                <button className="min-w-0 flex-1 text-left" type="button" onClick={() => toggleSection(section.id)}>
-                                  <div className="flex items-center gap-2">
-                                    <Folder size={14} aria-hidden="true" />
-                                    <span className="truncate text-sm font-semibold text-ink">{section.label}</span>
-                                  </div>
-                                  <p className="mt-1 text-xs text-muted">{section.description}</p>
-                                </button>
-                                <div className="flex shrink-0 items-center gap-2">
-                                  <span className="tag-small">{section.tagCount}</span>
-                                  <button
-                                    aria-expanded={isExpanded}
-                                    className="icon-button h-7 w-7"
-                                    title={isExpanded ? `Collapse ${section.label}` : `Expand ${section.label}`}
-                                    type="button"
-                                    onClick={() => toggleSection(section.id)}
-                                  >
-                                    {isExpanded ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
-                                  </button>
-                                </div>
-                              </div>
-
-                              {isExpanded ? (
-                                <div className="tag-library-file-grid px-3 py-3">
-                                  {section.files.map((file) => {
-                                    const isSelected = selectedFile?.id === file.id;
-
-                                    return (
+                            <section
+                              className={`tag-library-umbrella-card ${
+                                isSelected ? "border-steel bg-canvas" : "hover:border-steel hover:bg-canvas"
+                              }`}
+                              key={file.id}
+                            >
+                              <button
+                                className={`w-full px-3 py-3 text-left ${isCreateCard ? "flex min-h-[52px] items-center justify-center" : "flex items-center justify-between gap-3"}`}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedSectionId(section.id);
+                                  setSelectedFileId(file.id);
+                                }}
+                              >
+                                {isCreateCard ? (
+                                  <Plus size={18} aria-hidden="true" />
+                                ) : (
+                                  <>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <FileText size={14} aria-hidden="true" />
+                                        <span className="truncate text-sm font-semibold text-ink">{formatTagLibraryFileDisplayLabel(file)}</span>
+                                      </div>
+                                    </div>
+                                    <div className="flex shrink-0 items-center gap-2">
+                                      <span className="tag-small">{file.tagCount}</span>
                                       <button
-                                        className={`tag-library-file-button ${
-                                          isSelected ? "border-steel bg-canvas" : "border-line bg-surface hover:border-steel hover:bg-canvas"
-                                        }`}
-                                        key={file.id}
+                                        aria-label={`Delete ${file.label}`}
+                                        className="icon-button h-7 w-7 text-xs"
+                                        title={`Delete ${file.label}`}
                                         type="button"
-                                        onClick={() => setSelectedFileId(file.id)}
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          handleDeleteProjectTagGroup(file.id.replace("project-file:", ""));
+                                        }}
                                       >
-                                        <div className="flex items-center gap-2">
-                                          <FileText size={13} aria-hidden="true" />
-                                          <span className="truncate text-sm font-medium text-ink">{file.label}</span>
-                                        </div>
-                                        <p className="mt-1 text-[11px] text-muted">{file.tagCount} tags</p>
+                                        x
                                       </button>
-                                    );
-                                  })}
-                                </div>
-                              ) : null}
+                                    </div>
+                                  </>
+                                )}
+                              </button>
                             </section>
                           );
-                        })}
-                      </div>
-                    ))}
+                        });
+                      }
+
+                      const isSelected = selectedSectionId === section.id;
+
+                      return (
+                        <section
+                          className={`tag-library-umbrella-card ${
+                            isSelected ? "border-steel bg-canvas" : "hover:border-steel hover:bg-canvas"
+                          }`}
+                          key={section.id}
+                        >
+                          <button
+                            className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left"
+                            type="button"
+                            onClick={() => {
+                              setSelectedSectionId(section.id);
+                              setSelectedFileId(null);
+                            }}
+                          >
+                            <div className="min-w-0 flex flex-1 items-center gap-2">
+                              <div className="flex items-center gap-2">
+                                <Folder size={14} aria-hidden="true" />
+                                <span className="truncate text-sm font-semibold text-ink">{section.label}</span>
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <span className="tag-small">{section.tagCount}</span>
+                              <span className="icon-button h-7 w-7" aria-hidden="true">
+                                <ChevronRight size={14} />
+                              </span>
+                            </div>
+                          </button>
+                        </section>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="rounded-sm border border-line bg-surface p-4 text-sm text-muted">No tags match that search.</div>
@@ -567,73 +695,144 @@ export function TagLibraryBrowser({
           </section>
 
           <aside className="min-h-0 bg-surface">
-            {selectedFile ? (
+            {selectedSection ? (
               <div className="flex h-full min-h-0 flex-col">
                 <div className="border-b border-line px-4 py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h3 className="break-words text-lg font-semibold text-ink">{selectedFile.label}</h3>
-                      <p className="mt-1 text-xs text-muted">{selectedFile.pathLabels.join(" / ")}</p>
+                      <h3 className="break-words text-lg font-semibold text-ink">
+                        {selectedFile?.kind === "project" ? selectedFile.label : selectedSection.label}
+                      </h3>
+                          {selectedFile?.kind !== "project" ? (
+                        <p className="mt-1 text-xs text-muted">
+                          {selectedFile ? formatTagLibraryPathLabels(selectedFile).join(" / ") : selectedSection.description}
+                        </p>
+                      ) : null}
                     </div>
-                    <span className="tag-small">{selectedFile.tagCount} tags</span>
+                    {selectedFile?.kind !== "project" ? <span className="tag-small">{selectedSection.tagCount} tags</span> : null}
                   </div>
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-auto p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-[11px] font-semibold uppercase tracking-normal text-muted">Tags</div>
-                      <p className="mt-1 text-xs text-muted">
-                        {selectedAsset ? "Select a tag, then add it to the current file." : "Select a file in the inspector to add tags."}
-                      </p>
-                    </div>
-                    <button
-                      className="tag-add-button"
-                      disabled={!selectedAsset || !selectedTagDefinition || selectedAssetTagIds.has(normalizeLibraryMatchText(selectedTagDefinition.id))}
-                      type="button"
-                      onClick={addSelectedTag}
-                    >
-                      <Plus size={14} aria-hidden="true" />
-                      <span>Add</span>
-                    </button>
-                  </div>
+                  {!isProjectSectionSelected ? (
+                    <div className="mb-4">
+                      <div className="mb-3 text-[11px] font-semibold uppercase tracking-normal text-muted">Files</div>
+                      <div className="space-y-2">
+                        {selectedSection.files.map((file) => {
+                          const isSelected = selectedFile?.id === file.id;
 
-                  <div className="space-y-2">
-                    {selectedFile.tags.map((tagDefinition) => {
-                      const isSelected = selectedTagId === tagDefinition.id;
-                      const isAdded = selectedAssetTagIds.has(normalizeLibraryMatchText(tagDefinition.id));
+                          return (
+                            <section
+                              className={`overflow-hidden rounded-sm border transition ${
+                                isSelected ? "border-steel bg-canvas" : "border-line bg-surface hover:border-steel hover:bg-canvas"
+                              }`}
+                              key={file.id}
+                            >
+                              <button
+                                className="flex w-full items-center gap-3 px-3 py-2 text-left"
+                                type="button"
+                                onClick={() => setSelectedFileId((currentId) => (currentId === file.id ? null : file.id))}
+                              >
+                                <div className="flex min-w-0 flex-1 items-center gap-2">
+                                  <FileText size={13} aria-hidden="true" />
+                                  <div className="truncate text-sm font-medium text-ink">{formatTagLibraryFileDisplayLabel(file)}</div>
+                                </div>
+                                <span className="tag-small shrink-0">{file.tagCount}</span>
+                                {isSelected ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
+                              </button>
+                              {isSelected ? (
+                                <div className="border-t border-line px-3 py-3">
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {file.tags.map((tagDefinition) => {
+                                      const isAdded = selectedAssetTagIds.has(normalizeLibraryMatchText(tagDefinition.id));
 
-                      return (
-                        <button
-                          className={`flex w-full items-center gap-3 rounded-sm border px-3 py-2 text-left transition ${
-                            isSelected ? "border-steel bg-canvas" : "border-line bg-surface hover:border-steel hover:bg-canvas"
-                          }`}
-                          key={tagDefinition.id}
-                          type="button"
-                          onClick={() => setSelectedTagId(tagDefinition.id)}
-                        >
-                          <span className={`h-2 w-2 shrink-0 rounded-full ${getLibraryTagKindDotClass(tagDefinition.kind)}`} aria-hidden="true" />
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-medium text-ink">{tagDefinition.label}</div>
-                            <div className="truncate text-[11px] text-muted">{tagDefinition.id}</div>
-                          </div>
-                          {isAdded ? <Check className="shrink-0 text-steel" size={14} aria-hidden="true" /> : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {selectedTagDefinition ? (
-                    <div className="mt-4 rounded-sm border border-line bg-canvas p-3">
-                      <div className="flex items-center gap-2">
-                        <span className={`h-2 w-2 rounded-full ${getLibraryTagKindDotClass(selectedTagDefinition.kind)}`} aria-hidden="true" />
-                        <h4 className="text-sm font-semibold text-ink">{selectedTagDefinition.label}</h4>
-                        <span className="tag-small">{selectedTagDefinition.kind}</span>
+                                      return (
+                                        <button
+                                          className={`tag inline-flex items-center gap-1.5 ${isAdded ? "tag-kept" : "tag-editable"}`}
+                                          disabled={!selectedAsset || isAdded}
+                                          key={tagDefinition.id}
+                                          type="button"
+                                          onClick={() => addTag(tagDefinition.id)}
+                                        >
+                                          <span>{tagDefinition.label}</span>
+                                          {isAdded ? <Check size={11} aria-hidden="true" /> : null}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </section>
+                          );
+                        })}
                       </div>
-                      {selectedTagDefinition.description ? (
-                        <p className="mt-2 text-xs leading-relaxed text-muted">{selectedTagDefinition.description}</p>
-                      ) : null}
                     </div>
+                  ) : null}
+                  {selectedFile?.kind === "project" && !isCreateProjectGroupCardSelected ? (
+                    <div className="mb-4 flex gap-2">
+                      <input
+                        className="h-8 min-w-0 flex-1 rounded-sm border border-line bg-surface px-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-steel focus:ring-2 focus:ring-steel/20"
+                        placeholder="Tag name"
+                        value={draftProjectTag}
+                        onChange={(event) => setDraftProjectTag(event.currentTarget.value)}
+                      />
+                      <button className="tag-add-button h-8 px-3" disabled={!draftProjectTag.trim()} type="button" onClick={handleCreateProjectTag}>
+                        <span>Create Tag</span>
+                      </button>
+                    </div>
+                  ) : null}
+                  {isCreateProjectGroupCardSelected ? (
+                    <div className="mb-4 flex gap-2">
+                      <input
+                        className="h-8 min-w-0 flex-1 rounded-sm border border-line bg-surface px-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-steel focus:ring-2 focus:ring-steel/20"
+                        placeholder="Group name"
+                        value={draftProjectTagGroup}
+                        onChange={(event) => setDraftProjectTagGroup(event.currentTarget.value)}
+                      />
+                      <button className="tag-add-button h-8 px-3" disabled={!draftProjectTagGroup.trim()} type="button" onClick={handleCreateProjectTagGroup}>
+                        <span>+</span>
+                      </button>
+                    </div>
+                  ) : null}
+                  {isProjectSectionSelected && !isCreateProjectGroupCardSelected && selectedFile ? (
+                    <>
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div className="text-[11px] font-semibold uppercase tracking-normal text-muted">Tags</div>
+                        <button
+                          className="tag-add-button"
+                          disabled={!selectedAsset || !selectedTagDefinition || selectedAssetTagIds.has(normalizeLibraryMatchText(selectedTagDefinition.id))}
+                          type="button"
+                          onClick={addSelectedTag}
+                        >
+                          <Plus size={14} aria-hidden="true" />
+                          <span>Add</span>
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {selectedFile.tags.map((tagDefinition) => {
+                          const isSelected = selectedTagId === tagDefinition.id;
+                          const isAdded = selectedAssetTagIds.has(normalizeLibraryMatchText(tagDefinition.id));
+
+                          return (
+                            <button
+                              className={`flex w-full items-center gap-3 rounded-sm border px-3 py-2 text-left transition ${
+                                isSelected ? "border-steel bg-canvas" : "border-line bg-surface hover:border-steel hover:bg-canvas"
+                              }`}
+                              key={tagDefinition.id}
+                              type="button"
+                              onClick={() => setSelectedTagId(tagDefinition.id)}
+                            >
+                              <span className={`h-2 w-2 shrink-0 rounded-full ${getLibraryTagKindDotClass(tagDefinition.kind)}`} aria-hidden="true" />
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-medium text-ink">{tagDefinition.label}</div>
+                                {selectedFile.kind !== "project" ? <div className="truncate text-[11px] text-muted">{tagDefinition.id}</div> : null}
+                              </div>
+                              {isAdded ? <Check className="shrink-0 text-steel" size={14} aria-hidden="true" /> : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
                   ) : null}
                 </div>
               </div>
@@ -655,9 +854,8 @@ export function TagLibraryBrowser({
   return createPortal(content, document.body);
 }
 
-function buildTagLibrarySectionEntries(sections: LibraryTagSourceSection[]): TagLibrarySectionEntry[] {
-  return sections
-    .map((section) => {
+function buildTagLibrarySectionEntries(sections: LibraryTagSourceSection[], projectTagGroups: ProjectTagGroup[]): TagLibrarySectionEntry[] {
+  const librarySections = sections.map((section) => {
       const files = flattenTagLibraryFiles(section, [section.label]);
       const tagCount = files.reduce((total, file) => total + file.tagCount, 0);
 
@@ -673,8 +871,10 @@ function buildTagLibrarySectionEntries(sections: LibraryTagSourceSection[]): Tag
         ].join(" ")),
         tagCount,
       } satisfies TagLibrarySectionEntry;
-    })
-    .sort((first, second) => first.label.localeCompare(second.label));
+    });
+  const projectSection = buildProjectTagSectionEntry(projectTagGroups);
+
+  return [...librarySections, projectSection];
 }
 
 function flattenTagLibraryFiles(folder: LibraryTagSourceFolder, pathLabels: string[]): TagLibraryFileEntry[] {
@@ -683,6 +883,8 @@ function flattenTagLibraryFiles(folder: LibraryTagSourceFolder, pathLabels: stri
 
     return {
       id: `${folder.id}:${file.id}`,
+      kind: "library",
+      leadingIcon: "file",
       label: file.label,
       pathLabels: filePathLabels,
       searchText: normalizeLibraryMatchText([
@@ -699,6 +901,53 @@ function flattenTagLibraryFiles(folder: LibraryTagSourceFolder, pathLabels: stri
   return [...currentFiles, ...descendantFiles].sort((first, second) => first.label.localeCompare(second.label));
 }
 
+function buildProjectTagSectionEntry(projectTagGroups: ProjectTagGroup[]): TagLibrarySectionEntry {
+  const files: TagLibraryFileEntry[] = projectTagGroups
+    .map((group) => ({
+      id: `project-file:${group.id}`,
+      kind: "project",
+      leadingIcon: "file",
+      label: group.label,
+      pathLabels: ["Project Tags", group.label],
+      searchText: normalizeLibraryMatchText([
+        "Project Tags",
+        group.label,
+        ...group.tags.map((tag) => `${tag.id} ${tag.label}`),
+      ].join(" ")),
+      tagCount: group.tags.length,
+      tags: group.tags.map((tag) => ({
+        id: tag.id,
+        kind: "content",
+        label: tag.label,
+      })),
+    } satisfies TagLibraryFileEntry))
+    .sort((first, second) => first.label.localeCompare(second.label));
+  files.push({
+    id: "project-file:new-group",
+    kind: "project",
+    leadingIcon: "plus",
+    label: "Create Group",
+    pathLabels: ["Project Tags", "Create Group"],
+    searchText: normalizeLibraryMatchText("Project Tags New Group Create Group"),
+    tagCount: 0,
+    tags: [],
+  });
+  const tagCount = files.reduce((total, file) => total + file.tagCount, 0);
+
+  return {
+    description: `${projectTagGroups.length} groups`,
+    fileCount: files.length,
+    files,
+    id: "project-tags",
+    label: "Project Tags",
+    searchText: normalizeLibraryMatchText([
+      "Project Tags",
+      ...files.map((file) => file.searchText),
+    ].join(" ")),
+    tagCount,
+  };
+}
+
 function filterTagLibrarySectionEntries(sections: TagLibrarySectionEntry[], normalizedQuery: string) {
   if (!normalizedQuery) {
     return sections;
@@ -710,16 +959,6 @@ function filterTagLibrarySectionEntries(sections: TagLibrarySectionEntry[], norm
 
     return files.length > 0 ? [{ ...section, files, fileCount: files.length, tagCount: files.reduce((total, file) => total + file.tagCount, 0) }] : [];
   });
-}
-
-function splitSectionsIntoColumns(sections: TagLibrarySectionEntry[], columnCount: number) {
-  const columns = Array.from({ length: columnCount }, () => [] as TagLibrarySectionEntry[]);
-
-  sections.forEach((section, index) => {
-    columns[index % columnCount].push(section);
-  });
-
-  return columns;
 }
 
 function getDefaultTagLibraryWindowRect(): TagLibraryWindowRect {

@@ -37,6 +37,8 @@ export type InventoryManifest<TAsset, TSourceFolder, TLibraryTree, TWorkspaceSta
   workspaceState: TWorkspaceState;
   documents: InventoryDocumentsState;
   exportSettings: InventoryExportSettings;
+  projectTagGroups?: unknown[];
+  recentUserTagIds?: string[];
 };
 
 export type OpenedInventory<TAsset, TSourceFolder, TLibraryTree, TWorkspaceState = unknown> = {

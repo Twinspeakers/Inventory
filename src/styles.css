@@ -1146,15 +1146,9 @@ textarea {
     align-items: start;
   }
 
-  .tag-library-umbrella-column {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    min-width: 0;
-  }
-
   .tag-library-umbrella-card {
-    @apply overflow-hidden rounded-sm border border-line bg-surface;
+    align-self: start;
+    @apply overflow-hidden rounded-sm border border-line bg-surface transition;
   }
 
   .tag-library-file-grid {
@@ -1342,6 +1336,22 @@ textarea {
 
   .tag-editable {
     @apply inline-flex items-center gap-1.5 transition hover:border-copper hover:text-copper;
+  }
+
+  .tag-custom {
+    @apply border-line/70 bg-canvas text-muted;
+  }
+
+  .tag-chip-shell {
+    @apply inline-flex items-center gap-1.5;
+  }
+
+  .tag-chip-main {
+    @apply text-left text-xs font-medium;
+  }
+
+  .tag-chip-action {
+    @apply inline-flex h-4 w-4 items-center justify-center text-muted transition hover:text-copper;
   }
 
   .tag-small {

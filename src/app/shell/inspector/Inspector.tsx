@@ -44,9 +44,11 @@ type InspectorProps<TPlacementSuggestion extends InspectorAssetPlacementSuggesti
   nvvDocument: NvvDocument | null;
   onAcceptNvdStyle: () => void;
   onApplyNvdStyle: (role: NvdStyleRole) => void;
+  onAssetAddTag: (assetId: number, tag: string) => void;
   onAssetKeptTagsChange: (assetId: number, tags: string[]) => void;
   onAssetNotesChange: (assetId: number, notes: string) => void;
   onAssetPlacementSuggestionAccept: (suggestion: TPlacementSuggestion) => void;
+  onAssetRecentTagRemove: (tag: string) => void;
   onAssetTagsChange: (assetId: number, tags: string[]) => void;
   onOpenTagBrowser: () => void;
   onModelTransformChange: (transform: ModelTransform) => void;
@@ -80,9 +82,11 @@ export function Inspector<TPlacementSuggestion extends InspectorAssetPlacementSu
   nvvDocument,
   onAcceptNvdStyle,
   onApplyNvdStyle,
+  onAssetAddTag,
   onAssetKeptTagsChange,
   onAssetNotesChange,
   onAssetPlacementSuggestionAccept,
+  onAssetRecentTagRemove,
   onAssetTagsChange,
   onOpenTagBrowser,
   onModelTransformChange,
@@ -175,8 +179,10 @@ export function Inspector<TPlacementSuggestion extends InspectorAssetPlacementSu
 
           <AssetTagEditor
             asset={selectedAsset}
+            onAddTag={(tag) => onAssetAddTag(selectedAsset.id, tag)}
             onKeptTagsChange={(tags) => onAssetKeptTagsChange(selectedAsset.id, tags)}
             onOpenTagBrowser={onOpenTagBrowser}
+            onRemoveRecentTag={onAssetRecentTagRemove}
             onTagsChange={(tags) => onAssetTagsChange(selectedAsset.id, tags)}
             suggestions={tagSuggestions}
           />

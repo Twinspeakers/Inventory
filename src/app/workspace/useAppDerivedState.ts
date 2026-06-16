@@ -6,10 +6,12 @@ import type {
   PersistedLibraryState,
   PersistedOpenedNvdDocument,
   PersistedWorkspaceState,
+  ProjectTagGroup,
   ScanResult,
   VirtualFolder,
 } from "../appTypes";
 import { normalizePath, removeAssetIdsFromVirtualFolders } from "../workspace/workspaceState";
+import { normalizeLibraryMatchText } from "../../libraryCatalog";
 import type {
   AssetSortKey,
   AssetViewMode,
@@ -33,7 +35,6 @@ import {
   filterAssetsBySearchQuery,
   findFolder,
   getAssetPlacementSuggestions,
-  getAssetTagSuggestions,
   getScannedAssetModelKey,
   getSourceSummary,
   sortAssets,
@@ -57,6 +58,8 @@ export function useAppDerivedState({
   leftPaneView,
   modelInspectorResults,
   modelTransformOverrides,
+  projectTagGroups,
+  recentUserTagIds,
   scanResult,
   sceneMode,
   selectedFolderId,
@@ -78,6 +81,8 @@ export function useAppDerivedState({
   leftPaneView: LeftPaneView;
   modelInspectorResults: Record<string, ModelInspectorResult>;
   modelTransformOverrides: Record<string, ModelTransform>;
+  projectTagGroups: ProjectTagGroup[];
+  recentUserTagIds: string[];
   scanResult: ScanResult | null;
   sceneMode: SceneMode;
   selectedFolderId: string | null;
@@ -164,13 +169,15 @@ export function useAppDerivedState({
       ({
         rootPath: sourceFolders?.[0]?.path ?? scanResult?.root_path ?? null,
         assets: scanResult?.assets ?? [],
+        projectTagGroups,
+        recentUserTagIds,
         sourceFolders: (sourceFolders ?? []).map((folder) => ({
           ...folder,
           assetIds: folder.assetIds.filter((assetId) => !inventoryDocumentAssetIds.has(assetId)),
         })),
         virtualFolders: removeAssetIdsFromVirtualFolders(virtualFolders, inventoryDocumentAssetIds),
       }) satisfies PersistedLibraryState,
-    [inventoryDocumentAssetIds, scanResult, sourceFolders, virtualFolders],
+    [inventoryDocumentAssetIds, projectTagGroups, recentUserTagIds, scanResult, sourceFolders, virtualFolders],
   );
   const sourceSummary = useMemo(() => getSourceSummary(sourceFolders ?? []), [sourceFolders]);
   const activeFolder = selectedFolderId ? findFolder(virtualFolders, selectedFolderId) : null;
@@ -198,8 +205,8 @@ export function useAppDerivedState({
         ? selectedVisibleAsset ?? sortedVisibleAssets[0] ?? null
         : assets.find((asset) => asset.id === selectedId) ?? sortedVisibleAssets[0] ?? null;
   const assetTagSuggestions = useMemo(
-    () => getAssetTagSuggestions(selectedAsset, masterLibraryAssets, virtualFolders),
-    [masterLibraryAssets, selectedAsset, virtualFolders],
+    () => getRecentAssetTagSuggestions(selectedAsset, recentUserTagIds),
+    [recentUserTagIds, selectedAsset],
   );
   const currentWorkspaceState = useMemo(
     () =>
@@ -314,5 +321,14 @@ export function useAppDerivedState({
     structure,
     visibleAssets,
   };
+}
+
+function getRecentAssetTagSuggestions(asset: Asset | null, recentUserTagIds: string[]) {
+  if (!asset) {
+    return [];
+  }
+
+  const existingTags = new Set(asset.tags.map((tag) => normalizeLibraryMatchText(tag)));
+  return recentUserTagIds.filter((tag) => !existingTags.has(normalizeLibraryMatchText(tag))).slice(0, 12);
 }
 

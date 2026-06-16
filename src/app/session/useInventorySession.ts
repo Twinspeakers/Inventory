@@ -83,6 +83,8 @@ export function useInventorySession({
   setSourceFolders,
   setStatusMessage,
   setTreeOpenNodeIds,
+  setProjectTagGroups,
+  setRecentUserTagIds,
   setVirtualFolders,
 }: {
   activeInventory: ActiveInventory | null;
@@ -114,6 +116,8 @@ export function useInventorySession({
   setSourceFolders: Dispatch<SetStateAction<SourceFolder[]>>;
   setStatusMessage: (message: string) => void;
   setTreeOpenNodeIds: Dispatch<SetStateAction<Set<string>>>;
+  setProjectTagGroups: Dispatch<SetStateAction<NonNullable<PersistedLibraryState["projectTagGroups"]>>>;
+  setRecentUserTagIds: Dispatch<SetStateAction<NonNullable<PersistedLibraryState["recentUserTagIds"]>>>;
   setVirtualFolders: Dispatch<SetStateAction<VirtualFolder[]>>;
 }) {
   function applyLibraryStateToWorkspace(state: PersistedLibraryState, message: string, workspaceState?: PersistedWorkspaceState) {
@@ -146,6 +150,8 @@ export function useInventorySession({
       assets: state.assets,
       skipped_entries: 0,
     });
+    setProjectTagGroups(state.projectTagGroups ?? []);
+    setRecentUserTagIds(state.recentUserTagIds ?? []);
     setSourceFolders(loadedSourceFolders);
     setVirtualFolders(nextVirtualFolders);
     setSelectedId(nextSelectedAssetId);

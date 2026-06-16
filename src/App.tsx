@@ -37,6 +37,7 @@ import type {
   NvdHistoryState,
   PersistedInventoryManifest,
   PersistedOpenedNvdDocument,
+  ProjectTagGroup,
   ScanResult,
   SourceFolder,
   UndoContext,
@@ -63,10 +64,14 @@ import {
   initialVirtualFolders,
 } from "./features/libraryTree/libraryTreeModel";
 import type { SceneMode } from "./features/sceneViewer";
+import { libraryTagDefinitions } from "./libraryCatalog";
 import { isPlayableAudioAsset, isWaveAudioAsset, playAssetAudioOnce } from "./sceneReaders/audioReader";
 import type { ModelTransform } from "./sceneReaders/threeModelReader";
 import {
   TAG_LIBRARY_WINDOW_ADD_TAG_EVENT,
+  TAG_LIBRARY_WINDOW_CREATE_PROJECT_TAG_EVENT,
+  TAG_LIBRARY_WINDOW_CREATE_PROJECT_TAG_GROUP_EVENT,
+  TAG_LIBRARY_WINDOW_DELETE_PROJECT_TAG_GROUP_EVENT,
   TAG_LIBRARY_WINDOW_LABEL,
   TAG_LIBRARY_WINDOW_READY_EVENT,
   TAG_LIBRARY_WINDOW_STATE_EVENT,
@@ -74,7 +79,11 @@ import {
   isTauriRuntime,
   toTagLibraryWindowAssetSnapshot,
   type TagLibraryWindowAddTagPayload,
+  type TagLibraryWindowCreateProjectTagGroupPayload,
+  type TagLibraryWindowCreateProjectTagPayload,
+  type TagLibraryWindowDeleteProjectTagGroupPayload,
 } from "./features/tagLibrary/tagLibraryWindowBridge";
+import { createProjectTagGroupId, createProjectTagId, projectTagGroupLabelExists } from "./features/tagLibrary/projectTags";
 export function App() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [sourceFolders, setSourceFolders] = useState<SourceFolder[]>([]);
@@ -87,6 +96,8 @@ export function App() {
   const [nvdSaveState, setNvdSaveState] = useState<EditorSaveState>("idle");
   const hasUnsavedNvdChanges = nvdSaveState === "dirty" || nvdSaveState === "error";
   const [inventoryDocuments, setInventoryDocuments] = useState<InventoryDocumentsState>(() => ({ nvdDocuments: [], nvvDocuments: [] }));
+  const [projectTagGroups, setProjectTagGroups] = useState<ProjectTagGroup[]>([]);
+  const [recentUserTagIds, setRecentUserTagIds] = useState<string[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [virtualFolders, setVirtualFolders] = useState<VirtualFolder[]>(initialVirtualFolders);
   const [hasLoadedPersistedState, setHasLoadedPersistedState] = useState(false);
@@ -230,6 +241,8 @@ export function App() {
     leftPaneView,
     modelInspectorResults,
     modelTransformOverrides,
+    projectTagGroups,
+    recentUserTagIds,
     scanResult,
     sceneMode,
     selectedFolderId,
@@ -387,6 +400,8 @@ export function App() {
     setSourceFolders,
     setStatusMessage,
     setTreeOpenNodeIds,
+    setProjectTagGroups,
+    setRecentUserTagIds,
     setVirtualFolders,
   });
   const {
@@ -518,6 +533,9 @@ export function App() {
     let disposed = false;
     let unlistenReady: (() => void) | null = null;
     let unlistenAddTag: (() => void) | null = null;
+    let unlistenCreateProjectTagGroup: (() => void) | null = null;
+    let unlistenCreateProjectTag: (() => void) | null = null;
+    let unlistenDeleteProjectTagGroup: (() => void) | null = null;
     const currentWindow = getCurrentWindow();
 
     void currentWindow
@@ -535,13 +553,7 @@ export function App() {
 
     void currentWindow
       .listen<TagLibraryWindowAddTagPayload>(TAG_LIBRARY_WINDOW_ADD_TAG_EVENT, ({ payload }) => {
-        const asset = assets.find((entry) => entry.id === payload.assetId);
-
-        if (!asset) {
-          return;
-        }
-
-        updateAssetTags(payload.assetId, [...asset.userTags, payload.tag]);
+        addTagToAsset(payload.assetId, payload.tag);
       })
       .then((unlisten) => {
         if (disposed) {
@@ -552,12 +564,54 @@ export function App() {
         unlistenAddTag = unlisten;
       });
 
+    void currentWindow
+      .listen<TagLibraryWindowCreateProjectTagGroupPayload>(TAG_LIBRARY_WINDOW_CREATE_PROJECT_TAG_GROUP_EVENT, ({ payload }) => {
+        createProjectTagGroup(payload.label);
+      })
+      .then((unlisten) => {
+        if (disposed) {
+          unlisten();
+          return;
+        }
+
+        unlistenCreateProjectTagGroup = unlisten;
+      });
+
+    void currentWindow
+      .listen<TagLibraryWindowCreateProjectTagPayload>(TAG_LIBRARY_WINDOW_CREATE_PROJECT_TAG_EVENT, ({ payload }) => {
+        createProjectTag(payload.groupId, payload.label);
+      })
+      .then((unlisten) => {
+        if (disposed) {
+          unlisten();
+          return;
+        }
+
+        unlistenCreateProjectTag = unlisten;
+      });
+
+    void currentWindow
+      .listen<TagLibraryWindowDeleteProjectTagGroupPayload>(TAG_LIBRARY_WINDOW_DELETE_PROJECT_TAG_GROUP_EVENT, ({ payload }) => {
+        deleteProjectTagGroup(payload.groupId);
+      })
+      .then((unlisten) => {
+        if (disposed) {
+          unlisten();
+          return;
+        }
+
+        unlistenDeleteProjectTagGroup = unlisten;
+      });
+
     return () => {
       disposed = true;
       unlistenReady?.();
       unlistenAddTag?.();
+      unlistenCreateProjectTagGroup?.();
+      unlistenCreateProjectTag?.();
+      unlistenDeleteProjectTagGroup?.();
     };
-  }, [assets, selectedAsset, updateAssetTags]);
+  }, [assets, projectTagGroups, selectedAsset, updateAssetTags]);
 
   useEffect(() => {
     if (!isTauriRuntime()) {
@@ -565,7 +619,7 @@ export function App() {
     }
 
     void syncTagLibraryWindowState(selectedAsset);
-  }, [selectedAsset]);
+  }, [projectTagGroups, selectedAsset]);
 
   function cancelPendingLibrarySave() {
     if (saveTimer.current) {
@@ -594,6 +648,113 @@ export function App() {
     resetModelTransformOverride(selectedModelKey);
   }
 
+  function addTagToAsset(assetId: number, tag: string) {
+    const asset = assets.find((entry) => entry.id === assetId);
+
+    if (!asset) {
+      return;
+    }
+
+    const normalizedTag = createProjectTagId(tag) || tag;
+
+    if (asset.tags.some((existingTag) => createProjectTagId(existingTag) === normalizedTag)) {
+      return;
+    }
+
+    updateAssetTags(assetId, [...asset.userTags, normalizedTag]);
+    rememberRecentUserTag(normalizedTag);
+  }
+
+  function rememberRecentUserTag(tag: string) {
+    const normalizedTag = createProjectTagId(tag) || tag;
+
+    setRecentUserTagIds((currentTags) => {
+      const nextTags = [normalizedTag, ...currentTags.filter((currentTag) => createProjectTagId(currentTag) !== normalizedTag)];
+      return nextTags.slice(0, 24);
+    });
+  }
+
+  function removeRecentUserTag(tag: string) {
+    const normalizedTag = createProjectTagId(tag) || tag;
+    setRecentUserTagIds((currentTags) => currentTags.filter((currentTag) => (createProjectTagId(currentTag) || currentTag) !== normalizedTag));
+  }
+
+  function createProjectTagGroup(label: string) {
+    const trimmedLabel = label.trim();
+
+    if (!trimmedLabel) {
+      setStatusMessage("Project tag groups need a name.");
+      return;
+    }
+
+    if (projectTagGroupLabelExists(trimmedLabel, projectTagGroups.map((group) => group.label))) {
+      setStatusMessage(`A project tag group named "${trimmedLabel}" already exists.`);
+      return;
+    }
+
+    setProjectTagGroups((currentGroups) => [
+      ...currentGroups,
+      {
+        id: createProjectTagGroupId(trimmedLabel),
+        label: trimmedLabel,
+        tags: [],
+      },
+    ]);
+    setStatusMessage(`Created project tag group "${trimmedLabel}".`);
+  }
+
+  function createProjectTag(groupId: string, label: string) {
+    const trimmedLabel = label.trim();
+    const projectTagId = createProjectTagId(trimmedLabel);
+
+    if (!trimmedLabel || !projectTagId) {
+      setStatusMessage("Project tags need a name.");
+      return;
+    }
+
+    if (libraryTagExists(projectTagId) || projectTagGroups.some((group) => group.tags.some((tag) => tag.id === projectTagId))) {
+      setStatusMessage(`A tag named "${trimmedLabel}" already exists.`);
+      return;
+    }
+
+    setProjectTagGroups((currentGroups) =>
+      currentGroups.map((group) =>
+        group.id === groupId
+          ? {
+              ...group,
+              tags: [...group.tags, { id: projectTagId, label: trimmedLabel }].sort((first, second) => first.label.localeCompare(second.label)),
+            }
+          : group,
+      ),
+    );
+    setStatusMessage(`Created project tag "${trimmedLabel}".`);
+  }
+
+  function deleteProjectTagGroup(groupId: string) {
+    const group = projectTagGroups.find((entry) => entry.id === groupId);
+
+    if (!group) {
+      return;
+    }
+
+    const deletedTagIds = new Set(group.tags.map((tag) => tag.id));
+
+    assets.forEach((asset) => {
+      const nextUserTags = asset.userTags.filter((tag) => !deletedTagIds.has(createProjectTagId(tag) || tag));
+
+      if (nextUserTags.length !== asset.userTags.length) {
+        updateAssetTags(asset.id, nextUserTags);
+      }
+    });
+
+    setProjectTagGroups((currentGroups) => currentGroups.filter((entry) => entry.id !== groupId));
+    setStatusMessage(`Deleted project tag group "${group.label}".`);
+  }
+
+  function libraryTagExists(tagId: string) {
+    return libraryTagDefinitions.some((tagDefinition) => tagDefinition.id === tagId);
+  }
+
   async function syncTagLibraryWindowState(asset: Asset | null) {
     const tagBrowserWindow = await WebviewWindow.getByLabel(TAG_LIBRARY_WINDOW_LABEL);
 
@@ -602,6 +763,7 @@ export function App() {
     }
 
     await tagBrowserWindow.emit(TAG_LIBRARY_WINDOW_STATE_EVENT, {
+      projectTagGroups,
       selectedAsset: toTagLibraryWindowAssetSnapshot(asset),
     });
   }
@@ -781,9 +943,11 @@ export function App() {
         nvvDocument: activeInspectorNvvDocument,
         onAcceptNvdStyle: acceptNvdStyleDraft,
         onApplyNvdStyle: applyNvdStyle,
+        onAssetAddTag: addTagToAsset,
         onAssetKeptTagsChange: updateAssetKeptTags,
         onAssetNotesChange: updateAssetNotes,
         onAssetPlacementSuggestionAccept: acceptAssetPlacementSuggestion,
+        onAssetRecentTagRemove: removeRecentUserTag,
         onAssetTagsChange: updateAssetTags,
         onOpenTagBrowser: () => {
           if (isTauriRuntime()) {
@@ -823,6 +987,7 @@ export function App() {
         nvdStyleResetConfirmationEnabled,
         openedNvdDocumentTitle: activeNvdDocument?.document.title ?? null,
         pendingNvdStyleResetRole,
+        projectTagGroups,
         selectedThemeId,
         selectedThemeIsBuiltin,
         selectedAsset,
@@ -837,6 +1002,9 @@ export function App() {
         onCloseNvdCloseConfirmation: () => setIsNvdCloseConfirmationOpen(false),
         onConfirmNvdStyleReset: confirmNvdStyleReset,
         onCreateLibraryNode: addLibraryNodeFromDraft,
+        onCreateProjectTag: createProjectTag,
+        onCreateProjectTagGroup: createProjectTagGroup,
+        onDeleteProjectTagGroup: deleteProjectTagGroup,
         onDeleteInventoryNvdDocument: (assetId) => void deleteInventoryNvdDocument(assetId),
         onDeleteLibraryNode: deleteLibraryNode,
         onDeleteTheme: deleteSelectedTheme,
@@ -860,7 +1028,7 @@ export function App() {
             return;
           }
 
-          updateAssetTags(selectedAsset.id, [...selectedAsset.userTags, tag]);
+          addTagToAsset(selectedAsset.id, tag);
         },
         onThemeColorChange: updateThemeColor,
         onThemeEditorLayoutChange: setThemeEditorLayout,

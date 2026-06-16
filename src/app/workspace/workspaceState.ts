@@ -11,6 +11,7 @@ import type {
   LeftPaneView,
   PersistedInventoryManifest,
   PersistedLibraryState,
+  ProjectTagGroup,
   PersistedWorkspaceState,
   VirtualFolder,
 } from "../appTypes";
@@ -35,6 +36,8 @@ export function createEmptyLibraryState(): PersistedLibraryState {
   return {
     rootPath: null,
     assets: [],
+    projectTagGroups: [],
+    recentUserTagIds: [],
     sourceFolders: [],
     virtualFolders: [],
   };
@@ -62,9 +65,49 @@ export function getPersistedLibraryStateFromManifest(manifest: PersistedInventor
   return {
     rootPath: manifest.rootPath ?? manifest.sourceFolders[0]?.path ?? null,
     assets: manifest.assets,
+    projectTagGroups: normalizeProjectTagGroups(manifest.projectTagGroups),
+    recentUserTagIds: normalizeStringList(manifest.recentUserTagIds),
     sourceFolders: manifest.sourceFolders,
     virtualFolders: manifest.libraryTree,
   };
+}
+
+function normalizeProjectTagGroups(value: unknown[] | undefined): ProjectTagGroup[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((group) => {
+    if (!group || typeof group !== "object") {
+      return [];
+    }
+
+    const candidate = group as {
+      id?: unknown;
+      label?: unknown;
+      tags?: unknown;
+    };
+    const id = typeof candidate.id === "string" ? candidate.id : null;
+    const label = typeof candidate.label === "string" ? candidate.label : null;
+    const tags = Array.isArray(candidate.tags)
+      ? candidate.tags.flatMap((tag) => {
+          if (!tag || typeof tag !== "object") {
+            return [];
+          }
+
+          const tagCandidate = tag as { id?: unknown; label?: unknown };
+          return typeof tagCandidate.id === "string" && typeof tagCandidate.label === "string"
+            ? [{ id: tagCandidate.id, label: tagCandidate.label }]
+            : [];
+        })
+      : [];
+
+    return id && label ? [{ id, label, tags }] : [];
+  });
+}
+
+function normalizeStringList(value: string[] | undefined) {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
 }
 
 export function upsertInventoryDocumentEntry(entries: InventoryDocumentEntry[], entry: InventoryDocumentEntry) {
