@@ -10,11 +10,16 @@ import {
   countFolderAssets,
   createVirtualFolderFromDraft,
   findFolder,
+  findFolderNodePath,
   findFolderPath,
   folderContainsId,
   getAssetsForLibraryNode,
+  getAssetPlacementSuggestions,
   libraryNodeIncludesAsset,
+  insertFolder,
   removeFolder,
+  setFolderAssetAssignment,
+  setFolderAssetExclusion,
   updateFolder,
 } from "../../features/libraryTree/libraryTreeModel";
 import type { LibraryView } from "../../features/assetShelf";
@@ -86,6 +91,28 @@ export function useLibraryActions({
     }
   }
 
+  function focusLibraryRoot(selectedAssetId?: number) {
+    openTreeNodePath(["library"]);
+    setSelectedFolderId(null);
+    setActiveView("all");
+
+    if (selectedAssetId !== undefined) {
+      setSelectedId(selectedAssetId);
+    }
+  }
+
+  function focusLibraryParent(folderPath: string[], selectedAssetId?: number) {
+    const parentPath = folderPath.slice(0, -1);
+    const parentFolderId = parentPath[parentPath.length - 1] ?? null;
+
+    if (parentFolderId) {
+      focusLibraryFolder(parentFolderId, selectedAssetId, ["library", ...parentPath]);
+      return;
+    }
+
+    focusLibraryRoot(selectedAssetId);
+  }
+
   function updateScannedAsset(
     assetId: number,
     update: (asset: ScanResult["assets"][number]) => ScanResult["assets"][number],
@@ -112,12 +139,12 @@ export function useLibraryActions({
       return;
     }
 
-    const parentFolder = selectedFolderId ? findFolder(virtualFolders, selectedFolderId) : null;
-    openAddLibraryNodePanel(selectedFolderId, parentFolder?.name ?? "Master Library");
+    openAddLibraryNodePanel(null, "Master");
   }
 
   function openLibraryNodeContextMenu(node: StructureNode, event: ReactMouseEvent<HTMLElement>) {
-    const isAssetNode = typeof node.assetId === "number";
+    const assetNodeId = typeof node.assetId === "number" ? node.assetId : null;
+    const isAssetNode = assetNodeId !== null;
 
     if (!node.canAddChild && !isAssetNode) {
       return;
@@ -129,9 +156,18 @@ export function useLibraryActions({
     setSourceFolderContextMenu(null);
 
     if (isAssetNode) {
-      const asset = assets.find((candidate) => candidate.id === node.assetId);
+      const asset = assets.find((candidate) => candidate.id === assetNodeId);
+      const parentFolder = node.parentFolderId ? findFolder(virtualFolders, node.parentFolderId) : null;
+      const parentPathLabels = node.parentFolderId
+        ? (findFolderNodePath(virtualFolders, node.parentFolderId) ?? []).map((folder) => folder.name)
+        : [];
+      setSelectedId(assetNodeId);
       setLibraryNodeContextMenu({
-        assetId: node.assetId,
+        assetId: assetNodeId,
+        assetParentFolderId: node.parentFolderId ?? null,
+        assetParentPathLabels: parentPathLabels,
+        assetPlacementSuggestions: asset ? getAssetPlacementSuggestions(asset, virtualFolders, masterLibraryAssets).slice(0, 3) : [],
+        canRemoveFromNode: Boolean(parentFolder && asset && libraryNodeIncludesAsset(parentFolder, asset)),
         isInventoryDocument: Boolean(asset && findInventoryNvdDocumentForAsset(asset, inventoryDocuments)),
         label: node.label,
         target: "asset",
@@ -154,8 +190,13 @@ export function useLibraryActions({
     event.preventDefault();
     event.stopPropagation();
     setSourceFolderContextMenu(null);
+    setSelectedId(asset.id);
     setLibraryNodeContextMenu({
       assetId: asset.id,
+      assetParentFolderId: null,
+      assetParentPathLabels: [],
+      assetPlacementSuggestions: getAssetPlacementSuggestions(asset, virtualFolders, masterLibraryAssets).slice(0, 3),
+      canRemoveFromNode: false,
       isInventoryDocument: Boolean(findInventoryNvdDocumentForAsset(asset, inventoryDocuments)),
       label: asset.name,
       target: "asset",
@@ -200,7 +241,7 @@ export function useLibraryActions({
     const trimmedName = draft.name.trim();
 
     if (!trimmedName) {
-      setStatusMessage("Name the folder before creating it.");
+      setStatusMessage("Name the node before creating it.");
       return;
     }
 
@@ -214,7 +255,7 @@ export function useLibraryActions({
     }
 
     const parentPath = parentFolderId ? findFolderPath(virtualFolders, parentFolderId) ?? [] : [];
-    const parentLabel = parentFolder?.name ?? "Master Library";
+    const parentLabel = parentFolder?.name ?? "Master";
 
     setVirtualFolders((folders) =>
       parentFolderId
@@ -224,7 +265,7 @@ export function useLibraryActions({
     focusLibraryFolder(folder.id, undefined, ["library", ...parentPath, folder.id]);
     setAddLibraryNodePanel(null);
     setStatusMessage(
-      `Added folder "${folder.name}" under "${parentLabel}". ${
+      `Added node "${folder.name}" under "${parentLabel}". ${
         matchedAssetCount > 0
           ? `${matchedAssetCount} loaded asset${matchedAssetCount === 1 ? "" : "s"} currently match its rules.`
           : "No loaded assets match its rules yet."
@@ -243,6 +284,23 @@ export function useLibraryActions({
     const name = window.prompt("Rename library node", folder.name);
 
     const trimmedName = name?.trim();
+
+    if (!trimmedName) {
+      return;
+    }
+
+    renameLibraryNodeTo(folderId, trimmedName);
+  }
+
+  function renameLibraryNodeTo(folderId: string, name: string) {
+    const folder = findFolder(virtualFolders, folderId);
+
+    if (!folder) {
+      setStatusMessage("That library node could not be found.");
+      return;
+    }
+
+    const trimmedName = name.trim();
 
     if (!trimmedName || trimmedName === folder.name) {
       return;
@@ -280,6 +338,23 @@ export function useLibraryActions({
 
     const name = window.prompt("Rename asset in Inventory", asset.name);
     const trimmedName = name?.trim();
+
+    if (!trimmedName) {
+      return;
+    }
+
+    renameAssetDisplayNameTo(assetId, trimmedName);
+  }
+
+  function renameAssetDisplayNameTo(assetId: number, name: string) {
+    const asset = assets.find((candidate) => candidate.id === assetId);
+
+    if (!asset) {
+      setStatusMessage("That asset could not be found.");
+      return;
+    }
+
+    const trimmedName = name.trim();
 
     if (!trimmedName || trimmedName === asset.name) {
       return;
@@ -333,7 +408,9 @@ export function useLibraryActions({
   }
 
   function acceptAssetPlacementSuggestion(suggestion: AssetPlacementSuggestion) {
-    if (!selectedAsset) {
+    const asset = selectedAsset;
+
+    if (!asset) {
       setStatusMessage("Select an asset before accepting a placement suggestion.");
       return;
     }
@@ -343,16 +420,28 @@ export function useLibraryActions({
       const parentPath = parentFolderId ? findFolderPath(virtualFolders, parentFolderId) ?? [] : [];
       const folder = {
         ...createVirtualFolderFromDraft(suggestion.draft),
-        assetIds: [selectedAsset.id],
+        assetIds: [asset.id],
+      };
+      const folderPath = ["library", ...parentPath, folder.id];
+
+      const applyPlacement = (message: string) => {
+        setVirtualFolders((folders) => insertFolder(folders, parentFolderId, folder));
+        focusLibraryFolder(folder.id, asset.id, folderPath);
+        setStatusMessage(message);
       };
 
-      setVirtualFolders((folders) =>
-        parentFolderId
-          ? updateFolder(folders, parentFolderId, (parent) => ({ ...parent, children: [...parent.children, folder] }))
-          : [...folders, folder],
-      );
-      focusLibraryFolder(folder.id, selectedAsset.id, ["library", ...parentPath, folder.id]);
-      setStatusMessage(`Created "${folder.name}" and placed "${selectedAsset.name}" there inside Inventory.`);
+      const undoPlacement = (message: string) => {
+        setVirtualFolders((folders) => removeFolder(folders, folder.id));
+        focusLibraryParent([...parentPath, folder.id], asset.id);
+        setStatusMessage(message);
+      };
+
+      applyPlacement(`Created "${folder.name}" and placed "${asset.name}" there inside Inventory.`);
+      addLibraryHistoryCommand({
+        label: `Add To ${folder.name}`,
+        redo: () => applyPlacement(`Redid placing "${asset.name}" in "${folder.name}".`),
+        undo: () => undoPlacement(`Undid placing "${asset.name}" in "${folder.name}".`),
+      });
       return;
     }
 
@@ -368,18 +457,109 @@ export function useLibraryActions({
       return;
     }
 
-    if (!libraryNodeIncludesAsset(folder, selectedAsset)) {
-      setVirtualFolders((folders) =>
-        updateFolder(folders, folder.id, (currentFolder) =>
-          currentFolder.assetIds.includes(selectedAsset.id)
-            ? currentFolder
-            : { ...currentFolder, assetIds: [...currentFolder.assetIds, selectedAsset.id] },
-        ),
-      );
+    const folderPath = findFolderPath(virtualFolders, folder.id) ?? [folder.id];
+    const hadManualAssignment = folder.assetIds.includes(asset.id);
+    const wasExcluded = (folder.excludedAssetIds ?? []).includes(asset.id);
+    const needsManualAssignment = !libraryNodeIncludesAsset(folder, asset);
+
+    if (needsManualAssignment) {
+      const applyPlacement = (message: string) => {
+        setVirtualFolders((folders) => {
+          const withAssignment = setFolderAssetAssignment(folders, folder.id, asset.id, true);
+          return wasExcluded ? setFolderAssetExclusion(withAssignment, folder.id, asset.id, false) : withAssignment;
+        });
+        focusLibraryFolder(folder.id, asset.id);
+        setStatusMessage(message);
+      };
+
+      const undoPlacement = (message: string) => {
+        setVirtualFolders((folders) => {
+          const withAssignment = setFolderAssetAssignment(folders, folder.id, asset.id, hadManualAssignment);
+          return setFolderAssetExclusion(withAssignment, folder.id, asset.id, wasExcluded);
+        });
+        focusLibraryParent(folderPath, asset.id);
+        setStatusMessage(message);
+      };
+
+      applyPlacement(`Placed "${asset.name}" in "${suggestion.path.join(" > ")}" inside Inventory.`);
+      addLibraryHistoryCommand({
+        label: `Add To ${folder.name}`,
+        redo: () => applyPlacement(`Redid placing "${asset.name}" in "${suggestion.path.join(" > ")}".`),
+        undo: () => undoPlacement(`Undid placing "${asset.name}" in "${suggestion.path.join(" > ")}".`),
+      });
+      return;
     }
 
-    focusLibraryFolder(folder.id, selectedAsset.id);
-    setStatusMessage(`Placed "${selectedAsset.name}" in "${suggestion.path.join(" > ")}" inside Inventory.`);
+    if (wasExcluded) {
+      const applyPlacement = (message: string) => {
+        setVirtualFolders((folders) => setFolderAssetExclusion(folders, folder.id, asset.id, false));
+        focusLibraryFolder(folder.id, asset.id);
+        setStatusMessage(message);
+      };
+
+      const undoPlacement = (message: string) => {
+        setVirtualFolders((folders) => setFolderAssetExclusion(folders, folder.id, asset.id, true));
+        focusLibraryParent(folderPath, asset.id);
+        setStatusMessage(message);
+      };
+
+      applyPlacement(`Placed "${asset.name}" in "${suggestion.path.join(" > ")}" inside Inventory.`);
+      addLibraryHistoryCommand({
+        label: `Add To ${folder.name}`,
+        redo: () => applyPlacement(`Redid placing "${asset.name}" in "${suggestion.path.join(" > ")}".`),
+        undo: () => undoPlacement(`Undid placing "${asset.name}" in "${suggestion.path.join(" > ")}".`),
+      });
+      return;
+    }
+
+    focusLibraryFolder(folder.id, asset.id);
+    setStatusMessage(`Placed "${asset.name}" in "${suggestion.path.join(" > ")}" inside Inventory.`);
+  }
+
+  function removeAssetFromLibraryNode(assetId: number, folderId: string) {
+    const asset = assets.find((candidate) => candidate.id === assetId);
+    const folder = findFolder(virtualFolders, folderId);
+
+    if (!asset || !folder) {
+      setStatusMessage("That asset placement could not be found.");
+      return;
+    }
+
+    const hadManualAssignment = folder.assetIds.includes(assetId);
+    const wasExcluded = (folder.excludedAssetIds ?? []).includes(assetId);
+    const matchesByRules = !wasExcluded && !hadManualAssignment && libraryNodeIncludesAsset(folder, asset);
+
+    if (!hadManualAssignment && !matchesByRules) {
+      setStatusMessage(`"${asset.name}" is not currently placed in "${folder.name}".`);
+      return;
+    }
+
+    const folderPath = findFolderPath(virtualFolders, folder.id) ?? [folder.id];
+
+    const applyRemoval = (message: string) => {
+      setVirtualFolders((folders) => {
+        const withoutAssignment = setFolderAssetAssignment(folders, folder.id, assetId, false);
+        return setFolderAssetExclusion(withoutAssignment, folder.id, assetId, matchesByRules);
+      });
+      focusLibraryParent(folderPath, assetId);
+      setStatusMessage(message);
+    };
+
+    const undoRemoval = (message: string) => {
+      setVirtualFolders((folders) => {
+        const withAssignment = setFolderAssetAssignment(folders, folder.id, assetId, hadManualAssignment);
+        return setFolderAssetExclusion(withAssignment, folder.id, assetId, wasExcluded);
+      });
+      focusLibraryFolder(folder.id, assetId);
+      setStatusMessage(message);
+    };
+
+    applyRemoval(`Demoted "${asset.name}" from "${folder.name}" inside Inventory.`);
+    addLibraryHistoryCommand({
+      label: `Demote From ${folder.name}`,
+      redo: () => applyRemoval(`Redid demoting "${asset.name}" from "${folder.name}".`),
+      undo: () => undoRemoval(`Undid demoting "${asset.name}" from "${folder.name}".`),
+    });
   }
 
   function updateAssetNotes(assetId: number, notes: string) {
@@ -407,8 +587,11 @@ export function useLibraryActions({
     openAssetContextMenu,
     openLibraryNodeContextMenu,
     openSourceFolderContextMenu,
+    removeAssetFromLibraryNode,
     renameAssetDisplayName,
+    renameAssetDisplayNameTo,
     renameLibraryNode,
+    renameLibraryNodeTo,
     updateAssetKeptTags,
     updateAssetNotes,
     updateAssetTags,

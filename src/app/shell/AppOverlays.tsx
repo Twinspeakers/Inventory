@@ -13,6 +13,7 @@ import type {
   AddLibraryNodeDraft,
   AddLibraryNodePanelState,
   Asset,
+  AssetPlacementSuggestion,
   ProjectTagGroup,
   VirtualFolder,
 } from "../appTypes";
@@ -57,7 +58,9 @@ export function AppOverlays({
   onDeleteInventoryNvdDocument,
   onDeleteLibraryNode,
   onDeleteTheme,
+  onAssetPlacementSuggestionAccept,
   onLibraryNodeContextMenuClose,
+  onRemoveAssetFromLibraryNode,
   onNvdSaveReminderEnabledChange,
   onNvdStyleResetConfirmationEnabledChange,
   onOpenAddLibraryNodePanel,
@@ -82,6 +85,7 @@ export function AppOverlays({
   onCreateProjectTag,
   onCreateProjectTagGroup,
   onDeleteProjectTagGroup,
+  onRenameSelectedAsset,
 }: {
   addLibraryNodePanel: AddLibraryNodePanelState | null;
   availableThemes: ThemeDefinition[];
@@ -113,7 +117,9 @@ export function AppOverlays({
   onDeleteInventoryNvdDocument: (assetId: number) => void;
   onDeleteLibraryNode: (folderId: string) => void;
   onDeleteTheme: () => void;
+  onAssetPlacementSuggestionAccept: (suggestion: AssetPlacementSuggestion) => void;
   onLibraryNodeContextMenuClose: () => void;
+  onRemoveAssetFromLibraryNode: (assetId: number, folderId: string) => void;
   onNvdSaveReminderEnabledChange: (enabled: boolean) => void;
   onNvdStyleResetConfirmationEnabledChange: (enabled: boolean) => void;
   onOpenAddLibraryNodePanel: (parentFolderId: string | null, parentLabel: string) => void;
@@ -138,6 +144,7 @@ export function AppOverlays({
   onCreateProjectTag: (groupId: string, label: string) => void;
   onCreateProjectTagGroup: (label: string) => void;
   onDeleteProjectTagGroup: (groupId: string) => void;
+  onRenameSelectedAsset: (name: string) => void;
 }) {
   return (
     <>
@@ -270,6 +277,22 @@ export function AppOverlays({
               onDeleteLibraryNode(menu.folderId);
             }
           }}
+          onAcceptPlacementSuggestion={(suggestion) => {
+            onLibraryNodeContextMenuClose();
+            onAssetPlacementSuggestionAccept(suggestion);
+          }}
+          onOpenNewNode={() => {
+            onLibraryNodeContextMenuClose();
+            onOpenAddLibraryNodePanel(null, "Master");
+          }}
+          onRemoveFromNode={() => {
+            const menu = libraryNodeContextMenu;
+            onLibraryNodeContextMenuClose();
+
+            if (typeof menu.assetId === "number" && menu.assetParentFolderId) {
+              onRemoveAssetFromLibraryNode(menu.assetId, menu.assetParentFolderId);
+            }
+          }}
           onRename={() => {
             const menu = libraryNodeContextMenu;
             onLibraryNodeContextMenuClose();
@@ -320,6 +343,7 @@ export function AppOverlays({
           onCreateProjectTag={onCreateProjectTag}
           onCreateProjectTagGroup={onCreateProjectTagGroup}
           onDeleteProjectTagGroup={onDeleteProjectTagGroup}
+          onRenameSelectedAsset={onRenameSelectedAsset}
           onAddTag={onTagBrowserAddTag}
           onClose={onTagBrowserClose}
         />

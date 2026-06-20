@@ -82,12 +82,18 @@ import { styleTags } from "./styles/styles";
 import { systemTags } from "./system/system";
 
 export type LibraryTagSourceFile = {
+  aliases?: string[];
+  category?: string;
+  description?: string;
   id: string;
   label: string;
   tags: LibraryTagDefinition[];
 };
 
 export type LibraryTagSourceFolder = {
+  aliases?: string[];
+  category?: string;
+  description?: string;
   files: LibraryTagSourceFile[];
   folders?: LibraryTagSourceFolder[];
   id: string;
@@ -105,16 +111,27 @@ export const libraryTagSourceSections: LibraryTagSourceSection[] = [
   {
     id: "people",
     label: "People",
+    aliases: ["persons", "characters", "humans"],
+    category: "Taxonomy",
+    description: "People-focused folders sourced from the tag library, including roles, relationships, age groups, and humanoids.",
     files: [
       { id: "age-groups", label: "age-groups.ts", tags: ageGroupTags },
       { id: "humanoids", label: "humanoids.ts", tags: humanoidTags },
       { id: "relationships", label: "relationships.ts", tags: relationshipTags },
-      { id: "roles", label: "roles.ts", tags: roleTags },
+      {
+        id: "roles",
+        label: "roles.ts",
+        aliases: ["jobs", "professions"],
+        tags: roleTags,
+      },
     ],
   },
   {
     id: "animals",
     label: "Animals",
+    aliases: ["creatures", "wildlife", "fauna"],
+    category: "Taxonomy",
+    description: "Animal-focused folders sourced from the tag library, covering broad animal groups and species clusters.",
     files: [{ id: "animals", label: "animals.ts", tags: rootAnimalTags }],
     folders: [
       {
@@ -157,6 +174,9 @@ export const libraryTagSourceSections: LibraryTagSourceSection[] = [
   {
     id: "food",
     label: "Food",
+    aliases: ["cooking", "ingredients", "dishes"],
+    category: "Taxonomy",
+    description: "Food-focused folders sourced from the tag library, including ingredients, dishes, storage, and beverages.",
     files: [
       { id: "general", label: "general.ts", tags: foodTags },
       { id: "beverages", label: "beverages.ts", tags: beverageTags },
@@ -189,6 +209,9 @@ export const libraryTagSourceSections: LibraryTagSourceSection[] = [
   {
     id: "environment",
     label: "Environment",
+    aliases: ["places", "locations", "built environment"],
+    category: "Taxonomy",
+    description: "Place-focused folders sourced from the tag library, from rooms and buildings to cities and destinations.",
     files: [
       { id: "buildings", label: "buildings.ts", tags: buildingTags },
       { id: "rooms", label: "rooms.ts", tags: roomTags },
@@ -202,6 +225,9 @@ export const libraryTagSourceSections: LibraryTagSourceSection[] = [
   {
     id: "natural-world",
     label: "Natural World",
+    aliases: ["nature", "outdoors"],
+    category: "Taxonomy",
+    description: "Natural-world folders sourced from the tag library, covering terrain, ecosystems, celestial subjects, plants, and rocks.",
     files: [
       { id: "celestial", label: "celestial.ts", tags: celestialTags },
       { id: "ecosystems", label: "ecosystems.ts", tags: ecosystemTags },
@@ -215,6 +241,9 @@ export const libraryTagSourceSections: LibraryTagSourceSection[] = [
   {
     id: "objects",
     label: "Objects",
+    aliases: ["props", "items"],
+    category: "Taxonomy",
+    description: "Object-focused folders sourced from the tag library, covering practical object groupings and clothing.",
     files: [
       { id: "objects", label: "objects.ts", tags: objectTags },
       { id: "containers", label: "containers.ts", tags: containerTags },
@@ -238,6 +267,8 @@ export const libraryTagSourceSections: LibraryTagSourceSection[] = [
       {
         id: "clothing",
         label: "Clothing",
+        aliases: ["apparel", "garments"],
+        description: "Clothing folders sourced from the tag library, including accessories, tops, bottoms, footwear, and more.",
         files: [
           { id: "accessories", label: "accessories.ts", tags: accessoryTags },
           { id: "headwear", label: "headwear.ts", tags: headwearTags },
@@ -254,6 +285,9 @@ export const libraryTagSourceSections: LibraryTagSourceSection[] = [
   {
     id: "materials",
     label: "Materials",
+    aliases: ["substances", "resources"],
+    category: "Taxonomy",
+    description: "Material-focused folders sourced from the tag library, including natural, crafted, fabric, metal, and animal materials.",
     files: [
       { id: "general", label: "general.ts", tags: generalMaterialTags },
       { id: "animal-materials", label: "animal-materials.ts", tags: animalMaterialTags },
@@ -266,6 +300,9 @@ export const libraryTagSourceSections: LibraryTagSourceSection[] = [
   {
     id: "activities",
     label: "Activities",
+    aliases: ["skills", "sports", "hobbies"],
+    category: "Taxonomy",
+    description: "Activity-focused folders sourced from the tag library, including hobbies, sports, and skills.",
     files: [
       { id: "hobbies", label: "hobbies.ts", tags: hobbyTags },
       { id: "sports", label: "sports.ts", tags: sportTags },
@@ -275,6 +312,9 @@ export const libraryTagSourceSections: LibraryTagSourceSection[] = [
   {
     id: "styles",
     label: "Styles",
+    aliases: ["looks", "aesthetics"],
+    category: "Taxonomy",
+    description: "Style-focused folders sourced from the tag library.",
     files: [{ id: "styles", label: "styles.ts", tags: styleTags }],
   },
 ];

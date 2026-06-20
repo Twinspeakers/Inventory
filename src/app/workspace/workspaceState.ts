@@ -149,6 +149,7 @@ export function removeAssetIdsFromVirtualFolders(folders: VirtualFolder[], asset
   return folders.map((folder) => ({
     ...folder,
     assetIds: folder.assetIds.filter((assetId) => !assetIds.has(assetId)),
+    excludedAssetIds: (folder.excludedAssetIds ?? []).filter((assetId) => !assetIds.has(assetId)),
     children: removeAssetIdsFromVirtualFolders(folder.children, assetIds),
   }));
 }

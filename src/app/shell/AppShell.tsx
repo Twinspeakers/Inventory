@@ -1,25 +1,12 @@
-import type {
-  ComponentProps,
-  CSSProperties,
-  Ref,
-} from "react";
+import type { ComponentProps, CSSProperties, Ref } from "react";
 import { AppOverlays } from "./AppOverlays";
 import { MainWorkspace } from "./MainWorkspace";
 import { MenuBar } from "./MenuBar";
 import { LibraryStructure } from "./LibraryStructure";
 import { Inspector } from "./inspector";
-import type { AssetPlacementSuggestion } from "../appTypes";
-
-type AppShellInspectorProps = Omit<
-  ComponentProps<typeof Inspector>,
-  "assetPlacementSuggestions" | "onAssetPlacementSuggestionAccept"
-> & {
-  assetPlacementSuggestions: AssetPlacementSuggestion[];
-  onAssetPlacementSuggestionAccept: (suggestion: AssetPlacementSuggestion) => void;
-};
 
 type AppShellProps = {
-  inspector: AppShellInspectorProps;
+  inspector: ComponentProps<typeof Inspector>;
   libraryStructure: ComponentProps<typeof LibraryStructure>;
   mainWorkspace: ComponentProps<typeof MainWorkspace>;
   menuBar: ComponentProps<typeof MenuBar>;

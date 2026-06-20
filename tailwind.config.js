@@ -23,6 +23,7 @@ export default {
         steel: themedColor("steel"),
         violet: themedColor("violet"),
         amber: themedColor("amber"),
+        "brand-lime": themedColor("brand-lime"),
       },
       boxShadow: {
         soft: "0 12px 34px rgb(var(--color-graphite) / 0.24)",

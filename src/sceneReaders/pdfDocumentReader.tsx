@@ -159,12 +159,12 @@ export function PdfPreview({ asset }: { asset: PdfDocumentAsset }) {
       <div className="h-full min-h-0 overflow-auto bg-preview p-6" onWheel={handlePdfWheel}>
         {message ? <div className="mb-3 rounded-sm border border-line bg-surface px-3 py-2 text-sm text-muted">{message}</div> : null}
         <div className="flex min-h-full justify-center pb-16 pt-10">
-          <canvas className="h-fit max-w-none rounded-sm bg-white shadow-soft" ref={canvasRef} />
+          <canvas className="h-fit max-w-none rounded-sm bg-white" ref={canvasRef} />
         </div>
       </div>
       <button
         aria-label="Previous PDF page"
-        className="icon-button absolute left-1/2 top-3 z-20 -translate-x-1/2 shadow-soft"
+        className="icon-button absolute left-1/2 top-3 z-20 -translate-x-1/2"
         disabled={!canGoToPreviousPage}
         onClick={goToPreviousPage}
         title="Previous page"
@@ -173,14 +173,14 @@ export function PdfPreview({ asset }: { asset: PdfDocumentAsset }) {
       </button>
       <button
         aria-label="Next PDF page"
-        className="icon-button absolute bottom-3 left-1/2 z-20 -translate-x-1/2 shadow-soft"
+        className="icon-button absolute bottom-3 left-1/2 z-20 -translate-x-1/2"
         disabled={!canGoToNextPage}
         onClick={goToNextPage}
         title="Next page"
       >
         <ChevronDown size={16} aria-hidden="true" />
       </button>
-      <div className="pointer-events-none absolute bottom-3 right-3 z-20 rounded-sm border border-line bg-surface/90 px-2 py-1 text-xs font-medium text-muted shadow-soft">
+      <div className="pointer-events-none absolute bottom-3 right-3 z-20 rounded-sm border border-line bg-surface/90 px-2 py-1 text-xs font-medium text-muted">
         {pageCount > 0 ? `${pageNumber} / ${pageCount}` : "- / -"} / {Math.round(zoom * 100)}%
       </div>
     </div>
@@ -262,7 +262,7 @@ export function PdfThumbnail({ asset, fallback }: { asset: PdfDocumentAsset; fal
 
   return (
     <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-sm border border-line bg-preview">
-      <canvas className="max-h-full max-w-full bg-white shadow-soft" ref={canvasRef} />
+      <canvas className="max-h-full max-w-full bg-white" ref={canvasRef} />
     </div>
   );
 }

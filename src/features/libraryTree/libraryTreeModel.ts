@@ -39,13 +39,7 @@ import type { AssetSortKey, LibraryView, SortDirection } from "../assetShelf";
 import { Archive, Backpack, Box, FileAudio, FileImage, FileText, Folder, FolderOpen, type LucideIcon } from "lucide-react";
 export const initialVirtualFolders: VirtualFolder[] = [];
 const starterLibraryNodeIds = new Set(["vf-tavern", "vf-tavern-props", "vf-tavern-lighting", "vf-fishing", "vf-icons"]);
-const defaultTopLevelLibraryNodeTemplateIds: Record<AssetType, string> = {
-  "3D": "3d-objects",
-  Image: "images",
-  Audio: "audio",
-  Document: "documents",
-  Archive: "archives",
-};
+const defaultLibraryRootTemplateId = "library";
 
 const typeIcons: Record<AssetType, LucideIcon> = {
   Image: FileImage,
@@ -108,31 +102,37 @@ export function buildStructure(
   const inventoryDrawAssets = inventoryDocumentAssets.filter((asset) => asset.extension.toLowerCase() === "nvv");
   const masterLibraryAssets = assets.filter((asset) => !inventoryDocumentPaths.has(normalizePath(asset.path)));
   const sortedFolders = sortVirtualFoldersByName(virtualFolders);
-  const assignedAssetIds = getAssignedAssetIds(sortedFolders, masterLibraryAssets);
-  const rootAssetNodes = sortAssets(
-    masterLibraryAssets.filter((asset) => !assignedAssetIds.has(asset.id)),
-    "name",
-    "asc",
-  ).map(assetToStructureNode);
-  const inventoryWriteNodes = inventoryWriteAssets.map(assetToStructureNode);
-  const inventoryDrawNodes = inventoryDrawAssets.map(assetToStructureNode);
+  const legacyRootWrapper = sortedFolders.length === 1 && isLegacyVisualRootWrapper(sortedFolders[0]) ? sortedFolders[0] : null;
+  const assignedAssetIds = legacyRootWrapper ? new Set<number>() : getAssignedAssetIds(sortedFolders, masterLibraryAssets);
+  const rootAssetNodes = legacyRootWrapper
+    ? []
+    : sortAssets(
+        masterLibraryAssets.filter((asset) => !assignedAssetIds.has(asset.id)),
+        "name",
+        "asc",
+      ).map((asset) => assetToStructureNode(asset));
+  const visibleLibraryChildren = legacyRootWrapper
+    ? virtualFolderToNode(legacyRootWrapper, masterLibraryAssets, openNodeIds).children ?? []
+    : [
+        ...sortedFolders.map((folder) => virtualFolderToNode(folder, masterLibraryAssets, openNodeIds)),
+        ...rootAssetNodes,
+      ];
+  const inventoryWriteNodes = inventoryWriteAssets.map((asset) => assetToStructureNode(asset));
+  const inventoryDrawNodes = inventoryDrawAssets.map((asset) => assetToStructureNode(asset));
   const nodes: StructureNode[] = [
     {
       id: "library",
-      label: "Master Library",
+      label: "Master",
       icon: Backpack,
       canAddChild: true,
       view: "all",
       meta: String(masterLibraryAssets.length),
       open: openNodeIds.has("library"),
-      children: [
-        ...sortedFolders.map((folder) => virtualFolderToNode(folder, masterLibraryAssets, openNodeIds)),
-        ...rootAssetNodes,
-      ],
+      children: visibleLibraryChildren,
     },
     {
       id: "inventory-files",
-      label: "Inventory",
+      label: "Create",
       icon: FolderOpen,
       view: "inventory-files",
       meta: String(inventoryDocumentAssets.length),
@@ -160,7 +160,9 @@ export function buildStructure(
     },
   ];
 
-  return nodes.map((node) => markActive(node, activeView, selectedFolderId, selectedAssetId));
+  const visibleSelectedFolderId = legacyRootWrapper && selectedFolderId === legacyRootWrapper.id ? null : selectedFolderId;
+
+  return nodes.map((node) => markActive(node, activeView, visibleSelectedFolderId, selectedAssetId));
 }
 
 export function markActive(node: StructureNode, activeView: LibraryView, selectedFolderId: string | null, selectedAssetId: number | null): StructureNode {
@@ -333,7 +335,7 @@ export function virtualFolderToNode(folder: VirtualFolder, assets: Asset[], open
   const sortedChildren = sortVirtualFoldersByName(folder.children);
   const childAssetScopes = getChildAssetScopes(sortedChildren, scopedAssets);
   const childFolderNodes = sortedChildren.map((child) => virtualFolderToNode(child, childAssetScopes.get(child.id) ?? [], openNodeIds));
-  const assetNodes = matchingAssets.map(assetToStructureNode);
+  const assetNodes = matchingAssets.map((asset) => assetToStructureNode(asset, folder.id));
 
   return {
     id: folder.id,
@@ -351,11 +353,16 @@ export function sortVirtualFoldersByName(folders: VirtualFolder[]) {
   return [...folders].sort((first, second) => compareText(first.name, second.name));
 }
 
-export function assetToStructureNode(asset: Asset): StructureNode {
+function isLegacyVisualRootWrapper(folder: VirtualFolder) {
+  return folder.templateId === defaultLibraryRootTemplateId;
+}
+
+export function assetToStructureNode(asset: Asset, parentFolderId: string | null = null): StructureNode {
   return {
     id: `asset-${asset.id}`,
     label: asset.name,
     assetId: asset.id,
+    parentFolderId,
     icon: typeIcons[asset.type],
   };
 }
@@ -365,13 +372,13 @@ export function createVirtualFolderFromTemplate(template: LibraryNodeTemplate, n
 }
 
 export function createDefaultTopLevelLibraryNodesForAssets(assets: ScannedAsset[]) {
-  const assetTypes = new Set(assets.map((asset) => asset.file_type));
+  if (assets.length === 0) {
+    return [];
+  }
 
-  return (Object.entries(defaultTopLevelLibraryNodeTemplateIds) as Array<[AssetType, string]>)
-    .filter(([assetType]) => assetTypes.has(assetType))
-    .map(([, templateId]) => libraryNodeTemplates.find((template) => template.id === templateId))
-    .filter((template): template is LibraryNodeTemplate => Boolean(template))
-    .map((template) => createVirtualFolderFromTemplate(template, template.name));
+  const libraryTemplate = libraryNodeTemplates.find((template) => template.id === defaultLibraryRootTemplateId);
+
+  return libraryTemplate ? [createVirtualFolderFromTemplate(libraryTemplate, libraryTemplate.name)] : [];
 }
 
 export function createVirtualFolderFromDraft(draft: AddLibraryNodeDraft): VirtualFolder {
@@ -379,6 +386,7 @@ export function createVirtualFolderFromDraft(draft: AddLibraryNodeDraft): Virtua
     id: createVirtualFolderId(draft.name),
     name: draft.name,
     assetIds: [],
+    excludedAssetIds: [],
     children: [],
     diskPath: null,
     isPlannedOnDisk: false,
@@ -506,26 +514,39 @@ export function getAssetPlacementSuggestions(asset: Asset, folders: VirtualFolde
   const suggestions: AssetPlacementSuggestion[] = [];
 
   for (const folder of folders) {
-    const folderAssets = getAssetsForLibraryNode(folder, assets);
-
-    if (!folderAssets.some((candidate) => candidate.id === asset.id)) {
-      continue;
-    }
-
-    const childAssetScopes = getChildAssetScopes(folder.children, folderAssets);
-    const childFoldersWithAsset = folder.children.filter((child) => childAssetScopes.get(child.id)?.some((candidate) => candidate.id === asset.id));
-
-    if (childFoldersWithAsset.length > 0) {
-      continue;
-    }
-
-    suggestions.push(...getExistingChildPlacementSuggestions(folder, asset, folderAssets, [folder]));
-    suggestions.push(...getNewChildPlacementSuggestions(folder, asset, [folder]));
+    suggestions.push(...collectAssetPlacementSuggestions(folder, asset, assets, [folder]));
   }
 
   return dedupeAssetPlacementSuggestions(suggestions)
     .sort((first, second) => second.score - first.score || second.path.length - first.path.length || compareText(first.path.join(" "), second.path.join(" ")))
     .slice(0, 8);
+}
+
+export function collectAssetPlacementSuggestions(
+  folder: VirtualFolder,
+  asset: Asset,
+  assets: Asset[],
+  path: VirtualFolder[],
+): AssetPlacementSuggestion[] {
+  const folderAssets = getAssetsForLibraryNode(folder, assets);
+
+  if (!folderAssets.some((candidate) => candidate.id === asset.id)) {
+    return [];
+  }
+
+  const childAssetScopes = getChildAssetScopes(folder.children, folderAssets);
+  const childFoldersWithAsset = folder.children.filter((child) => childAssetScopes.get(child.id)?.some((candidate) => candidate.id === asset.id));
+
+  if (childFoldersWithAsset.length > 0) {
+    return childFoldersWithAsset.flatMap((child) =>
+      collectAssetPlacementSuggestions(child, asset, childAssetScopes.get(child.id) ?? folderAssets, [...path, child]),
+    );
+  }
+
+  return [
+    ...getExistingChildPlacementSuggestions(folder, asset, folderAssets, path),
+    ...getNewChildPlacementSuggestions(folder, asset, path),
+  ];
 }
 
 export function getExistingChildPlacementSuggestions(parentFolder: VirtualFolder, asset: Asset, scopedAssets: Asset[], parentPath: VirtualFolder[]) {
@@ -564,39 +585,7 @@ export function getNewChildPlacementSuggestions(parentFolder: VirtualFolder, ass
     }
   }
 
-  if (suggestions.length === 0) {
-    const fallbackSuggestion = getFallbackNewChildPlacementSuggestion(parentFolder, parentFileTypes, existingChildNames, asset, parentPath);
-
-    if (fallbackSuggestion) {
-      suggestions.push(fallbackSuggestion);
-    }
-  }
-
   return suggestions;
-}
-
-export function getFallbackNewChildPlacementSuggestion(
-  parentFolder: VirtualFolder,
-  parentFileTypes: LibraryNodeFileType[],
-  existingChildNames: Set<string>,
-  asset: Asset,
-  parentPath: VirtualFolder[],
-) {
-  const nameTerms = getAssetPlacementNameTerms(asset);
-
-  if (nameTerms.length === 0) {
-    return null;
-  }
-
-  const name = nameTerms.map(toTitleCase).join(" ");
-  const normalizedName = normalizeLibraryMatchText(name);
-
-  if (!normalizedName || existingChildNames.has(normalizedName)) {
-    return null;
-  }
-
-  const draft = createLibraryNodeDraft(customLibraryNodeTemplate, name, nameTerms, parentFileTypes);
-  return scoreDraftPlacementSuggestion(draft, customLibraryNodeTemplate, asset, [...parentPath.map((folder) => folder.name), name], parentFolder.id);
 }
 
 export function getLibraryNodeChildSuggestionTemplates(parentTemplate: LibraryNodeTemplate) {
@@ -604,7 +593,7 @@ export function getLibraryNodeChildSuggestionTemplates(parentTemplate: LibraryNo
   const seenTemplateIds = new Set<string>();
 
   function addTemplate(template: LibraryNodeTemplate | undefined) {
-    if (!template || template.id === "all-assets" || template.id === parentTemplate.id || seenTemplateIds.has(template.id)) {
+    if (!template || template.id === defaultLibraryRootTemplateId || template.id === parentTemplate.id || seenTemplateIds.has(template.id)) {
       return;
     }
 
@@ -904,10 +893,17 @@ export function formatMatchedTerms(terms: string[]) {
 }
 
 export function libraryNodeIncludesAsset(folder: VirtualFolder, asset: Asset) {
-  return folder.assetIds.includes(asset.id) || libraryNodeRulesMatchAsset(folder, asset);
+  const excludedAssetIds = folder.excludedAssetIds ?? [];
+  return folder.assetIds.includes(asset.id) || (!excludedAssetIds.includes(asset.id) && libraryNodeRulesMatchAsset(folder, asset));
 }
 
 export function libraryNodeRulesMatchAsset(folder: VirtualFolder, asset: Asset) {
+  const template = getLibraryNodeTemplateForFolder(folder);
+
+  if (template.id === defaultLibraryRootTemplateId) {
+    return true;
+  }
+
   const rules = getLibraryNodeRules(folder);
 
   if (rules.length > 0) {
@@ -918,8 +914,6 @@ export function libraryNodeRulesMatchAsset(folder: VirtualFolder, asset: Asset) 
 
     return fileRulesMatch && contentRulesMatch;
   }
-
-  const template = getLibraryNodeTemplateForFolder(folder);
 
   if (!libraryNodeFileTypeMatches(template, asset)) {
     return false;
@@ -1501,6 +1495,53 @@ export function updateFolder(folders: VirtualFolder[], folderId: string, update:
   });
 }
 
+export function insertFolder(folders: VirtualFolder[], parentFolderId: string | null, folder: VirtualFolder): VirtualFolder[] {
+  if (!parentFolderId) {
+    return [...folders, folder];
+  }
+
+  return updateFolder(folders, parentFolderId, (parent) => ({
+    ...parent,
+    children: [...parent.children, folder],
+  }));
+}
+
+export function setFolderAssetAssignment(
+  folders: VirtualFolder[],
+  folderId: string,
+  assetId: number,
+  assigned: boolean,
+): VirtualFolder[] {
+  return updateFolder(folders, folderId, (folder) => ({
+    ...folder,
+    assetIds: assigned
+      ? folder.assetIds.includes(assetId)
+        ? folder.assetIds
+        : [...folder.assetIds, assetId]
+      : folder.assetIds.filter((currentAssetId) => currentAssetId !== assetId),
+  }));
+}
+
+export function setFolderAssetExclusion(
+  folders: VirtualFolder[],
+  folderId: string,
+  assetId: number,
+  excluded: boolean,
+): VirtualFolder[] {
+  return updateFolder(folders, folderId, (folder) => {
+    const currentExcludedAssetIds = folder.excludedAssetIds ?? [];
+
+    return {
+      ...folder,
+      excludedAssetIds: excluded
+        ? currentExcludedAssetIds.includes(assetId)
+          ? currentExcludedAssetIds
+          : [...currentExcludedAssetIds, assetId]
+        : currentExcludedAssetIds.filter((currentAssetId) => currentAssetId !== assetId),
+    };
+  });
+}
+
 export function getTreeNodePathForView(view: LibraryView) {
   switch (view) {
     case "inventory-files":
@@ -1580,7 +1621,7 @@ export function sumManualFolderAssets(folders: VirtualFolder[]): number {
 }
 
 export function getAddLibraryNodeParentOptions(folders: VirtualFolder[]): AddLibraryNodeParentOption[] {
-  const options: AddLibraryNodeParentOption[] = [{ id: null, label: "Master Library" }];
+  const options: AddLibraryNodeParentOption[] = [{ id: null, label: "Master" }];
 
   function addFolderOptions(currentFolders: VirtualFolder[], parentLabels: string[]) {
     for (const folder of currentFolders) {
@@ -1594,7 +1635,7 @@ export function getAddLibraryNodeParentOptions(folders: VirtualFolder[]): AddLib
     }
   }
 
-  addFolderOptions(folders, ["Master Library"]);
+  addFolderOptions(folders, ["Master"]);
   return options;
 }
 
@@ -1606,7 +1647,7 @@ export function getAddFolderSuggestions(
 ): AddFolderSuggestion[] {
   const search = normalizeLibraryMatchText(query);
   const parentTemplate = getLibraryNodeTemplateForSuggestionParent(parentFolder, templates);
-  const parentLabel = parentFolder?.name ?? "Master Library";
+  const parentLabel = parentFolder?.name ?? "Master";
   const parentFileTypes = getInheritedSuggestionFileTypes(parentTemplate);
   const suggestions: AddFolderSuggestion[] = [];
   const seenNames = new Set<string>();
@@ -1658,7 +1699,7 @@ export function getAddFolderSuggestions(
   }
 
   const rankedTemplates = templates
-    .filter((template) => template.id !== parentTemplate.id && template.id !== "all-assets")
+    .filter((template) => template.id !== parentTemplate.id && template.id !== defaultLibraryRootTemplateId)
     .map((template) => ({
       rank: rankTemplateForSuggestionContext(template, parentTemplate, parentFolder, search, folders),
       template,
@@ -1821,7 +1862,7 @@ function getRootSuggestionAdjustment(
   search: string,
   folders: VirtualFolder[],
 ) {
-  if (search || parentTemplate.id !== "all-assets") {
+  if (search || parentTemplate.id !== defaultLibraryRootTemplateId) {
     return 0;
   }
 
@@ -2034,7 +2075,7 @@ export function getAddFolderSuggestionSearchText(suggestion: AddFolderSuggestion
 
 export function getLibraryNodeTemplateForSuggestionParent(parentFolder: VirtualFolder | null, templates: LibraryNodeTemplate[]) {
   if (!parentFolder) {
-    return templates.find((template) => template.id === "all-assets") ?? customLibraryNodeTemplate;
+    return templates.find((template) => template.id === defaultLibraryRootTemplateId) ?? customLibraryNodeTemplate;
   }
 
   const template = getLibraryNodeTemplateForFolder(parentFolder);

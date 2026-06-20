@@ -104,13 +104,13 @@ export function MarkdownPreview({ asset, previewBackground }: { asset: MarkdownD
     <div className="relative h-full min-h-full bg-preview">
       <div className="h-full min-h-0 overflow-auto px-6 py-8" onWheel={handleMarkdownWheel}>
         {message ? (
-          <div className="pointer-events-none absolute left-1/2 top-5 z-10 max-w-sm -translate-x-1/2 rounded-sm border border-line bg-surface/95 px-3 py-2 text-center text-sm text-muted shadow-soft">
+          <div className="pointer-events-none absolute left-1/2 top-5 z-10 max-w-sm -translate-x-1/2 rounded-sm border border-line bg-surface/95 px-3 py-2 text-center text-sm text-muted">
             {message}
           </div>
         ) : null}
         {text ? (
           <div className="markdown-preview-layout mx-auto grid max-w-6xl gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
-            <article className="markdown-document min-w-0 border border-line bg-surface/75 px-10 py-9 shadow-soft" style={{ fontSize: `${zoom}rem` }}>
+            <article className="markdown-document min-w-0 border border-line bg-surface/75 px-10 py-9" style={{ fontSize: `${zoom}rem` }}>
               <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
                 {text}
               </ReactMarkdown>
@@ -119,7 +119,7 @@ export function MarkdownPreview({ asset, previewBackground }: { asset: MarkdownD
           </div>
         ) : null}
       </div>
-      <div className="pointer-events-none absolute bottom-3 right-3 z-20 rounded-sm border border-line bg-surface/90 px-2 py-1 text-xs font-medium text-muted shadow-soft">
+      <div className="pointer-events-none absolute bottom-3 right-3 z-20 rounded-sm border border-line bg-surface/90 px-2 py-1 text-xs font-medium text-muted">
         {Math.round(zoom * 100)}%
       </div>
     </div>
@@ -135,7 +135,7 @@ export function MarkdownThumbnail({ asset, fallback }: { asset: MarkdownDocument
   }
 
   return (
-    <div className="markdown-thumbnail relative aspect-[4/3] overflow-hidden rounded-sm border border-line bg-preview p-3 text-left shadow-soft">
+    <div className="markdown-thumbnail relative aspect-[4/3] overflow-hidden rounded-sm border border-line bg-preview p-3 text-left">
       <div className="mb-2 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase text-muted">
         <span>Markdown</span>
         <span>.md</span>

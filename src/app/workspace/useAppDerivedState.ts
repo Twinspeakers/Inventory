@@ -34,7 +34,6 @@ import {
   filterAssetsByEnabledSources,
   filterAssetsBySearchQuery,
   findFolder,
-  getAssetPlacementSuggestions,
   getScannedAssetModelKey,
   getSourceSummary,
   sortAssets,
@@ -242,13 +241,6 @@ export function useAppDerivedState({
       treeOpenNodeIds,
     ],
   );
-  const assetPlacementSuggestions = useMemo(
-    () =>
-      selectedAsset && !inventoryDocumentPaths.has(normalizePath(selectedAsset.path))
-        ? getAssetPlacementSuggestions(selectedAsset, virtualFolders, masterLibraryAssets)
-        : [],
-    [inventoryDocumentPaths, masterLibraryAssets, selectedAsset, virtualFolders],
-  );
   const selectedDocumentFontsReady = useNvdFontsReady(getNvdDocumentFontFamilies(activeNvdDocument?.document));
   const deferredActiveNvdDocument = useDeferredValue(activeNvdDocument);
   const deferredDocumentPageCount = useMemo(() => {
@@ -303,7 +295,6 @@ export function useAppDerivedState({
   return {
     activeFolder,
     allAssets,
-    assetPlacementSuggestions,
     assetTagSuggestions,
     assets,
     currentLibraryState,

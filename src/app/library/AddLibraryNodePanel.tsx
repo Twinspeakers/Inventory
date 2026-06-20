@@ -1,6 +1,6 @@
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, FolderPlus, Search, X } from "lucide-react";
+import { ArrowLeft, Backpack, ChevronDown, ChevronRight, Folder, FolderOpen, FolderPlus, Search, X } from "lucide-react";
 import {
   customLibraryNodeTemplate,
   getDefaultLibraryNodeTagsForName,
@@ -20,12 +20,17 @@ import {
   createVirtualFolderFromDraft,
   findFolder,
   getAddFolderSuggestions,
-  getAddLibraryNodeParentOptions,
   getAssetsForLibraryNode,
   getInheritedSuggestionFileTypes,
   getLibraryNodeTemplateForSuggestionParent,
   normalizeLibraryNodeFileTypes,
 } from "../../features/libraryTree/libraryTreeModel";
+
+type PreviewTreeEntry =
+  | { type: "folder"; folder: VirtualFolder }
+  | { type: "preview"; name: string };
+
+const previewRootTemplateId = "library";
 export function AddLibraryNodePanel({
   assets,
   folders,
@@ -41,16 +46,21 @@ export function AddLibraryNodePanel({
   onClose: () => void;
   onCreate: (draft: AddLibraryNodeDraft, parentFolderId: string | null) => void;
 }) {
-  const parentOptions = useMemo(() => getAddLibraryNodeParentOptions(folders), [folders]);
   const [selectedParentFolderId, setSelectedParentFolderId] = useState<string | null>(panel.parentFolderId);
+  const [isDraggingPreviewNode, setIsDraggingPreviewNode] = useState(false);
+  const [previewDropTargetId, setPreviewDropTargetId] = useState<string | null>(null);
   const selectedParentFolder = selectedParentFolderId ? findFolder(folders, selectedParentFolderId) : null;
-  const selectedParentLabel = selectedParentFolder?.name ?? "Master Library";
+  const previewParentFolderId = isDraggingPreviewNode ? previewDropTargetId : selectedParentFolderId;
+  const previewParentFolder = previewParentFolderId ? findFolder(folders, previewParentFolderId) : null;
+  const selectedParentLabel = previewParentFolder?.name ?? "Master";
   const parentTemplate = useMemo(() => getLibraryNodeTemplateForSuggestionParent(selectedParentFolder, templates), [selectedParentFolder, templates]);
   const inheritedFileTypes = useMemo(() => getInheritedSuggestionFileTypes(parentTemplate), [parentTemplate]);
   const [folderName, setFolderName] = useState(panel.initialQuery);
   const [selectedTemplate, setSelectedTemplate] = useState<LibraryNodeTemplate | null>(null);
   const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
   const [selectedFileTypes, setSelectedFileTypes] = useState<LibraryNodeFileType[]>(() => inheritedFileTypes);
+  const previewNodeDragPointerIdRef = useRef<number | null>(null);
+  const [previewDragCursor, setPreviewDragCursor] = useState<{ x: number; y: number } | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const panelDragRef = useRef<{
     height: number;
@@ -65,7 +75,7 @@ export function AddLibraryNodePanel({
     [folderName, folders, selectedParentFolder, templates],
   );
   const selectedSuggestion = selectedSuggestionId ? suggestions.find((suggestion) => suggestion.id === selectedSuggestionId) ?? null : null;
-  const draftName = folderName.trim() || selectedTemplate?.name || "New Folder";
+  const draftName = folderName.trim() || selectedTemplate?.name || "New Node";
   const draftTags = useMemo(
     () => selectedSuggestion?.tags ?? getDefaultLibraryNodeTagsForName(draftName),
     [draftName, selectedSuggestion],
@@ -100,6 +110,39 @@ export function AddLibraryNodePanel({
     }
   }, [folders, selectedParentFolderId, templates]);
 
+  useEffect(() => {
+    if (!isDraggingPreviewNode) {
+      return;
+    }
+
+    function stopPreviewNodeDrag() {
+      const dropTargetId = previewDropTargetId;
+      setIsDraggingPreviewNode(false);
+      setPreviewDropTargetId(null);
+      setPreviewDragCursor(null);
+      previewNodeDragPointerIdRef.current = null;
+      document.body.classList.remove("is-dragging-preview-node");
+      updateParentFolder(dropTargetId ?? null);
+    }
+
+    function movePreviewNodeDrag(event: PointerEvent) {
+      if (previewNodeDragPointerIdRef.current !== null && event.pointerId !== previewNodeDragPointerIdRef.current) {
+        return;
+      }
+
+      setPreviewDragCursor({ x: event.clientX, y: event.clientY });
+    }
+
+    window.addEventListener("pointermove", movePreviewNodeDrag);
+    window.addEventListener("pointerup", stopPreviewNodeDrag);
+    window.addEventListener("pointercancel", stopPreviewNodeDrag);
+    return () => {
+      window.removeEventListener("pointermove", movePreviewNodeDrag);
+      window.removeEventListener("pointerup", stopPreviewNodeDrag);
+      window.removeEventListener("pointercancel", stopPreviewNodeDrag);
+    };
+  }, [isDraggingPreviewNode, previewDropTargetId, templates]);
+
   function updateFolderName(value: string) {
     const hadSuggestion = Boolean(selectedSuggestionId);
 
@@ -112,8 +155,7 @@ export function AddLibraryNodePanel({
     }
   }
 
-  function updateParentFolder(value: string) {
-    const parentFolderId = value || null;
+  function updateParentFolder(parentFolderId: string | null) {
     const nextParentFolder = parentFolderId ? findFolder(folders, parentFolderId) : null;
     const nextParentTemplate = getLibraryNodeTemplateForSuggestionParent(nextParentFolder, templates);
 
@@ -135,6 +177,36 @@ export function AddLibraryNodePanel({
     setSelectedTemplate(null);
     setFolderName(panel.initialQuery);
     setSelectedFileTypes(inheritedFileTypes);
+  }
+
+  function startPreviewNodeDrag(event: ReactPointerEvent<HTMLElement>) {
+    if (!isPrimaryPointer(event)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    previewNodeDragPointerIdRef.current = event.pointerId;
+    setIsDraggingPreviewNode(true);
+    setPreviewDropTargetId(selectedParentFolderId);
+    setPreviewDragCursor({ x: event.clientX, y: event.clientY });
+    document.body.classList.add("is-dragging-preview-node");
+  }
+
+  function endPreviewNodeDrag() {
+    setIsDraggingPreviewNode(false);
+    setPreviewDropTargetId(null);
+    setPreviewDragCursor(null);
+    previewNodeDragPointerIdRef.current = null;
+    document.body.classList.remove("is-dragging-preview-node");
+  }
+
+  function handlePreviewNodeTargetHover(parentFolderId: string | null) {
+    if (!isDraggingPreviewNode) {
+      return;
+    }
+
+    setPreviewDropTargetId(parentFolderId);
   }
 
   function startPanelDrag(event: ReactPointerEvent<HTMLElement>) {
@@ -200,8 +272,23 @@ export function AddLibraryNodePanel({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/45 p-6">
+      {isDraggingPreviewNode && previewDragCursor ? (
+        <div
+          className="add-node-tree-drag-ghost"
+          style={{ left: previewDragCursor.x + 14, top: previewDragCursor.y + 10 }}
+        >
+          <span className="add-node-tree-toggle" aria-hidden="true">
+            <ChevronRight size={14} className="opacity-40" />
+          </span>
+          <span className="add-node-tree-label">
+            <FolderPlus size={14} aria-hidden="true" />
+            <span>{draftName}</span>
+          </span>
+          <span className="add-node-tree-badge">New</span>
+        </div>
+      ) : null}
       <section
-        className="absolute flex h-[min(760px,calc(100vh-64px))] w-[min(980px,calc(100vw-48px))] flex-col overflow-hidden rounded-sm border border-line bg-surface text-ink shadow-soft"
+        className="absolute flex h-[min(760px,calc(100vh-64px))] w-[min(980px,calc(100vw-48px))] flex-col overflow-hidden rounded-sm border border-line bg-surface text-ink"
         ref={panelRef}
         style={panelStyle}
       >
@@ -213,10 +300,10 @@ export function AddLibraryNodePanel({
           onPointerUp={stopPanelDrag}
         >
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold">Add Folder</h2>
+            <h2 className="truncate text-sm font-semibold">New Node</h2>
             <p className="truncate text-xs text-muted">Parent: {selectedParentLabel}</p>
           </div>
-          <button className="icon-button" aria-label="Close add folder panel" title="Close" type="button" onClick={onClose}>
+          <button className="icon-button" aria-label="Close new node panel" title="Close" type="button" onClick={onClose}>
             <X size={16} aria-hidden="true" />
           </button>
         </header>
@@ -236,18 +323,20 @@ export function AddLibraryNodePanel({
               </label>
 
               <label className="grid gap-1.5 text-sm">
-                <span className="text-xs font-semibold uppercase text-muted">Make Subdirectory Of</span>
-                <select
-                  className="h-10 rounded-sm border border-line bg-canvas px-3 text-sm text-ink outline-none transition focus:border-steel focus:ring-2 focus:ring-steel/20"
-                  value={selectedParentFolderId ?? ""}
-                  onChange={(event) => updateParentFolder(event.currentTarget.value)}
-                >
-                  {parentOptions.map((option) => (
-                    <option key={option.id ?? "master-library"} value={option.id ?? ""}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                <span className="text-xs font-semibold uppercase text-muted">Scene Tree</span>
+                <div className="rounded-sm border border-line bg-canvas p-2">
+                  <PreviewLibraryTree
+                    draftName={draftName}
+                    folders={folders}
+                    isDraggingPreviewNode={isDraggingPreviewNode}
+                    previewDropTargetId={previewDropTargetId}
+                    previewParentFolderId={previewParentFolderId}
+                    selectedParentFolderId={selectedParentFolderId}
+                    onPreviewNodeDragStart={startPreviewNodeDrag}
+                    onPreviewNodeTargetHover={handlePreviewNodeTargetHover}
+                    onSelectParent={updateParentFolder}
+                  />
+                </div>
               </label>
 
               <div className="rounded-sm border border-line bg-canvas p-3">
@@ -267,17 +356,17 @@ export function AddLibraryNodePanel({
                     ))}
                   </div>
                 ) : (
-                  <p className="mt-2 text-xs leading-relaxed text-muted">No loaded assets match this folder yet.</p>
+                  <p className="mt-2 text-xs leading-relaxed text-muted">No loaded assets match this node yet.</p>
                 )}
               </div>
 
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs text-muted">
-                  {selectedSuggestion ? `Suggestion: ${selectedSuggestion.category} / ${selectedSuggestion.name}` : "Custom folder"}
+                  {selectedSuggestion ? `Suggestion: ${selectedSuggestion.category} / ${selectedSuggestion.name}` : "Custom node"}
                 </p>
                 <button className="primary-button" type="button" onClick={() => onCreate(draft, selectedParentFolderId)}>
                   <FolderPlus size={16} aria-hidden="true" />
-                  <span>Create Folder</span>
+                  <span>Create Node</span>
                 </button>
               </div>
             </div>
@@ -306,7 +395,7 @@ export function AddLibraryNodePanel({
                   />
                 ))
               ) : (
-                <div className="rounded-sm border border-line bg-surface p-3 text-xs leading-relaxed text-muted">No suggestion matched. The folder can still be created from your name, tags, and file types.</div>
+                <div className="rounded-sm border border-line bg-surface p-3 text-xs leading-relaxed text-muted">No suggestion matched. The node can still be created from your name, tags, and file types.</div>
               )}
             </div>
           </aside>
@@ -314,6 +403,241 @@ export function AddLibraryNodePanel({
       </section>
     </div>
   );
+}
+
+function PreviewLibraryTree({
+  draftName,
+  folders,
+  isDraggingPreviewNode,
+  previewDropTargetId,
+  previewParentFolderId,
+  selectedParentFolderId,
+  onPreviewNodeDragStart,
+  onPreviewNodeTargetHover,
+  onSelectParent,
+}: {
+  draftName: string;
+  folders: VirtualFolder[];
+  isDraggingPreviewNode: boolean;
+  previewDropTargetId: string | null;
+  previewParentFolderId: string | null;
+  selectedParentFolderId: string | null;
+  onPreviewNodeDragStart: (event: ReactPointerEvent<HTMLElement>) => void;
+  onPreviewNodeTargetHover: (parentFolderId: string | null) => void;
+  onSelectParent: (parentFolderId: string | null) => void;
+}) {
+  const treeRef = useRef<HTMLDivElement | null>(null);
+  const visibleFolders = getVisiblePreviewFolders(folders);
+
+  return (
+    <div
+      ref={treeRef}
+      className="grid gap-0"
+      onPointerMove={(event) => {
+        if (!isDraggingPreviewNode) {
+          return;
+        }
+
+        const target = event.target;
+
+        if (target instanceof HTMLElement) {
+          const row = target.closest<HTMLElement>("[data-preview-target-id]");
+
+          if (row) {
+            const targetId = row.dataset.previewTargetId ?? "__master__";
+            onPreviewNodeTargetHover(targetId === "__master__" ? null : targetId);
+            return;
+          }
+        }
+
+        const rows = treeRef.current?.querySelectorAll<HTMLElement>("[data-preview-target-id]");
+
+        if (!rows || rows.length === 0) {
+          return;
+        }
+
+        const firstRowBounds = rows[0].getBoundingClientRect();
+        const lastRowBounds = rows[rows.length - 1].getBoundingClientRect();
+
+        if (event.clientY < firstRowBounds.top || event.clientY > lastRowBounds.bottom) {
+          onPreviewNodeTargetHover(null);
+        }
+      }}
+    >
+      <button
+        className={`add-node-tree-row add-node-tree-row-root ${previewParentFolderId === null ? "add-node-tree-row-selected" : ""} ${
+          isDraggingPreviewNode && previewDropTargetId === null ? "add-node-tree-row-drop-target" : ""
+        }`}
+        data-preview-target-id="__master__"
+        style={{ "--tree-depth": 0 } as CSSProperties}
+        type="button"
+        onPointerEnter={() => onPreviewNodeTargetHover(null)}
+        onClick={() => onSelectParent(null)}
+      >
+        <span className="add-node-tree-toggle" aria-hidden="true">
+          <ChevronDown size={14} />
+        </span>
+        <span className="add-node-tree-label">
+          <Backpack size={15} aria-hidden="true" />
+          <span>Master</span>
+        </span>
+      </button>
+      {getAlphabetizedTreeEntries(visibleFolders, previewParentFolderId === null ? draftName : null).map((entry) =>
+        entry.type === "preview" ? (
+          <PreviewNodeRow
+            key="preview-root"
+            depth={1}
+            draftName={draftName}
+            isDragging={isDraggingPreviewNode}
+            onDragStart={onPreviewNodeDragStart}
+          />
+        ) : (
+          <PreviewFolderBranch
+            key={entry.folder.id}
+            draftName={draftName}
+            folder={entry.folder}
+            depth={1}
+            isDraggingPreviewNode={isDraggingPreviewNode}
+            previewDropTargetId={previewDropTargetId}
+            previewParentFolderId={previewParentFolderId}
+            selectedParentFolderId={selectedParentFolderId}
+            onPreviewNodeDragStart={onPreviewNodeDragStart}
+            onPreviewNodeTargetHover={onPreviewNodeTargetHover}
+            onSelectParent={onSelectParent}
+          />
+        ),
+      )}
+    </div>
+  );
+}
+
+function PreviewFolderBranch({
+  draftName,
+  folder,
+  depth,
+  isDraggingPreviewNode,
+  previewDropTargetId,
+  previewParentFolderId,
+  selectedParentFolderId,
+  onPreviewNodeDragStart,
+  onPreviewNodeTargetHover,
+  onSelectParent,
+}: {
+  draftName: string;
+  folder: VirtualFolder;
+  depth: number;
+  isDraggingPreviewNode: boolean;
+  previewDropTargetId: string | null;
+  previewParentFolderId: string | null;
+  selectedParentFolderId: string | null;
+  onPreviewNodeDragStart: (event: ReactPointerEvent<HTMLElement>) => void;
+  onPreviewNodeTargetHover: (parentFolderId: string | null) => void;
+  onSelectParent: (parentFolderId: string | null) => void;
+}) {
+  const childEntries = getAlphabetizedTreeEntries(folder.children, previewParentFolderId === folder.id ? draftName : null);
+
+  return (
+    <div className="grid gap-0">
+      <button
+        className={`add-node-tree-row ${previewParentFolderId === folder.id ? "add-node-tree-row-selected" : ""} ${
+          isDraggingPreviewNode && previewDropTargetId === folder.id ? "add-node-tree-row-drop-target" : ""
+        }`}
+        data-preview-target-id={folder.id}
+        style={{ "--tree-depth": depth } as CSSProperties}
+        type="button"
+        onPointerEnter={() => onPreviewNodeTargetHover(folder.id)}
+        onClick={() => onSelectParent(folder.id)}
+      >
+        <span className="add-node-tree-toggle" aria-hidden="true">
+          {childEntries.length > 0 ? <ChevronDown size={14} /> : <ChevronRight size={14} className="opacity-40" />}
+        </span>
+        <span className="add-node-tree-label">
+          {(childEntries.length > 0 || folder.children.length > 0) ? <FolderOpen size={15} aria-hidden="true" /> : <Folder size={15} aria-hidden="true" />}
+          <span>{folder.name}</span>
+        </span>
+      </button>
+      {childEntries.map((entry) =>
+        entry.type === "preview" ? (
+          <PreviewNodeRow
+            key={`${folder.id}-preview`}
+            depth={depth + 1}
+            draftName={draftName}
+            isDragging={isDraggingPreviewNode}
+            onDragStart={onPreviewNodeDragStart}
+          />
+        ) : (
+          <PreviewFolderBranch
+            key={entry.folder.id}
+            draftName={draftName}
+            folder={entry.folder}
+            depth={depth + 1}
+            isDraggingPreviewNode={isDraggingPreviewNode}
+            previewDropTargetId={previewDropTargetId}
+            previewParentFolderId={previewParentFolderId}
+            selectedParentFolderId={selectedParentFolderId}
+            onPreviewNodeDragStart={onPreviewNodeDragStart}
+            onPreviewNodeTargetHover={onPreviewNodeTargetHover}
+            onSelectParent={onSelectParent}
+          />
+        ),
+      )}
+    </div>
+  );
+}
+
+function PreviewNodeRow({
+  depth,
+  draftName,
+  isDragging,
+  onDragStart,
+}: {
+  depth: number;
+  draftName: string;
+  isDragging: boolean;
+  onDragStart: (event: ReactPointerEvent<HTMLElement>) => void;
+}) {
+  return (
+    <div
+      className={`add-node-tree-row add-node-tree-row-preview add-node-tree-row-draggable ${isDragging ? "add-node-tree-row-dragging" : ""}`}
+      style={{ "--tree-depth": depth } as CSSProperties}
+      onPointerDown={onDragStart}
+    >
+      <span className="add-node-tree-toggle" aria-hidden="true">
+        <ChevronRight size={14} className="opacity-40" />
+      </span>
+      <span className="add-node-tree-label">
+        <FolderPlus size={14} aria-hidden="true" />
+        <span>{draftName}</span>
+      </span>
+      <span className="add-node-tree-badge">New</span>
+    </div>
+  );
+}
+
+function getAlphabetizedTreeEntries(folders: VirtualFolder[], previewName: string | null) {
+  const entries: PreviewTreeEntry[] = folders.map((folder) => ({ type: "folder", folder }));
+
+  if (previewName) {
+    entries.push({ type: "preview", name: previewName });
+  }
+
+  return entries.sort((first, second) =>
+    getPreviewEntryName(first).localeCompare(getPreviewEntryName(second), undefined, { sensitivity: "base" }),
+  );
+}
+
+function getPreviewEntryName(entry: PreviewTreeEntry) {
+  return entry.type === "folder" ? entry.folder.name : entry.name;
+}
+
+function getVisiblePreviewFolders(folders: VirtualFolder[]) {
+  const sortedFolders = [...folders];
+
+  if (sortedFolders.length === 1 && sortedFolders[0].templateId === previewRootTemplateId) {
+    return [...sortedFolders[0].children];
+  }
+
+  return sortedFolders;
 }
 
 function AddFolderSuggestionButton({

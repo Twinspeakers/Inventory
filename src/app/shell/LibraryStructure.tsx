@@ -1,8 +1,10 @@
 import type {
   CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Backpack, ChevronDown, ChevronLeft, ChevronRight, FolderSearch, ListTree, Plus } from "lucide-react";
 import type { LibraryView } from "../../features/assetShelf";
 import type { NvdDocument } from "../../features/inventoryProject";
@@ -15,9 +17,17 @@ export function LibraryStructure({
   canCreateFolder,
   canShowNvdNavigation,
   collapsed,
+  editingAssetId,
+  editingFolderId,
   nodes,
   onCreateFolder,
   onNavigateNvdBlock,
+  onRenameAssetStart,
+  onRenameAssetCancel,
+  onRenameAssetSubmit,
+  onRenameFolderStart,
+  onRenameFolderCancel,
+  onRenameFolderSubmit,
   onPaneViewChange,
   onResizeStart,
   onResetWidth,
@@ -42,9 +52,17 @@ export function LibraryStructure({
   canCreateFolder: boolean;
   canShowNvdNavigation: boolean;
   collapsed: boolean;
+  editingAssetId: number | null;
+  editingFolderId: string | null;
   nodes: StructureNode[];
   onCreateFolder: () => void;
   onNavigateNvdBlock: (blockIndex: number) => void;
+  onRenameAssetStart: (assetId: number) => void;
+  onRenameAssetCancel: () => void;
+  onRenameAssetSubmit: (assetId: number, name: string) => void;
+  onRenameFolderStart: (folderId: string) => void;
+  onRenameFolderCancel: () => void;
+  onRenameFolderSubmit: (folderId: string, name: string) => void;
   onPaneViewChange: (view: LeftPaneView) => void;
   onResizeStart: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onResetWidth: () => void;
@@ -153,12 +171,20 @@ export function LibraryStructure({
               {nodes.map((node) => (
                 <StructureRow
                   activeView={activeView}
+                  editingAssetId={editingAssetId}
                   key={node.id}
                   node={node}
                   depth={0}
+                  editingFolderId={editingFolderId}
                   onSelectFolder={onSelectFolder}
                   onSelectView={onSelectView}
                   onSelectAsset={onSelectAsset}
+                  onRenameAssetStart={onRenameAssetStart}
+                  onRenameAssetCancel={onRenameAssetCancel}
+                  onRenameAssetSubmit={onRenameAssetSubmit}
+                  onRenameFolderStart={onRenameFolderStart}
+                  onRenameFolderCancel={onRenameFolderCancel}
+                  onRenameFolderSubmit={onRenameFolderSubmit}
                   onToggleNode={onToggleTreeNode}
                   onOpenContextMenu={onOpenNodeContextMenu}
                   selectedAssetId={selectedAssetId}
@@ -335,20 +361,36 @@ function SourceFoldersPanel({
 function StructureRow({
   activeView,
   depth,
+  editingAssetId,
+  editingFolderId,
   node,
   onSelectAsset,
   onSelectFolder,
   onSelectView,
+  onRenameAssetStart,
+  onRenameAssetCancel,
+  onRenameAssetSubmit,
+  onRenameFolderStart,
+  onRenameFolderCancel,
+  onRenameFolderSubmit,
   onToggleNode,
   onOpenContextMenu,
   selectedAssetId,
 }: {
   activeView: LibraryView;
   depth: number;
+  editingAssetId: number | null;
+  editingFolderId: string | null;
   node: StructureNode;
   onSelectAsset: (assetId: number) => void;
   onSelectFolder: (folderId: string) => void;
   onSelectView: (view: LibraryView) => void;
+  onRenameAssetStart: (assetId: number) => void;
+  onRenameAssetCancel: () => void;
+  onRenameAssetSubmit: (assetId: number, name: string) => void;
+  onRenameFolderStart: (folderId: string) => void;
+  onRenameFolderCancel: () => void;
+  onRenameFolderSubmit: (folderId: string, name: string) => void;
   onToggleNode: (nodeId: string) => void;
   onOpenContextMenu: (node: StructureNode, event: ReactMouseEvent<HTMLElement>) => void;
   selectedAssetId: number | null;
@@ -359,8 +401,42 @@ function StructureRow({
   const isAssetNode = typeof node.assetId === "number";
   const isActive = isAssetNode && selectedAssetId === node.assetId;
   const isLibraryRoot = node.id === "library" || node.id === "inventory-files";
+  const isEditingAsset = typeof node.assetId === "number" && editingAssetId === node.assetId;
+  const isEditingFolder = Boolean(node.folderId) && editingFolderId === node.folderId;
+  const isEditing = isEditingAsset || isEditingFolder;
+  const [draftName, setDraftName] = useState(node.label);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!isEditing) {
+      setDraftName(node.label);
+      return;
+    }
+
+    setDraftName(node.label);
+  }, [isEditing, node.label]);
+
+  useEffect(() => {
+    if (!isEditing) {
+      return;
+    }
+
+    const input = inputRef.current;
+
+    if (!input) {
+      return;
+    }
+
+    input.focus();
+    const nameLength = input.value.length;
+    input.setSelectionRange(nameLength, nameLength);
+  }, [isEditing]);
 
   function handleSelect() {
+    if (isEditing) {
+      return;
+    }
+
     if (typeof node.assetId === "number") {
       onSelectAsset(node.assetId);
     } else if (node.folderId) {
@@ -369,6 +445,62 @@ function StructureRow({
       onSelectView(node.view);
     } else if (hasChildren) {
       onToggleNode(node.id);
+    }
+  }
+
+  function handleDoubleClick() {
+    if (typeof node.assetId === "number") {
+      onRenameAssetStart(node.assetId);
+      return;
+    }
+
+    if (node.folderId) {
+      onRenameFolderStart(node.folderId);
+    }
+  }
+
+  function commitRename() {
+    const trimmedName = draftName.trim();
+
+    if (!trimmedName || trimmedName === node.label) {
+      if (isEditingAsset) {
+        onRenameAssetCancel();
+        return;
+      }
+
+      onRenameFolderCancel();
+      return;
+    }
+
+    if (isEditingAsset && typeof node.assetId === "number") {
+      onRenameAssetSubmit(node.assetId, trimmedName);
+      return;
+    }
+
+    if (node.folderId) {
+      onRenameFolderSubmit(node.folderId, trimmedName);
+      return;
+    }
+
+    onRenameFolderCancel();
+  }
+
+  function handleRenameKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commitRename();
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setDraftName(node.label);
+      if (isEditingAsset) {
+        onRenameAssetCancel();
+        return;
+      }
+
+      onRenameFolderCancel();
     }
   }
 
@@ -398,10 +530,23 @@ function StructureRow({
           aria-expanded={hasChildren ? node.open : undefined}
           className="tree-row-main"
           type="button"
+          onDoubleClick={handleDoubleClick}
           onClick={handleSelect}
         >
           {Icon ? <Icon className={isActive ? "text-white" : "text-muted"} size={15} aria-hidden="true" /> : null}
-          <span className="truncate">{node.label}</span>
+          {isEditing ? (
+            <input
+              ref={inputRef}
+              className="min-w-0 flex-1 rounded-sm border border-line bg-surface px-1.5 py-0.5 text-[13px] font-medium text-ink outline-none transition focus:border-steel focus:ring-2 focus:ring-steel/20"
+              value={draftName}
+              onBlur={commitRename}
+              onChange={(event) => setDraftName(event.currentTarget.value)}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={handleRenameKeyDown}
+            />
+          ) : (
+            <span className="truncate">{node.label}</span>
+          )}
         </button>
         {!isAssetNode && node.meta ? <span className="tree-meta">{node.meta}</span> : null}
       </div>
@@ -410,12 +555,20 @@ function StructureRow({
         node.children?.map((child) => (
           <StructureRow
             activeView={activeView}
+            editingAssetId={editingAssetId}
             depth={depth + 1}
+            editingFolderId={editingFolderId}
             key={child.id}
             node={child}
             onSelectAsset={onSelectAsset}
             onSelectFolder={onSelectFolder}
             onSelectView={onSelectView}
+            onRenameAssetStart={onRenameAssetStart}
+            onRenameAssetCancel={onRenameAssetCancel}
+            onRenameAssetSubmit={onRenameAssetSubmit}
+            onRenameFolderStart={onRenameFolderStart}
+            onRenameFolderCancel={onRenameFolderCancel}
+            onRenameFolderSubmit={onRenameFolderSubmit}
             onToggleNode={onToggleNode}
             onOpenContextMenu={onOpenContextMenu}
             selectedAssetId={selectedAssetId}

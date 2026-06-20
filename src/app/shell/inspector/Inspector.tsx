@@ -1,5 +1,4 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { useEffect, useState } from "react";
 import {
   ChevronDown,
   ChevronLeft,
@@ -18,8 +17,7 @@ import {
   type NvdStyleDefinition,
   type NvdStyleRole,
 } from "../../../features/nvdEditor";
-import type { InspectorAsset, InspectorAssetPlacementSuggestion } from "./inspectorTypes";
-import { AssetPlacementSuggestionCard } from "./asset/AssetPlacementSuggestionCard";
+import type { InspectorAsset } from "./inspectorTypes";
 import { AssetTagEditor } from "./asset/AssetTagEditor";
 import { NotesSection } from "./asset/NotesSection";
 import { ModelInspector } from "./model/ModelInspector";
@@ -29,9 +27,8 @@ import { WordCountSection } from "./nvd/WordCountSection";
 import { NvvCanvasSettings } from "./nvv/NvvCanvasSettings";
 import { NvvSvgPreview } from "./nvv/NvvSvgPreview";
 
-type InspectorProps<TPlacementSuggestion extends InspectorAssetPlacementSuggestion> = {
+type InspectorProps = {
   activeNvdStyleRole: NvdStyleRole | null;
-  assetPlacementSuggestions: TPlacementSuggestion[];
   collapsed: boolean;
   documentStatistics: DocumentStatistics | null;
   modelInspectorResult: ModelInspectorResult | null;
@@ -47,7 +44,6 @@ type InspectorProps<TPlacementSuggestion extends InspectorAssetPlacementSuggesti
   onAssetAddTag: (assetId: number, tag: string) => void;
   onAssetKeptTagsChange: (assetId: number, tags: string[]) => void;
   onAssetNotesChange: (assetId: number, notes: string) => void;
-  onAssetPlacementSuggestionAccept: (suggestion: TPlacementSuggestion) => void;
   onAssetRecentTagRemove: (tag: string) => void;
   onAssetTagsChange: (assetId: number, tags: string[]) => void;
   onOpenTagBrowser: () => void;
@@ -67,9 +63,8 @@ type InspectorProps<TPlacementSuggestion extends InspectorAssetPlacementSuggesti
   tagSuggestions: string[];
 };
 
-export function Inspector<TPlacementSuggestion extends InspectorAssetPlacementSuggestion>({
+export function Inspector({
   activeNvdStyleRole,
-  assetPlacementSuggestions,
   collapsed,
   documentStatistics,
   modelInspectorResult,
@@ -85,7 +80,6 @@ export function Inspector<TPlacementSuggestion extends InspectorAssetPlacementSu
   onAssetAddTag,
   onAssetKeptTagsChange,
   onAssetNotesChange,
-  onAssetPlacementSuggestionAccept,
   onAssetRecentTagRemove,
   onAssetTagsChange,
   onOpenTagBrowser,
@@ -103,20 +97,11 @@ export function Inspector<TPlacementSuggestion extends InspectorAssetPlacementSu
   onToggleCollapsed,
   selectedAsset,
   tagSuggestions,
-}: InspectorProps<TPlacementSuggestion>) {
-  const [placementSuggestionIndex, setPlacementSuggestionIndex] = useState(0);
-  const selectedPlacementSuggestion =
-    assetPlacementSuggestions.length > 0
-      ? assetPlacementSuggestions[placementSuggestionIndex % assetPlacementSuggestions.length]
-      : null;
+}: InspectorProps) {
   const isNvvDocumentOpen = Boolean(nvvDocument);
   const isModelAssetSelected = selectedAsset?.type === "3D";
   const showDocumentStatistics = Boolean(documentStatistics);
   const showNvdSections = showDocumentStatistics && selectedAsset?.extension.toLowerCase() === "nvd";
-
-  useEffect(() => {
-    setPlacementSuggestionIndex(0);
-  }, [assetPlacementSuggestions.length, selectedAsset?.id]);
 
   if (collapsed) {
     return (
@@ -210,15 +195,6 @@ export function Inspector<TPlacementSuggestion extends InspectorAssetPlacementSu
               onResetStyle={onResetNvdStyle}
               onSelectStyle={onSelectNvdStyle}
               styleDefinitions={nvdStyleDefinitions}
-            />
-          ) : null}
-
-          {selectedPlacementSuggestion ? (
-            <AssetPlacementSuggestionCard
-              suggestion={selectedPlacementSuggestion}
-              suggestionCount={assetPlacementSuggestions.length}
-              onAccept={() => onAssetPlacementSuggestionAccept(selectedPlacementSuggestion)}
-              onRefresh={() => setPlacementSuggestionIndex((index) => index + 1)}
             />
           ) : null}
 

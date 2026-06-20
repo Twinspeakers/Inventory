@@ -8,6 +8,7 @@ export const TAG_LIBRARY_WINDOW_ADD_TAG_EVENT = "tag-library:add-tag";
 export const TAG_LIBRARY_WINDOW_CREATE_PROJECT_TAG_GROUP_EVENT = "tag-library:create-project-tag-group";
 export const TAG_LIBRARY_WINDOW_CREATE_PROJECT_TAG_EVENT = "tag-library:create-project-tag";
 export const TAG_LIBRARY_WINDOW_DELETE_PROJECT_TAG_GROUP_EVENT = "tag-library:delete-project-tag-group";
+export const TAG_LIBRARY_WINDOW_RENAME_ASSET_EVENT = "tag-library:rename-asset";
 
 export type TagLibraryWindowAssetSnapshot = Pick<Asset, "id" | "name" | "tags">;
 
@@ -32,6 +33,11 @@ export type TagLibraryWindowCreateProjectTagPayload = {
 
 export type TagLibraryWindowDeleteProjectTagGroupPayload = {
   groupId: string;
+};
+
+export type TagLibraryWindowRenameAssetPayload = {
+  assetId: number;
+  name: string;
 };
 
 export function isTauriRuntime() {

@@ -669,7 +669,7 @@ function AssetPreview<TAsset extends SceneViewerAsset>({
 
   return (
     <div className="flex min-h-full items-center justify-center">
-      <div className="flex h-52 w-52 items-center justify-center rounded-sm border border-line bg-surface text-ink shadow-soft">
+      <div className="flex h-52 w-52 items-center justify-center rounded-sm border border-line bg-surface text-ink">
         <Icon size={96} strokeWidth={1.4} aria-hidden="true" />
       </div>
     </div>

@@ -80,6 +80,24 @@ export function useInventoryDocumentActions({
       return;
     }
 
+    await renameInventoryNvdDocumentTo(assetId, trimmedTitle);
+  }
+
+  async function renameInventoryNvdDocumentTo(assetId: number, title: string) {
+    const asset = assets.find((candidate) => candidate.id === assetId);
+    const entry = asset ? findInventoryNvdDocumentForAsset(asset, inventoryDocuments) : null;
+
+    if (!activeInventory || !asset || !entry) {
+      setStatusMessage("That Inventory-owned NVD document could not be found.");
+      return;
+    }
+
+    const trimmedTitle = title.trim();
+
+    if (!trimmedTitle || trimmedTitle === entry.title) {
+      return;
+    }
+
     const isActiveDocument = activeNvdDocumentPath !== null && normalizePath(activeNvdDocumentPath) === normalizePath(entry.path);
     cancelPendingLibrarySave();
     setStatusMessage(`Renaming NVD document "${entry.title}"...`);
@@ -212,6 +230,7 @@ export function useInventoryDocumentActions({
   return {
     deleteInventoryNvdDocument,
     renameInventoryNvdDocument,
+    renameInventoryNvdDocumentTo,
   };
 }
 

@@ -89,11 +89,13 @@ function buildSourceFolderTemplate(
   const template: LibraryNodeTemplate = {
     id: templateId,
     name: templateName,
-    description: context.isSection
-      ? `${folder.label} folders generated from the tag library taxonomy.`
-      : `Tag-backed folder template for ${[context.sectionLabel, ...getSourceFolderPathLabels(context.path).slice(1)].join(" / ")}.`,
-    category: context.isSection ? "Tag Sections" : context.sectionLabel,
-    aliases: [],
+    description:
+      folder.description ??
+      (context.isSection
+        ? `${folder.label} folders generated from the tag library taxonomy.`
+        : `Tag-backed folder template for ${[context.sectionLabel, ...getSourceFolderPathLabels(context.path).slice(1)].join(" / ")}.`),
+    category: folder.category ?? (context.isSection ? "Tag Sections" : context.sectionLabel),
+    aliases: folder.aliases ?? [],
     icon: getTemplateIcon(context.section.id),
     suggestedTags: getTemplateSuggestedTags(templateTags),
     fileTypes: getTemplateFileTypes(templateTags),
@@ -123,9 +125,9 @@ function createSourceFileTemplate(
   return {
     id: context.id,
     name,
-    description: `Tag-backed folder template for ${context.pathLabels.join(" / ")}.`,
-    category: context.sectionLabel,
-    aliases: [],
+    description: file.description ?? `Tag-backed folder template for ${context.pathLabels.join(" / ")}.`,
+    category: file.category ?? context.sectionLabel,
+    aliases: file.aliases ?? [],
     icon: getTemplateIcon(context.sectionId),
     suggestedTags: getTemplateSuggestedTags(file.tags),
     fileTypes: getTemplateFileTypes(file.tags),
@@ -160,7 +162,7 @@ function getSourceFolderTemplateName(folder: LibraryTagSourceFolder) {
 }
 
 function getSourceFileTemplateName(file: LibraryTagSourceFile) {
-  return humanizeIdentifier(file.id);
+  return file.label.replace(/\.ts$/i, "") === file.id ? humanizeIdentifier(file.id) : file.label;
 }
 
 function getSourceFolderPathLabels(path: string[]) {

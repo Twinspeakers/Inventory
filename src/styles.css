@@ -95,7 +95,7 @@ textarea {
   }
 
   .file-menu {
-    @apply absolute left-0 top-full z-20 w-56 rounded-sm border border-line bg-graphite py-1 text-sm text-ink shadow-soft;
+    @apply absolute left-0 top-full z-20 w-56 rounded-sm border border-line bg-graphite py-1 text-sm text-ink;
   }
 
   .file-menu-item {
@@ -345,7 +345,7 @@ textarea {
 
   .nvd-font-menu {
     max-height: min(420px, calc(100vh - 7rem));
-    @apply absolute left-0 top-[calc(100%+4px)] z-50 w-64 overflow-y-auto rounded-sm border border-line bg-surface py-1 text-ink shadow-soft;
+    @apply absolute left-0 top-[calc(100%+4px)] z-50 w-64 overflow-y-auto rounded-sm border border-line bg-surface py-1 text-ink;
   }
 
   .nvd-font-menu-group + .nvd-font-menu-group {
@@ -398,7 +398,7 @@ textarea {
 
   .nvd-font-size-menu {
     max-height: min(360px, calc(100vh - 7rem));
-    @apply absolute left-0 top-[calc(100%+4px)] z-50 w-20 overflow-y-auto rounded-sm border border-line bg-surface py-1 text-ink shadow-soft;
+    @apply absolute left-0 top-[calc(100%+4px)] z-50 w-20 overflow-y-auto rounded-sm border border-line bg-surface py-1 text-ink;
   }
 
   .nvd-font-size-menu-item {
@@ -606,7 +606,7 @@ textarea {
 
   .nvd-editor-empty {
     width: min(420px, 100%);
-    @apply mx-auto mt-20 flex flex-col items-center rounded-sm border border-line bg-surface p-8 text-center text-ink shadow-soft;
+    @apply mx-auto mt-20 flex flex-col items-center rounded-sm border border-line bg-surface p-8 text-center text-ink;
   }
 
   .nvd-editor-empty h2 {
@@ -627,7 +627,7 @@ textarea {
   .project-readme-page {
     width: min(780px, 100%);
     min-height: min(940px, calc(100vh - 9rem));
-    @apply flex flex-col rounded-sm border border-line bg-white p-10 text-[#202020] shadow-soft;
+    @apply flex flex-col rounded-sm border border-line bg-white p-10 text-[#202020];
   }
 
   .project-readme-header {
@@ -694,7 +694,12 @@ textarea {
   }
 
   .primary-button {
-    @apply inline-flex h-9 items-center justify-center gap-2 rounded-sm bg-steel px-3 text-sm font-semibold text-white transition hover:bg-copper disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-steel;
+    @apply inline-flex h-9 items-center justify-center gap-2 rounded-sm bg-steel px-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-steel disabled:hover:text-white;
+  }
+
+  .primary-button:hover {
+    background: rgb(var(--color-brand-lime));
+    color: rgb(18 18 18);
   }
 
   .native-hub {
@@ -987,8 +992,9 @@ textarea {
   }
 
   .tree-row-active {
-    @apply text-white shadow-[inset_3px_0_0_#d1844c];
+    @apply text-white;
     background: rgb(48 48 48);
+    box-shadow: inset 3px 0 0 rgb(var(--color-brand-lime));
   }
 
   .tree-row-contains-active {
@@ -1027,7 +1033,7 @@ textarea {
   }
 
   .library-context-menu {
-    @apply fixed z-[60] w-52 overflow-hidden rounded-sm border border-line bg-surface text-ink shadow-soft;
+    @apply fixed z-[60] w-52 overflow-visible rounded-sm bg-surface text-ink;
   }
 
   .library-context-menu-item {
@@ -1036,6 +1042,33 @@ textarea {
 
   .library-context-menu-item-danger {
     @apply text-red-500;
+  }
+
+  .library-context-submenu {
+    @apply absolute z-[61] w-56 overflow-y-auto rounded-sm bg-surface text-ink opacity-0 pointer-events-none transition;
+    left: calc(100% - 1px);
+    max-height: min(18rem, calc(100vh - 24px));
+  }
+
+  .relative:hover > .library-context-submenu,
+  .relative:focus-within > .library-context-submenu {
+    @apply opacity-100 pointer-events-auto;
+  }
+
+  .library-context-submenu-downward {
+    top: -1px;
+  }
+
+  .library-context-submenu-upward {
+    bottom: -1px;
+  }
+
+  .library-context-menu-divider {
+    @apply border-t border-line/0;
+  }
+
+  .library-context-menu-empty {
+    @apply px-3 py-2 text-[11px] text-muted;
   }
 
   .library-node-list {
@@ -1131,7 +1164,7 @@ textarea {
   }
 
   .tag-library-resize-handle:hover::after {
-    @apply bg-copper;
+    background: rgb(var(--color-brand-lime));
   }
 
   .tag-library-browser-layout {
@@ -1179,7 +1212,76 @@ textarea {
   }
 
   .add-folder-suggestion-row-selected {
-    @apply border-copper bg-surface shadow-soft;
+    @apply bg-surface;
+    border-color: rgb(var(--color-brand-lime));
+  }
+
+  .add-node-tree-row {
+    padding-left: calc(0.5rem + var(--tree-depth) * 1rem);
+    @apply flex h-7 w-full items-center justify-between gap-2 pr-2 text-left text-[13px] text-ink transition hover:bg-surface-raised;
+  }
+
+  .add-node-tree-row-selected {
+    @apply text-white;
+    background: rgb(48 48 48);
+    box-shadow: inset 3px 0 0 rgb(var(--color-brand-lime));
+  }
+
+  .add-node-tree-row-root {
+    @apply h-7;
+  }
+
+  .add-node-tree-row-root .add-node-tree-label {
+    @apply text-xs font-semibold uppercase tracking-normal text-muted;
+  }
+
+  .add-node-tree-row-root.add-node-tree-row-selected .add-node-tree-label {
+    @apply text-white;
+  }
+
+  .add-node-tree-row-preview {
+    background: rgb(var(--color-surface-raised) / 0.5);
+    box-shadow: inset 0 0 0 1px rgb(var(--color-brand-lime) / 0.45);
+  }
+
+  .add-node-tree-row-draggable {
+    cursor: grab;
+  }
+
+  .add-node-tree-row-draggable:active {
+    cursor: grabbing;
+  }
+
+  .add-node-tree-row-dragging {
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  .add-node-tree-drag-ghost {
+    @apply fixed z-[70] flex h-7 min-w-40 items-center justify-between gap-2 rounded-sm bg-surface px-2 pr-2 text-[13px] text-ink;
+    pointer-events: none;
+    box-shadow: inset 0 0 0 1px rgb(var(--color-brand-lime) / 0.55);
+  }
+
+  .add-node-tree-row-drop-target {
+    background: rgb(var(--color-brand-lime) / 0.14);
+    box-shadow: inset 0 0 0 1px rgb(var(--color-brand-lime) / 0.55);
+  }
+
+  .add-node-tree-toggle {
+    @apply flex h-4 w-4 shrink-0 items-center justify-center text-muted;
+  }
+
+  .add-node-tree-row-selected .add-node-tree-toggle {
+    @apply text-white;
+  }
+
+  .add-node-tree-label {
+    @apply flex min-w-0 flex-1 items-center gap-2;
+  }
+
+  .add-node-tree-badge {
+    @apply shrink-0 rounded-sm bg-surface-raised px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-normal text-muted;
   }
 
   .source-folder-row {
@@ -1199,8 +1301,8 @@ textarea {
   }
 
   .source-folder-toggle-on {
-    border-color: rgb(var(--color-brand-blue));
-    background: rgb(var(--color-brand-blue));
+    border-color: rgb(var(--color-steel));
+    background: rgb(var(--color-steel));
   }
 
   .source-folder-toggle-on > span {
@@ -1208,7 +1310,11 @@ textarea {
   }
 
   .asset-card {
-    @apply cursor-pointer rounded-sm border border-line bg-surface p-2.5 text-ink transition hover:border-steel hover:bg-surface-raised hover:shadow-soft focus:outline-none focus:ring-2 focus:ring-copper/35;
+    @apply cursor-pointer rounded-sm border border-line bg-surface p-2.5 text-ink transition hover:border-steel hover:bg-surface-raised focus:outline-none;
+  }
+
+  .asset-card:focus-visible {
+    box-shadow: 0 0 0 2px rgb(var(--color-brand-lime) / 0.35);
   }
 
   .asset-card-extra {
@@ -1224,7 +1330,8 @@ textarea {
   }
 
   .asset-card-selected {
-    @apply border-ink ring-2 ring-copper/35;
+    @apply border-ink;
+    box-shadow: 0 0 0 2px rgb(var(--color-brand-lime) / 0.35);
   }
 
   .asset-grid-extra-large {
@@ -1257,7 +1364,7 @@ textarea {
   }
 
   .asset-details-header-cell:hover .asset-details-column-grip {
-    @apply border-copper;
+    border-color: rgb(var(--color-brand-lime));
   }
 
   .asset-details-row {
@@ -1265,7 +1372,8 @@ textarea {
   }
 
   .asset-details-row-selected {
-    @apply border-ink bg-surface-raised ring-2 ring-copper/35;
+    @apply border-ink bg-surface-raised;
+    box-shadow: 0 0 0 2px rgb(var(--color-brand-lime) / 0.35);
   }
 
   .audio-card-actions {
@@ -1278,7 +1386,11 @@ textarea {
   }
 
   .audio-card-action-button {
-    @apply pointer-events-auto absolute inline-flex items-center justify-center rounded-full border border-line bg-surface/90 text-ink shadow-soft backdrop-blur transition hover:border-copper hover:bg-surface;
+    @apply pointer-events-auto absolute inline-flex items-center justify-center rounded-full border border-line bg-surface/90 text-ink backdrop-blur transition hover:bg-surface;
+  }
+
+  .audio-card-action-button:hover {
+    border-color: rgb(var(--color-brand-lime));
   }
 
   .audio-card-play-button {
@@ -1286,7 +1398,7 @@ textarea {
   }
 
   .audio-waveform-shell {
-    @apply relative flex aspect-[4/3] flex-col overflow-hidden rounded-sm border border-line bg-surface shadow-soft;
+    @apply relative flex aspect-[4/3] flex-col overflow-hidden rounded-sm border border-line bg-surface;
   }
 
   .audio-waveform-shell::before {
@@ -1311,7 +1423,8 @@ textarea {
   }
 
   .audio-waveform-svg {
-    @apply relative z-10 min-h-0 flex-1 px-1 text-copper;
+    @apply relative z-10 min-h-0 flex-1 px-1;
+    color: rgb(var(--color-brand-lime));
   }
 
   .audio-waveform-bar {
@@ -1335,7 +1448,12 @@ textarea {
   }
 
   .tag-editable {
-    @apply inline-flex items-center gap-1.5 transition hover:border-copper hover:text-copper;
+    @apply inline-flex items-center gap-1.5 transition;
+  }
+
+  .tag-editable:hover {
+    border-color: rgb(var(--color-brand-lime));
+    color: rgb(var(--color-brand-lime));
   }
 
   .tag-custom {
@@ -1343,15 +1461,19 @@ textarea {
   }
 
   .tag-chip-shell {
-    @apply inline-flex items-center gap-1.5;
+    @apply inline-flex items-center gap-1 pl-2 pr-1;
   }
 
   .tag-chip-main {
-    @apply text-left text-xs font-medium;
+    @apply inline-flex items-center text-left text-xs font-medium;
   }
 
   .tag-chip-action {
-    @apply inline-flex h-4 w-4 items-center justify-center text-muted transition hover:text-copper;
+    @apply inline-flex h-3.5 w-3.5 items-center justify-center text-muted transition;
+  }
+
+  .tag-chip-action:hover {
+    color: rgb(var(--color-brand-lime));
   }
 
   .tag-small {
@@ -1385,7 +1507,7 @@ textarea {
 
   .pane-resize-handle:hover::after,
   .pane-resize-handle:focus-visible::after {
-    @apply bg-copper;
+    background: rgb(var(--color-brand-lime));
   }
 
   .row-resize-handle {
@@ -1399,7 +1521,7 @@ textarea {
 
   .row-resize-handle:hover::after,
   .row-resize-handle:focus-visible::after {
-    @apply bg-copper;
+    background: rgb(var(--color-brand-lime));
   }
 
   .three-preview-canvas {
@@ -1415,11 +1537,21 @@ textarea {
   }
 
   .three-light-toggle {
-    @apply absolute right-4 top-[7.25rem] z-30 inline-flex h-8 w-8 items-center justify-center rounded-sm border border-line bg-surface text-ink transition hover:border-copper hover:bg-surface-raised;
+    @apply absolute right-4 top-[7.25rem] z-30 inline-flex h-8 w-8 items-center justify-center rounded-sm border border-line bg-surface text-ink transition hover:bg-surface-raised;
+  }
+
+  .three-light-toggle:hover {
+    border-color: rgb(var(--color-brand-lime));
   }
 
   .three-light-toggle-active {
-    @apply border-copper bg-copper text-[#121212] hover:bg-copper;
+    color: rgb(18 18 18);
+    border-color: rgb(var(--color-brand-lime));
+    background: rgb(var(--color-brand-lime));
+  }
+
+  .three-light-toggle-active:hover {
+    background: rgb(var(--color-brand-lime));
   }
 
   .three-light-toggle-hidden {
@@ -1453,7 +1585,7 @@ textarea {
   .viewport-compass-axis-label {
     @apply absolute flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold;
     color: rgb(18 18 18);
-    box-shadow: 0 4px 12px rgb(0 0 0 / 0.28);
+    box-shadow: none;
   }
 
   .viewport-compass-axis-line.viewport-compass-axis-x {
@@ -1568,7 +1700,8 @@ textarea {
   }
 
   .asset-notepad:focus {
-    @apply border-copper bg-surface-raised shadow-soft;
+    @apply bg-surface-raised;
+    border-color: rgb(var(--color-brand-lime));
   }
 
   .markdown-document {
@@ -1642,7 +1775,7 @@ textarea {
   }
 
   .markdown-document blockquote {
-    border-left: 3px solid rgb(var(--color-copper));
+    border-left: 3px solid rgb(var(--color-brand-lime));
     color: rgb(var(--color-muted));
     padding: 0.2em 0 0.2em 1em;
   }

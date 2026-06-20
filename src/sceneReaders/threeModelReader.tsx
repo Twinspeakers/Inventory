@@ -492,7 +492,7 @@ export function ThreePreview<TAsset extends ThreeSceneAsset>({
         ))}
       </div>
       {message ? (
-        <div className="pointer-events-none absolute left-3 top-3 max-w-md rounded-sm border border-line bg-surface/90 px-3 py-2 text-sm text-ink shadow-soft">
+        <div className="pointer-events-none absolute left-3 top-3 max-w-md rounded-sm border border-line bg-surface/90 px-3 py-2 text-sm text-ink">
           {message}
         </div>
       ) : null}

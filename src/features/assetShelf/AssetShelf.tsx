@@ -358,7 +358,7 @@ export function AssetShelf<TAsset extends AssetShelfAsset>({
         </div>
       ) : !collapsed ? (
         <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-8">
-          <div className="max-w-md rounded-sm border border-line bg-surface p-6 text-center shadow-soft">
+          <div className="max-w-md rounded-sm border border-line bg-surface p-6 text-center">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-sm bg-forest text-white">
               {isInventoryDocumentsView ? <FilePlus2 size={24} aria-hidden="true" /> : <FolderSearch size={24} aria-hidden="true" />}
             </div>

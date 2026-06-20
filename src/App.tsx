@@ -72,6 +72,7 @@ import {
   TAG_LIBRARY_WINDOW_CREATE_PROJECT_TAG_EVENT,
   TAG_LIBRARY_WINDOW_CREATE_PROJECT_TAG_GROUP_EVENT,
   TAG_LIBRARY_WINDOW_DELETE_PROJECT_TAG_GROUP_EVENT,
+  TAG_LIBRARY_WINDOW_RENAME_ASSET_EVENT,
   TAG_LIBRARY_WINDOW_LABEL,
   TAG_LIBRARY_WINDOW_READY_EVENT,
   TAG_LIBRARY_WINDOW_STATE_EVENT,
@@ -82,6 +83,7 @@ import {
   type TagLibraryWindowCreateProjectTagGroupPayload,
   type TagLibraryWindowCreateProjectTagPayload,
   type TagLibraryWindowDeleteProjectTagGroupPayload,
+  type TagLibraryWindowRenameAssetPayload,
 } from "./features/tagLibrary/tagLibraryWindowBridge";
 import { createProjectTagGroupId, createProjectTagId, projectTagGroupLabelExists } from "./features/tagLibrary/projectTags";
 export function App() {
@@ -99,6 +101,8 @@ export function App() {
   const [projectTagGroups, setProjectTagGroups] = useState<ProjectTagGroup[]>([]);
   const [recentUserTagIds, setRecentUserTagIds] = useState<string[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [editingLibraryAssetId, setEditingLibraryAssetId] = useState<number | null>(null);
+  const [editingLibraryFolderId, setEditingLibraryFolderId] = useState<string | null>(null);
   const [virtualFolders, setVirtualFolders] = useState<VirtualFolder[]>(initialVirtualFolders);
   const [hasLoadedPersistedState, setHasLoadedPersistedState] = useState(false);
   const [activeInventory, setActiveInventory] = useState<ActiveInventory | null>(null);
@@ -214,7 +218,6 @@ export function App() {
   });
   const {
     activeFolder,
-    assetPlacementSuggestions,
     assetTagSuggestions,
     assets,
     currentLibraryState,
@@ -407,6 +410,7 @@ export function App() {
   const {
     deleteInventoryNvdDocument,
     renameInventoryNvdDocument,
+    renameInventoryNvdDocumentTo,
   } = useInventoryDocumentActions({
     activeInventory,
     activeNvdDocument,
@@ -467,8 +471,11 @@ export function App() {
     openAssetContextMenu,
     openLibraryNodeContextMenu,
     openSourceFolderContextMenu,
+    removeAssetFromLibraryNode,
     renameAssetDisplayName,
+    renameAssetDisplayNameTo,
     renameLibraryNode,
+    renameLibraryNodeTo,
     updateAssetKeptTags,
     updateAssetNotes,
     updateAssetTags,
@@ -536,6 +543,7 @@ export function App() {
     let unlistenCreateProjectTagGroup: (() => void) | null = null;
     let unlistenCreateProjectTag: (() => void) | null = null;
     let unlistenDeleteProjectTagGroup: (() => void) | null = null;
+    let unlistenRenameAsset: (() => void) | null = null;
     const currentWindow = getCurrentWindow();
 
     void currentWindow
@@ -603,6 +611,19 @@ export function App() {
         unlistenDeleteProjectTagGroup = unlisten;
       });
 
+    void currentWindow
+      .listen<TagLibraryWindowRenameAssetPayload>(TAG_LIBRARY_WINDOW_RENAME_ASSET_EVENT, ({ payload }) => {
+        renameAssetDisplayNameTo(payload.assetId, payload.name);
+      })
+      .then((unlisten) => {
+        if (disposed) {
+          unlisten();
+          return;
+        }
+
+        unlistenRenameAsset = unlisten;
+      });
+
     return () => {
       disposed = true;
       unlistenReady?.();
@@ -610,8 +631,9 @@ export function App() {
       unlistenCreateProjectTagGroup?.();
       unlistenCreateProjectTag?.();
       unlistenDeleteProjectTagGroup?.();
+      unlistenRenameAsset?.();
     };
-  }, [assets, projectTagGroups, selectedAsset, updateAssetTags]);
+  }, [assets, projectTagGroups, renameAssetDisplayNameTo, selectedAsset, updateAssetTags]);
 
   useEffect(() => {
     if (!isTauriRuntime()) {
@@ -803,7 +825,6 @@ export function App() {
       decorations: false,
       focus: true,
       resizable: true,
-      alwaysOnTop: true,
       skipTaskbar: true,
     });
 
@@ -850,10 +871,37 @@ export function App() {
         canCreateFolder: Boolean(activeInventory),
         canShowNvdNavigation: Boolean(activeInventory) && sceneMode === "nvd-document",
         collapsed: leftPaneCollapsed,
+        editingAssetId: editingLibraryAssetId,
+        editingFolderId: editingLibraryFolderId,
         nodes: structure,
         onCreateFolder: createFolder,
         onNavigateNvdBlock: navigateToNvdBlock,
         onOpenNodeContextMenu: openLibraryNodeContextMenu,
+        onRenameAssetStart: (assetId) => {
+          setEditingLibraryFolderId(null);
+          setEditingLibraryAssetId(assetId);
+        },
+        onRenameAssetCancel: () => setEditingLibraryAssetId(null),
+        onRenameAssetSubmit: (assetId, name) => {
+          const asset = assets.find((candidate) => candidate.id === assetId);
+          const isInventoryDocument = Boolean(asset && inventoryDocuments.nvdDocuments.some((entry) => normalizePath(entry.path) === normalizePath(asset.path)));
+
+          if (isInventoryDocument) {
+            void renameInventoryNvdDocumentTo(assetId, name);
+          } else {
+            renameAssetDisplayNameTo(assetId, name);
+          }
+          setEditingLibraryAssetId(null);
+        },
+        onRenameFolderStart: (folderId) => {
+          setEditingLibraryAssetId(null);
+          setEditingLibraryFolderId(folderId);
+        },
+        onRenameFolderCancel: () => setEditingLibraryFolderId(null),
+        onRenameFolderSubmit: (folderId, name) => {
+          renameLibraryNodeTo(folderId, name);
+          setEditingLibraryFolderId(null);
+        },
         onOpenSourceFolderContextMenu: openSourceFolderContextMenu,
         onPaneViewChange: changeLeftPaneView,
         onResetWidth: () => setLeftPaneWidth(DEFAULT_LEFT_PANE_WIDTH),
@@ -930,7 +978,6 @@ export function App() {
       }}
       inspector={{
         activeNvdStyleRole,
-        assetPlacementSuggestions,
         collapsed: rightPaneCollapsed,
         documentStatistics: selectedDocumentStatistics,
         modelInspectorResult: selectedModelInspectorResult,
@@ -946,7 +993,6 @@ export function App() {
         onAssetAddTag: addTagToAsset,
         onAssetKeptTagsChange: updateAssetKeptTags,
         onAssetNotesChange: updateAssetNotes,
-        onAssetPlacementSuggestionAccept: acceptAssetPlacementSuggestion,
         onAssetRecentTagRemove: removeRecentUserTag,
         onAssetTagsChange: updateAssetTags,
         onOpenTagBrowser: () => {
@@ -1005,18 +1051,31 @@ export function App() {
         onCreateProjectTag: createProjectTag,
         onCreateProjectTagGroup: createProjectTagGroup,
         onDeleteProjectTagGroup: deleteProjectTagGroup,
+        onRenameSelectedAsset: (name) => {
+          if (selectedAsset) {
+            renameAssetDisplayNameTo(selectedAsset.id, name);
+          }
+        },
         onDeleteInventoryNvdDocument: (assetId) => void deleteInventoryNvdDocument(assetId),
         onDeleteLibraryNode: deleteLibraryNode,
         onDeleteTheme: deleteSelectedTheme,
+        onAssetPlacementSuggestionAccept: acceptAssetPlacementSuggestion,
         onLibraryNodeContextMenuClose: () => setLibraryNodeContextMenu(null),
+        onRemoveAssetFromLibraryNode: removeAssetFromLibraryNode,
         onNvdSaveReminderEnabledChange: updateNvdSaveReminderEnabled,
         onNvdStyleResetConfirmationEnabledChange: updateNvdStyleResetConfirmationEnabled,
         onOpenAddLibraryNodePanel: openAddLibraryNodePanel,
         onRefreshSourceFolder: (sourceId) => void refreshSourceFolder(sourceId),
         onRemoveSourceFolder: removeSourceFolder,
-        onRenameAssetDisplayName: renameAssetDisplayName,
-        onRenameInventoryNvdDocument: (assetId) => void renameInventoryNvdDocument(assetId),
-        onRenameLibraryNode: renameLibraryNode,
+        onRenameAssetDisplayName: (assetId) => {
+          setEditingLibraryFolderId(null);
+          setEditingLibraryAssetId(assetId);
+        },
+        onRenameInventoryNvdDocument: (assetId) => setEditingLibraryAssetId(assetId),
+        onRenameLibraryNode: (folderId) => {
+          setEditingLibraryAssetId(null);
+          setEditingLibraryFolderId(folderId);
+        },
         onSaveAndCloseActiveNvdDocument: () => void saveAndCloseActiveNvdDocument(),
         onSaveTheme: saveTheme,
         onSelectTheme: selectTheme,

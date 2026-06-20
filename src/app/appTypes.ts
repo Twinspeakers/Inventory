@@ -145,6 +145,7 @@ export type StructureNode = {
   id: string;
   label: string;
   assetId?: number;
+  parentFolderId?: string | null;
   icon?: LucideIcon;
   canAddChild?: boolean;
   view?: LibraryView;
@@ -160,6 +161,7 @@ export type VirtualFolder = {
   id: string;
   name: string;
   assetIds: number[];
+  excludedAssetIds?: number[];
   children: VirtualFolder[];
   diskPath?: string | null;
   isPlannedOnDisk?: boolean;

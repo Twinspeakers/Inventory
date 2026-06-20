@@ -1,4 +1,4 @@
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { createPortal } from "react-dom";
@@ -85,6 +85,7 @@ export function TagLibraryBrowser({
   onCreateProjectTag,
   onCreateProjectTagGroup,
   onDeleteProjectTagGroup,
+  onRenameSelectedAsset,
   onAddTag,
   onClose,
 }: {
@@ -96,6 +97,7 @@ export function TagLibraryBrowser({
   onCreateProjectTag: (groupId: string, label: string) => void;
   onCreateProjectTagGroup: (label: string) => void;
   onDeleteProjectTagGroup: (groupId: string) => void;
+  onRenameSelectedAsset: (name: string) => void;
   onAddTag: (tag: string) => void;
   onClose: () => void;
 }) {
@@ -103,11 +105,14 @@ export function TagLibraryBrowser({
   const [query, setQuery] = useState("");
   const [draftProjectTag, setDraftProjectTag] = useState("");
   const [draftProjectTagGroup, setDraftProjectTagGroup] = useState("");
+  const [draftAssetName, setDraftAssetName] = useState("");
+  const [isEditingAssetName, setIsEditingAssetName] = useState(false);
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const [windowRect, setWindowRect] = useState<TagLibraryWindowRect>(() => getDefaultTagLibraryWindowRect());
+  const assetNameInputRef = useRef<HTMLInputElement | null>(null);
   const windowRef = useRef<HTMLElement | null>(null);
   const windowInteractionCleanupRef = useRef<(() => void) | null>(null);
   const normalizedQuery = normalizeLibraryMatchText(query);
@@ -120,16 +125,23 @@ export function TagLibraryBrowser({
     () => new Map(visibleSections.flatMap((section) => section.files.map((file) => [file.id, file] as const))),
     [visibleSections],
   );
+  const defaultSelection = useMemo(() => getDefaultTagLibrarySelection(visibleSections), [visibleSections]);
   const visibleCount = useMemo(
     () => visibleSections.reduce((total, section) => total + section.tagCount, 0),
     [visibleSections],
   );
-  const selectedSection = selectedSectionId ? visibleSections.find((section) => section.id === selectedSectionId) ?? null : visibleSections[0] ?? null;
+  const selectedSection = selectedSectionId
+    ? visibleSections.find((section) => section.id === selectedSectionId) ?? null
+    : defaultSelection.section;
   const selectedAssetTagIds = useMemo(
     () => new Set(normalizeLibraryNodeTagValues(selectedAsset?.tags ?? [])),
     [selectedAsset?.tags],
   );
-  const selectedFile = selectedFileId ? fileEntriesById.get(selectedFileId) ?? null : null;
+  const selectedFile = selectedFileId
+    ? fileEntriesById.get(selectedFileId) ?? null
+    : !selectedSectionId && defaultSelection.fileId
+      ? fileEntriesById.get(defaultSelection.fileId) ?? null
+      : null;
   const selectedTagDefinition = selectedFile?.tags.find((tagDefinition) => tagDefinition.id === selectedTagId) ?? null;
   const isCreateProjectGroupCardSelected = selectedFile?.id === "project-file:new-group";
   const isProjectSectionSelected = selectedSection?.id === "project-tags";
@@ -221,10 +233,15 @@ export function TagLibraryBrowser({
       return;
     }
 
-    setSelectedSectionId(visibleSections[0]?.id ?? null);
-  }, [selectedSectionId, visibleSections]);
+    setSelectedSectionId(defaultSelection.section?.id ?? null);
+  }, [defaultSelection.section?.id, selectedSectionId, visibleSections]);
 
   useEffect(() => {
+    if (!selectedFileId && selectedSectionId === defaultSelection.section?.id && defaultSelection.fileId) {
+      setSelectedFileId(defaultSelection.fileId);
+      return;
+    }
+
     if (!selectedFileId) {
       return;
     }
@@ -233,9 +250,16 @@ export function TagLibraryBrowser({
       return;
     }
 
-    const nextSelectedSection = selectedSectionId ? visibleSections.find((section) => section.id === selectedSectionId) ?? null : visibleSections[0] ?? null;
-    setSelectedFileId(nextSelectedSection?.id === "project-tags" ? nextSelectedSection.files[0]?.id ?? null : null);
-  }, [fileEntriesById, selectedFileId, selectedSectionId, visibleSections]);
+    const nextSelectedSection = selectedSectionId
+      ? visibleSections.find((section) => section.id === selectedSectionId) ?? null
+      : defaultSelection.section;
+    setSelectedFileId(nextSelectedSection?.id === "project-tags" ? defaultSelection.fileId : null);
+  }, [defaultSelection.fileId, defaultSelection.section, fileEntriesById, selectedFileId, selectedSectionId, visibleSections]);
+
+  function resetToDefaultSelection() {
+    setSelectedSectionId(defaultSelection.section?.id ?? null);
+    setSelectedFileId(defaultSelection.fileId);
+  }
 
   useEffect(() => {
     if (selectedFile?.tags.some((tagDefinition) => tagDefinition.id === selectedTagId)) {
@@ -244,6 +268,32 @@ export function TagLibraryBrowser({
 
     setSelectedTagId(selectedFile?.tags[0]?.id ?? null);
   }, [selectedFile, selectedTagId]);
+
+  useEffect(() => {
+    if (!selectedAsset) {
+      setDraftAssetName("");
+      setIsEditingAssetName(false);
+      return;
+    }
+
+    setDraftAssetName(selectedAsset.name);
+  }, [selectedAsset?.id, selectedAsset?.name]);
+
+  useEffect(() => {
+    if (!isEditingAssetName) {
+      return;
+    }
+
+    const input = assetNameInputRef.current;
+
+    if (!input) {
+      return;
+    }
+
+    input.focus();
+    const nameLength = input.value.length;
+    input.setSelectionRange(nameLength, nameLength);
+  }, [isEditingAssetName]);
 
   function startWindowDrag(event: ReactPointerEvent<HTMLElement>) {
     if (!isPrimaryPointer(event)) {
@@ -454,6 +504,41 @@ export function TagLibraryBrowser({
     onDeleteProjectTagGroup(groupId);
   }
 
+  function commitAssetNameRename() {
+    if (!selectedAsset) {
+      setIsEditingAssetName(false);
+      return;
+    }
+
+    const trimmedName = draftAssetName.trim();
+
+    if (!trimmedName) {
+      setDraftAssetName(selectedAsset.name);
+      setIsEditingAssetName(false);
+      return;
+    }
+
+    if (trimmedName !== selectedAsset.name) {
+      onRenameSelectedAsset(trimmedName);
+    }
+
+    setIsEditingAssetName(false);
+  }
+
+  function handleAssetNameKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commitAssetNameRename();
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setDraftAssetName(selectedAsset?.name ?? "");
+      setIsEditingAssetName(false);
+    }
+  }
+
   const content = (
     <div className={isNativeWindowMode ? "h-screen w-screen bg-app p-px" : overlayClassName}>
       <section
@@ -579,9 +664,24 @@ export function TagLibraryBrowser({
               <div className="min-h-0 flex-1 overflow-auto p-3">
                 {selectedAsset ? (
                   <div className="mb-3 border-b border-line pb-3 pl-2">
-                    <div className="text-base font-semibold text-ink">
-                      {selectedAsset.name}
-                    </div>
+                    {isEditingAssetName ? (
+                      <input
+                        ref={assetNameInputRef}
+                        className="w-full rounded-sm border border-line bg-surface px-2 py-1 text-base font-semibold text-ink outline-none transition focus:border-steel focus:ring-2 focus:ring-steel/20"
+                        value={draftAssetName}
+                        onBlur={commitAssetNameRename}
+                        onChange={(event) => setDraftAssetName(event.currentTarget.value)}
+                        onKeyDown={handleAssetNameKeyDown}
+                      />
+                    ) : (
+                      <button
+                        className="text-left text-base font-semibold text-ink transition hover:text-[rgb(var(--color-brand-lime))]"
+                        type="button"
+                        onDoubleClick={() => setIsEditingAssetName(true)}
+                      >
+                        {selectedAsset.name}
+                      </button>
+                    )}
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {selectedAsset.tags.length > 0 ? (
                         selectedAsset.tags.map((tag) => (
@@ -616,6 +716,11 @@ export function TagLibraryBrowser({
                                 className={`w-full px-3 py-3 text-left ${isCreateCard ? "flex min-h-[52px] items-center justify-center" : "flex items-center justify-between gap-3"}`}
                                 type="button"
                                 onClick={() => {
+                                  if (isSelected) {
+                                    resetToDefaultSelection();
+                                    return;
+                                  }
+
                                   setSelectedSectionId(section.id);
                                   setSelectedFileId(file.id);
                                 }}
@@ -666,6 +771,11 @@ export function TagLibraryBrowser({
                             className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left"
                             type="button"
                             onClick={() => {
+                              if (isSelected) {
+                                resetToDefaultSelection();
+                                return;
+                              }
+
                               setSelectedSectionId(section.id);
                               setSelectedFileId(null);
                             }}
@@ -871,7 +981,8 @@ function buildTagLibrarySectionEntries(sections: LibraryTagSourceSection[], proj
         ].join(" ")),
         tagCount,
       } satisfies TagLibrarySectionEntry;
-    });
+    })
+    .sort((first, second) => first.label.localeCompare(second.label));
   const projectSection = buildProjectTagSectionEntry(projectTagGroups);
 
   return [...librarySections, projectSection];
@@ -959,6 +1070,23 @@ function filterTagLibrarySectionEntries(sections: TagLibrarySectionEntry[], norm
 
     return files.length > 0 ? [{ ...section, files, fileCount: files.length, tagCount: files.reduce((total, file) => total + file.tagCount, 0) }] : [];
   });
+}
+
+function getDefaultTagLibrarySelection(sections: TagLibrarySectionEntry[]) {
+  const projectSection = sections.find((section) => section.id === "project-tags") ?? null;
+  const createGroupFile = projectSection?.files.find((file) => file.id === "project-file:new-group") ?? null;
+
+  if (projectSection) {
+    return {
+      fileId: createGroupFile?.id ?? projectSection.files[0]?.id ?? null,
+      section: projectSection,
+    };
+  }
+
+  return {
+    fileId: null,
+    section: sections[0] ?? null,
+  };
 }
 
 function getDefaultTagLibraryWindowRect(): TagLibraryWindowRect {
@@ -1082,7 +1210,7 @@ function getLibraryTagKindDotClass(kind: LibraryTagDefinition["kind"]) {
     case "system":
       return "bg-steel";
     case "style":
-      return "bg-copper";
+      return "bg-[rgb(var(--color-brand-lime))]";
     case "workflow":
       return "bg-muted";
     case "content":

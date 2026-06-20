@@ -108,11 +108,11 @@ export function VectorImagePreview({ asset }: { asset: VectorImageAsset }) {
         />
       ) : null}
       {message ? (
-        <div className="pointer-events-none absolute left-1/2 top-1/2 max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-sm border border-line bg-surface/90 px-3 py-2 text-center text-sm font-medium text-muted shadow-soft">
+        <div className="pointer-events-none absolute left-1/2 top-1/2 max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-sm border border-line bg-surface/90 px-3 py-2 text-center text-sm font-medium text-muted">
           {message}
         </div>
       ) : null}
-      <div className="pointer-events-none absolute bottom-3 right-3 rounded-sm border border-line bg-surface/90 px-2 py-1 text-xs font-medium text-muted shadow-soft">
+      <div className="pointer-events-none absolute bottom-3 right-3 rounded-sm border border-line bg-surface/90 px-2 py-1 text-xs font-medium text-muted">
         {Math.round(scale * 100)}%
       </div>
     </div>

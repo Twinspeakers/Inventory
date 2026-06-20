@@ -11,6 +11,7 @@ import {
   TAG_LIBRARY_WINDOW_CREATE_PROJECT_TAG_EVENT,
   TAG_LIBRARY_WINDOW_CREATE_PROJECT_TAG_GROUP_EVENT,
   TAG_LIBRARY_WINDOW_DELETE_PROJECT_TAG_GROUP_EVENT,
+  TAG_LIBRARY_WINDOW_RENAME_ASSET_EVENT,
   TAG_LIBRARY_WINDOW_READY_EVENT,
   TAG_LIBRARY_WINDOW_STATE_EVENT,
   type TagLibraryWindowAddTagPayload,
@@ -18,6 +19,7 @@ import {
   type TagLibraryWindowCreateProjectTagGroupPayload,
   type TagLibraryWindowCreateProjectTagPayload,
   type TagLibraryWindowDeleteProjectTagGroupPayload,
+  type TagLibraryWindowRenameAssetPayload,
   type TagLibraryWindowStatePayload,
 } from "./tagLibraryWindowBridge";
 
@@ -84,6 +86,18 @@ export function TagLibraryWindowApp() {
     void emitTo("main", TAG_LIBRARY_WINDOW_DELETE_PROJECT_TAG_GROUP_EVENT, payload);
   }
 
+  function handleRenameSelectedAsset(name: string) {
+    if (!selectedAsset) {
+      return;
+    }
+
+    const payload: TagLibraryWindowRenameAssetPayload = {
+      assetId: selectedAsset.id,
+      name,
+    };
+    void emitTo("main", TAG_LIBRARY_WINDOW_RENAME_ASSET_EVENT, payload);
+  }
+
   return (
     <TagLibraryBrowser
       mode="window"
@@ -94,6 +108,7 @@ export function TagLibraryWindowApp() {
       onCreateProjectTag={handleCreateProjectTag}
       onCreateProjectTagGroup={handleCreateProjectTagGroup}
       onDeleteProjectTagGroup={handleDeleteProjectTagGroup}
+      onRenameSelectedAsset={handleRenameSelectedAsset}
       onAddTag={handleAddTag}
       onClose={handleClose}
     />
