@@ -561,13 +561,9 @@ export function App() {
     }
 
     void runRefresh();
-    const intervalId = window.setInterval(() => {
-      void runRefresh();
-    }, 5000);
 
     return () => {
       disposed = true;
-      window.clearInterval(intervalId);
     };
   }, [activeInventory?.manifestPath, isScanning, sourceFolders]);
 
