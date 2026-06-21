@@ -46,6 +46,7 @@ export type ScannedAsset = {
   extension: string;
   size_bytes: number;
   modified_unix: number | null;
+  content_clues?: string[];
   kept_tags?: string[];
   notes?: string;
   tags?: string[];
@@ -184,6 +185,8 @@ export type AddLibraryNodePanelState = {
   initialQuery: string;
   parentFolderId: string | null;
   parentLabel: string;
+  preferredSuggestion?: AssetPlacementSuggestion | null;
+  preferredSuggestions?: AssetPlacementSuggestion[];
 };
 
 export type AddLibraryNodeDraft = {
@@ -212,6 +215,7 @@ export type AddFolderSuggestion = {
 };
 
 export type AssetPlacementSuggestion = {
+  confidence: "high" | "low" | "medium";
   draft?: AddLibraryNodeDraft;
   folderId?: string;
   matchedTerms: string[];

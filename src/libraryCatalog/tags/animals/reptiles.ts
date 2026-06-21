@@ -6,18 +6,21 @@ export const reptileTags = [
     aliases: ["alligator", "caiman", "gharial"],
     parents: ["reptile", "water"],
     implies: ["reptile", "animal", "water"],
+    matches: ["reptile"],
   }),
   tag("dinosaur", {
     label: "Dinosaur",
     aliases: ["tyrannosaurus", "triceratops", "raptor", "sauropod"],
     parents: ["reptile"],
     implies: ["reptile", "animal"],
+    matches: ["reptile"],
   }),
   tag("lizard", {
     label: "Lizard",
     aliases: ["gecko", "iguana", "chameleon", "monitor lizard"],
     parents: ["reptile"],
     implies: ["reptile", "animal"],
+    matches: ["reptile"],
   }),
   tag("reptile", {
     label: "Reptile",
@@ -30,11 +33,13 @@ export const reptileTags = [
     aliases: ["python", "cobra", "viper", "boa"],
     parents: ["reptile"],
     implies: ["reptile", "animal"],
+    matches: ["reptile"],
   }),
   tag("turtle", {
     label: "Turtle",
     aliases: ["tortoise", "terrapin"],
     parents: ["reptile"],
     implies: ["reptile", "animal"],
+    matches: ["reptile"],
   }),
 ];

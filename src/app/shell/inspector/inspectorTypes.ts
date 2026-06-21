@@ -14,7 +14,3 @@ export type InspectorAsset = {
   type: InspectorAssetType;
   userTags: string[];
 };
-
-export type InspectorAssetPlacementSuggestion = {
-  path: string[];
-};

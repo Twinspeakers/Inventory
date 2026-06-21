@@ -1,0 +1,136 @@
+import { tag } from "../../tag";
+
+export const technicalTags = [
+  tag("alpha-channel", {
+    label: "Alpha Channel",
+    kind: "system",
+    aliases: ["alpha", "transparency channel"],
+    locksToFileTypes: ["Image"],
+  }),
+  tag("albedo", {
+    label: "Albedo",
+    kind: "system",
+    aliases: ["base color", "diffuse map"],
+    locksToFileTypes: ["Image", "Source"],
+  }),
+  tag("animated", {
+    label: "Animated",
+    kind: "system",
+    aliases: ["has animation", "motion"],
+    locksToFileTypes: ["Image", "3D", "Audio", "Source"],
+  }),
+  tag("ao-map", {
+    label: "AO Map",
+    kind: "system",
+    aliases: ["ambient occlusion", "occlusion map"],
+    locksToFileTypes: ["Image", "Source"],
+  }),
+  tag("atlas", {
+    label: "Atlas",
+    kind: "system",
+    aliases: ["texture atlas", "packed atlas"],
+    locksToFileTypes: ["Image", "Source"],
+  }),
+  tag("emissive-map", {
+    label: "Emissive Map",
+    kind: "system",
+    aliases: ["glow map", "emission map"],
+    locksToFileTypes: ["Image", "Source"],
+  }),
+  tag("hdri", {
+    label: "HDRI",
+    kind: "system",
+    aliases: ["environment map", "lighting dome"],
+    locksToFileTypes: ["Image"],
+  }),
+  tag("high-resolution", {
+    label: "High Resolution",
+    kind: "system",
+    aliases: ["hi-res", "hi resolution"],
+    locksToFileTypes: ["Image", "Document", "3D", "Source"],
+  }),
+  tag("layered-source", {
+    label: "Layered Source",
+    kind: "system",
+    aliases: ["editable layers", "layered file"],
+    locksToFileTypes: ["Image", "Source"],
+  }),
+  tag("looping", {
+    label: "Looping",
+    kind: "system",
+    aliases: ["looped", "seamless loop"],
+    locksToFileTypes: ["Audio", "Image", "3D", "Source"],
+  }),
+  tag("low-resolution", {
+    label: "Low Resolution",
+    kind: "system",
+    aliases: ["lo-res", "preview quality"],
+    locksToFileTypes: ["Image", "Document", "3D", "Source"],
+  }),
+  tag("metallic-map", {
+    label: "Metallic Map",
+    kind: "system",
+    aliases: ["metalness map", "metallic"],
+    locksToFileTypes: ["Image", "Source"],
+  }),
+  tag("normal-map", {
+    label: "Normal Map",
+    kind: "system",
+    aliases: ["normal", "tangent normal"],
+    locksToFileTypes: ["Image", "Source"],
+  }),
+  tag("optimized", {
+    label: "Optimized",
+    kind: "system",
+    aliases: ["performance ready", "optimized asset"],
+    locksToFileTypes: ["3D", "Image", "Audio", "Source"],
+  }),
+  tag("pbr", {
+    label: "PBR",
+    kind: "system",
+    aliases: ["physically based rendering"],
+    locksToFileTypes: ["3D", "Image", "Source"],
+  }),
+  tag("rigged", {
+    label: "Rigged",
+    kind: "system",
+    aliases: ["has rig", "skeleton rig"],
+    locksToFileTypes: ["3D"],
+  }),
+  tag("roughness-map", {
+    label: "Roughness Map",
+    kind: "system",
+    aliases: ["roughness", "gloss map"],
+    locksToFileTypes: ["Image", "Source"],
+  }),
+  tag("seamless", {
+    label: "Seamless",
+    kind: "system",
+    aliases: ["tileable", "repeatable"],
+    locksToFileTypes: ["Image", "Audio", "Source"],
+  }),
+  tag("sprite-sheet", {
+    label: "Sprite Sheet",
+    kind: "system",
+    aliases: ["spritesheet", "frame sheet"],
+    locksToFileTypes: ["Image", "Source"],
+  }),
+  tag("transparent-background", {
+    label: "Transparent Background",
+    kind: "system",
+    aliases: ["cutout", "background removed"],
+    locksToFileTypes: ["Image"],
+  }),
+  tag("trim-sheet", {
+    label: "Trim Sheet",
+    kind: "system",
+    aliases: ["trim texture"],
+    locksToFileTypes: ["Image", "Source"],
+  }),
+  tag("vector-source", {
+    label: "Vector Source",
+    kind: "system",
+    aliases: ["editable vector", "vector master"],
+    locksToFileTypes: ["Image", "Source"],
+  }),
+];

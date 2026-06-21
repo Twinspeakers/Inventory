@@ -218,7 +218,13 @@ export function useLibraryActions({
     });
   }
 
-  function openAddLibraryNodePanel(parentFolderId: string | null, parentLabel: string, initialQuery = "") {
+  function openAddLibraryNodePanel(
+    parentFolderId: string | null,
+    parentLabel: string,
+    initialQuery = "",
+    preferredSuggestion: AssetPlacementSuggestion | null = null,
+    preferredSuggestions: AssetPlacementSuggestion[] = [],
+  ) {
     if (!canAddLibraryNodes()) {
       setLibraryNodeContextMenu(null);
       return;
@@ -230,6 +236,8 @@ export function useLibraryActions({
       initialQuery,
       parentFolderId,
       parentLabel,
+      preferredSuggestion,
+      preferredSuggestions,
     });
   }
 

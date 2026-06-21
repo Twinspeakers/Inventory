@@ -1,6 +1,11 @@
 import { tag } from "../../tag";
 
 export const metalTags = [
+  tag("aluminium", {
+    label: "Aluminium",
+    parents: ["metal"],
+    implies: ["metal", "material"],
+  }),
   tag("bronze", {
     label: "Bronze",
     parents: ["metal"],
@@ -34,6 +39,11 @@ export const metalTags = [
   }),
   tag("steel", {
     label: "Steel",
+    parents: ["metal"],
+    implies: ["metal", "material"],
+  }),
+  tag("tin", {
+    label: "Tin",
     parents: ["metal"],
     implies: ["metal", "material"],
   }),

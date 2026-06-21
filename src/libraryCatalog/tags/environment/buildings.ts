@@ -108,7 +108,7 @@ export const buildingTags = [
   }),
   tag("ruin", {
     label: "Ruin",
-    aliases: ["ruins", "abandoned building", "wreck"],
+    aliases: ["ruins", "abandoned building", "wreck", "derelict", "dilapidated building"],
     parents: ["building"],
     implies: ["building", "architecture"],
   }),
@@ -153,7 +153,7 @@ export const buildingTags = [
   }),
   tag("workshop", {
     label: "Workshop",
-    aliases: ["studio", "workroom"],
+    aliases: ["studio", "workroom", "forge", "smithy", "blacksmith shop"],
     parents: ["building"],
     implies: ["building", "crafting-station"],
   }),

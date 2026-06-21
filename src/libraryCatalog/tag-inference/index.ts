@@ -1,5 +1,5 @@
-import type { Asset, AssetType, ScannedAsset } from "../app/appTypes";
-import type { ModelInspectorResult } from "../sceneReaders/threeModelReader";
+import type { Asset, AssetType, ScannedAsset } from "../../app/appTypes";
+import type { ModelInspectorResult } from "../../sceneReaders/threeModelReader";
 import {
   addNormalizedLibraryMatchTerm,
   canonicalizeLibraryTag,
@@ -8,9 +8,10 @@ import {
   normalizeLibraryMatchText,
   normalizeLibraryNodeTagValues,
   normalizedTextIncludesTerm,
-} from "./normalization";
-import { libraryTagDefinitions } from "./tags";
-import type { LibraryTagDefinition } from "./types";
+} from "../normalization";
+import { libraryTagDefinitions } from "../tags";
+import type { LibraryTagDefinition } from "../types";
+import { ambiguousSenseRules, type AmbiguousSenseDefinition, type AmbiguousSenseRule } from "./tagAmbiguity";
 
 export const sourceFileExtensions = new Set([
   "ai",
@@ -35,7 +36,7 @@ export const sourceFileExtensions = new Set([
   "unitypackage",
 ]);
 
-export const TAG_INFERENCE_VERSION = 13;
+export const TAG_INFERENCE_VERSION = 18;
 
 export const automaticCatalogTagIgnoredTerms = new Set([
   ...libraryNodeIgnoredMatchTerms,
@@ -75,7 +76,6 @@ const extensionAutomaticTags: Record<string, string[]> = {
   gd: ["godot", "code"],
   gif: ["animated"],
   hdr: ["hdr"],
-  ico: ["icon"],
   js: ["code"],
   json: ["data"],
   license: ["license", "legal"],
@@ -243,11 +243,58 @@ const audioNonSoundEffectTerms = [
 
 const likelySoundEffectAudioExtensions = new Set(["aif", "aiff", "flac", "ogg", "wav"]);
 const libraryTagDefinitionsByKey = createLibraryTagDefinitionLookup(libraryTagDefinitions);
+const lowSignalPathTerms = new Set([
+  "asset",
+  "assets",
+  "content",
+  "contents",
+  "export",
+  "exports",
+  "file",
+  "files",
+  "final",
+  "library",
+  "misc",
+  "mixed",
+  "new",
+  "pack",
+  "packs",
+  "set",
+  "sets",
+  "source",
+  "sources",
+  "temp",
+  "test",
+  "testing",
+  "texture",
+  "textures",
+  "untitled",
+  "v1",
+  "v2",
+  "v3",
+  "wip",
+]);
 
 const modelPolyTagThresholds = {
   low: 5_000,
   high: 50_000,
   veryHigh: 250_000,
+};
+
+type AssetInferenceContext = {
+  combinedText: string;
+  extension: string;
+  fileType: AssetType;
+  pathSearchText: string;
+  parentSearchText: string;
+  searchText: string;
+};
+
+type CandidateTagMatch = {
+  definition: LibraryTagDefinition;
+  familyId: string | null;
+  matchedTerms: string[];
+  senseId: string | null;
 };
 
 export function toAsset(asset: ScannedAsset, modelResult?: ModelInspectorResult): Asset {
@@ -318,8 +365,12 @@ function getDefaultKeptAssetTags(asset: ScannedAsset) {
 }
 
 function getScannedAssetTagSearchText(asset: ScannedAsset) {
+  const pathSearchText = getAssetPathSearchText(asset.path);
+  const contentClueSearchText = normalizeLibraryMatchText((asset.content_clues ?? []).join(" "));
   return normalizeLibraryMatchText([
     asset.name,
+    pathSearchText,
+    contentClueSearchText,
     asset.extension,
     asset.file_type,
   ].join(" "));
@@ -327,21 +378,161 @@ function getScannedAssetTagSearchText(asset: ScannedAsset) {
 
 function getAutomaticLibraryRegistryTags(asset: ScannedAsset) {
   const tags = new Set<string>();
-  const searchText = getScannedAssetTagSearchText(asset);
+  const context = createAssetInferenceContext(asset);
+  const candidates = collectCandidateTagMatches(asset, context);
+  const resolvedMatches = resolveCandidateTagMatches(candidates, context);
 
-  for (const tagDefinition of libraryTagDefinitions) {
+  for (const match of resolvedMatches) {
     if (tags.size >= MAX_AUTOMATIC_REGISTRY_TAGS) {
       break;
     }
 
-    if (!libraryTagDefinitionCanMatchAsset(asset, tagDefinition) || !libraryTagDefinitionMatchesSearchText(tagDefinition, searchText)) {
-      continue;
-    }
-
-    addLibraryTagDefinitionTags(tags, tagDefinition);
+    addLibraryTagDefinitionTags(tags, match.definition);
   }
 
   return [...tags];
+}
+
+function createAssetInferenceContext(asset: ScannedAsset): AssetInferenceContext {
+  const searchText = getScannedAssetTagSearchText(asset);
+  const parentSearchText = normalizeLibraryMatchText(getAssetImmediateParentName(asset.path));
+  const pathSearchText = getAssetPathSearchText(asset.path);
+
+  return {
+    combinedText: normalizeLibraryMatchText([searchText, pathSearchText, parentSearchText].join(" ")),
+    extension: asset.extension.toLowerCase(),
+    fileType: asset.file_type,
+    pathSearchText,
+    parentSearchText,
+    searchText,
+  };
+}
+
+function collectCandidateTagMatches(asset: ScannedAsset, context: AssetInferenceContext) {
+  const candidates: CandidateTagMatch[] = [];
+
+  for (const tagDefinition of libraryTagDefinitions) {
+    if (!libraryTagDefinitionCanMatchAsset(asset, tagDefinition)) {
+      continue;
+    }
+
+    const matchedTerms = getLibraryTagDefinitionMatchedTerms(tagDefinition, context.searchText);
+
+    if (matchedTerms.length === 0) {
+      continue;
+    }
+
+    const ambiguityResolution = getAmbiguousSenseResolution(tagDefinition, matchedTerms);
+    candidates.push({
+      definition: tagDefinition,
+      familyId: ambiguityResolution?.rule.id ?? null,
+      matchedTerms,
+      senseId: ambiguityResolution?.sense.id ?? null,
+    });
+  }
+
+  return candidates;
+}
+
+function getLibraryTagDefinitionMatchedTerms(tagDefinition: LibraryTagDefinition, searchText: string) {
+  return getLibraryTagDefinitionTriggerTerms(tagDefinition).filter((term) => normalizedTextIncludesTerm(searchText, term));
+}
+
+function getAmbiguousSenseResolution(tagDefinition: LibraryTagDefinition, matchedTerms: string[]) {
+  for (const rule of ambiguousSenseRules) {
+    if (!matchedTerms.some((term) => rule.triggerTerms.includes(term))) {
+      continue;
+    }
+
+    for (const sense of rule.senses) {
+      if (sense.tagIds.includes(tagDefinition.id)) {
+        return { rule, sense };
+      }
+    }
+  }
+
+  return null;
+}
+
+function resolveCandidateTagMatches(candidates: CandidateTagMatch[], context: AssetInferenceContext) {
+  const resolvedMatches: CandidateTagMatch[] = [];
+  const familyCandidates = new Map<string, CandidateTagMatch[]>();
+
+  for (const candidate of candidates) {
+    if (!candidate.familyId || !candidate.senseId) {
+      resolvedMatches.push(candidate);
+      continue;
+    }
+
+    const matches = familyCandidates.get(candidate.familyId) ?? [];
+    matches.push(candidate);
+    familyCandidates.set(candidate.familyId, matches);
+  }
+
+  for (const [familyId, matches] of familyCandidates.entries()) {
+    const rule = ambiguousSenseRules.find((candidateRule) => candidateRule.id === familyId);
+
+    if (!rule) {
+      resolvedMatches.push(...matches);
+      continue;
+    }
+
+    const selectedSenseId = pickWinningSenseId(rule, matches, context);
+    resolvedMatches.push(...matches.filter((match) => match.senseId === selectedSenseId));
+  }
+
+  return dedupeCandidateTagMatches(resolvedMatches);
+}
+
+function pickWinningSenseId(rule: AmbiguousSenseRule, matches: CandidateTagMatch[], context: AssetInferenceContext) {
+  let bestSenseId = rule.defaultSenseId ?? matches[0]?.senseId ?? "";
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (const sense of rule.senses) {
+    const directMatches = matches.filter((match) => match.senseId === sense.id);
+
+    if (directMatches.length === 0) {
+      continue;
+    }
+
+    let score = directMatches.length * 12 + (sense.defaultPriority ?? 0);
+
+    if (rule.defaultSenseId && sense.id === rule.defaultSenseId) {
+      score += 2;
+    }
+
+    score += countEvidenceMatches(context.combinedText, sense.positiveTerms) * 8;
+    score += countEvidenceMatches(context.pathSearchText, sense.positiveTerms) * 4;
+    score -= countEvidenceMatches(context.combinedText, sense.negativeTerms ?? []) * 8;
+    score -= countEvidenceMatches(context.pathSearchText, sense.negativeTerms ?? []) * 4;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestSenseId = sense.id;
+    }
+  }
+
+  return bestSenseId;
+}
+
+function countEvidenceMatches(text: string, terms: string[]) {
+  return terms.reduce((count, term) => count + (normalizedTextIncludesTerm(text, normalizeLibraryMatchText(term)) ? 1 : 0), 0);
+}
+
+function dedupeCandidateTagMatches(matches: CandidateTagMatch[]) {
+  const dedupedMatches: CandidateTagMatch[] = [];
+  const seenDefinitionIds = new Set<string>();
+
+  for (const match of matches) {
+    if (seenDefinitionIds.has(match.definition.id)) {
+      continue;
+    }
+
+    seenDefinitionIds.add(match.definition.id);
+    dedupedMatches.push(match);
+  }
+
+  return dedupedMatches;
 }
 
 function libraryTagDefinitionCanMatchAsset(asset: ScannedAsset, tagDefinition: LibraryTagDefinition) {
@@ -521,6 +712,68 @@ function getAutomaticModelInspectorTags(modelResult?: ModelInspectorResult) {
 function getAssetImmediateParentName(path: string) {
   const directory = getAssetDirectoryPath(path);
   return directory ? getBaseName(directory) : "";
+}
+
+function getAssetPathSearchText(path: string) {
+  const segments = getAssetDirectoryPathSegments(path);
+  const weightedSegments: string[] = [];
+
+  for (const [index, segment] of segments.entries()) {
+    const distanceFromLeaf = segments.length - index - 1;
+    const repeatCount = distanceFromLeaf === 0 ? 3 : distanceFromLeaf === 1 ? 2 : 1;
+
+    for (const term of normalizePathSegmentTerms(segment)) {
+      for (let count = 0; count < repeatCount; count += 1) {
+        weightedSegments.push(term);
+      }
+    }
+  }
+
+  return normalizeLibraryMatchText(weightedSegments.join(" "));
+}
+
+function getAssetDirectoryPathSegments(path: string) {
+  const directoryPath = getAssetDirectoryPath(path);
+
+  if (!directoryPath) {
+    return [];
+  }
+
+  return directoryPath
+    .split(/[\\/]+/)
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .slice(-4);
+}
+
+function normalizePathSegmentTerms(segment: string) {
+  const normalizedSegment = normalizeLibraryMatchText(segment);
+
+  if (!normalizedSegment) {
+    return [];
+  }
+
+  const terms = normalizedSegment
+    .split(" ")
+    .map((term) => canonicalizeLibraryTag(term))
+    .filter((term) => Boolean(term) && !shouldIgnorePathTerm(term));
+
+  if (terms.length === 0) {
+    return [];
+  }
+
+  return [terms.join(" "), ...terms];
+}
+
+function shouldIgnorePathTerm(term: string) {
+  return (
+    !term ||
+    term.length <= 2 ||
+    /^\d+$/.test(term) ||
+    /^v\d+$/.test(term) ||
+    lowSignalPathTerms.has(term) ||
+    isIgnoredLibraryMatchTerm(term)
+  );
 }
 
 function getAssetDirectoryPath(path: string) {

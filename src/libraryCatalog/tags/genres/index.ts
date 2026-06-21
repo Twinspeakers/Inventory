@@ -1,0 +1,1 @@
+export { genreTags } from "./genres";

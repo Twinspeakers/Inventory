@@ -122,6 +122,8 @@ export function App() {
   const [libraryHistory, setLibraryHistory] = useState<SessionHistory>(EMPTY_SESSION_HISTORY);
   const [undoContext, setUndoContext] = useState<UndoContext>("library");
   const saveTimer = useRef<number | null>(null);
+  const autoRefreshInFlightRef = useRef(false);
+  const syncSourceFoldersRef = useRef<(() => Promise<boolean>) | null>(null);
   const workspaceGridRef = useRef<HTMLDivElement | null>(null);
   const { openTreeNodePath, toggleTreeNode } = useTreeExpansion({ setTreeOpenNodeIds });
   const {
@@ -218,6 +220,7 @@ export function App() {
   });
   const {
     activeFolder,
+    assetPlacementSuggestions,
     assetTagSuggestions,
     assets,
     currentLibraryState,
@@ -286,6 +289,7 @@ export function App() {
     handleOpenFolder,
     refreshSourceFolder,
     removeSourceFolder,
+    syncSourceFolders,
     toggleSourceFolder,
   } = useSourceFolderActions({
     activeInventory,
@@ -304,6 +308,9 @@ export function App() {
     setStatusMessage,
     setVirtualFolders,
   });
+  useEffect(() => {
+    syncSourceFoldersRef.current = () => syncSourceFolders({ silentNoChanges: true, background: true });
+  }, [syncSourceFolders]);
   const {
     activeNvvDocument,
     nvvHistory,
@@ -531,6 +538,38 @@ export function App() {
       void openNvvDocumentFromAsset(selectedAsset);
     }
   }, [selectedAsset?.id, selectedAsset?.path]);
+
+  useEffect(() => {
+    if (!activeInventory || sourceFolders.length === 0) {
+      autoRefreshInFlightRef.current = false;
+      return;
+    }
+
+    let disposed = false;
+
+    async function runRefresh() {
+      if (disposed || autoRefreshInFlightRef.current || isScanning || document.hidden) {
+        return;
+      }
+
+      autoRefreshInFlightRef.current = true;
+      try {
+        await syncSourceFoldersRef.current?.();
+      } finally {
+        autoRefreshInFlightRef.current = false;
+      }
+    }
+
+    void runRefresh();
+    const intervalId = window.setInterval(() => {
+      void runRefresh();
+    }, 5000);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, [activeInventory?.manifestPath, isScanning, sourceFolders]);
 
   useEffect(() => {
     if (!isTauriRuntime()) {

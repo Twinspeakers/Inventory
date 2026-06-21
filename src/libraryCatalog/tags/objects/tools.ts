@@ -3,7 +3,7 @@ import { tag } from "../../tag";
 export const toolTags = [
   tag("tool", {
     label: "Tool",
-    aliases: ["equipment", "gear"],
+    aliases: ["equipment", "gear", "hand tool", "utility item"],
   }),
   tag("fishing-rod", {
     label: "Fishing Rod",
@@ -35,6 +35,12 @@ export const toolTags = [
     parents: ["tool"],
     implies: ["tool", "mining"],
   }),
+  tag("pliers", {
+    label: "Pliers",
+    aliases: ["tongs", "grips"],
+    parents: ["tool"],
+    implies: ["tool", "metalworking"],
+  }),
   tag("rake", {
     label: "Rake",
     aliases: ["garden rake", "leaf rake"],
@@ -43,9 +49,15 @@ export const toolTags = [
   }),
   tag("rope", {
     label: "Rope",
-    aliases: ["cord", "line"],
+    aliases: ["cord", "line", "cable rope"],
     parents: ["tool"],
     implies: ["tool"],
+  }),
+  tag("saw", {
+    label: "Saw",
+    aliases: ["handsaw", "hand saw", "wood saw"],
+    parents: ["tool"],
+    implies: ["tool", "woodcutting"],
   }),
   tag("shovel", {
     label: "Shovel",
@@ -53,10 +65,22 @@ export const toolTags = [
     parents: ["tool"],
     implies: ["tool", "digging"],
   }),
+  tag("screwdriver", {
+    label: "Screwdriver",
+    aliases: ["driver", "philips", "phillips", "flathead", "flat head"],
+    parents: ["tool"],
+    implies: ["tool"],
+  }),
   tag("step-ladder", {
     label: "Step Ladder",
-    aliases: ["ladder"],
+    aliases: ["ladder", "stepladder", "step stool"],
     parents: ["tool"],
     implies: ["tool", "prop"],
+  }),
+  tag("wrench", {
+    label: "Wrench",
+    aliases: ["spanner", "socket wrench", "monkey wrench"],
+    parents: ["tool"],
+    implies: ["tool", "metalworking"],
   }),
 ];

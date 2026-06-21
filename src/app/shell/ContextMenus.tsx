@@ -77,6 +77,30 @@ export function LibraryNodeContextMenu({
     return (relativePath.length > 0 ? relativePath : withoutRoot).join(" / ");
   }
 
+  function getConfidenceLabel(confidence: AssetPlacementSuggestion["confidence"]) {
+    switch (confidence) {
+      case "high":
+        return "Strong";
+      case "medium":
+        return "Likely";
+      case "low":
+      default:
+        return "Loose";
+    }
+  }
+
+  function getConfidenceClassName(confidence: AssetPlacementSuggestion["confidence"]) {
+    switch (confidence) {
+      case "high":
+        return "border-emerald-500/40 bg-emerald-500/12 text-emerald-200";
+      case "medium":
+        return "border-sky-500/40 bg-sky-500/12 text-sky-100";
+      case "low":
+      default:
+        return "border-line bg-canvas text-muted";
+    }
+  }
+
   useEffect(() => {
     function handleClose() {
       onClose();
@@ -146,8 +170,18 @@ export function LibraryNodeContextMenu({
                       className="library-context-menu-item"
                       type="button"
                       onClick={() => onAcceptPlacementSuggestion(suggestion)}
+                      title={suggestion.reason}
                     >
-                      <span className="truncate">{getSuggestionLabel(suggestion.path)}</span>
+                      <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                        <span className="truncate">{getSuggestionLabel(suggestion.path)}</span>
+                        <span
+                          className={`rounded-sm border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${getConfidenceClassName(
+                            suggestion.confidence,
+                          )}`}
+                        >
+                          {getConfidenceLabel(suggestion.confidence)}
+                        </span>
+                      </span>
                     </button>
                   ))
                 ) : (

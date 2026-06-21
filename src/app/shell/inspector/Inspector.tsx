@@ -1,10 +1,8 @@
-import type { PointerEvent as ReactPointerEvent } from "react";
+import { type PointerEvent as ReactPointerEvent } from "react";
 import {
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   PanelRight,
-  RefreshCw,
 } from "lucide-react";
 import {
   InspectorMiniThreePreview,

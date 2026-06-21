@@ -1,5 +1,12 @@
 export { customLibraryNodeTemplate } from "./customNode";
 export {
+  automaticCatalogTagIgnoredTerms,
+  getBaseName,
+  sourceFileExtensions,
+  TAG_INFERENCE_VERSION,
+  toAsset,
+} from "./tag-inference";
+export {
   addNormalizedLibraryMatchTerm,
   canonicalizeLibraryTag,
   getDefaultLibraryNodeTagsForName,

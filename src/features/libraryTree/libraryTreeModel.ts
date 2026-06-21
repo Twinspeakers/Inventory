@@ -19,7 +19,7 @@ import {
 import {
   automaticCatalogTagIgnoredTerms,
   sourceFileExtensions,
-} from "../../libraryCatalog/tagInference";
+} from "../../libraryCatalog/tag-inference";
 import type {
   AddFolderSuggestion,
   AddLibraryNodeDraft,
@@ -71,9 +71,50 @@ const assetPlacementNameNoiseTerms = new Set([
   "wav",
   "webp",
 ]);
+const assetPlacementGenericTagTerms = new Set([
+  "animal",
+  "artifact",
+  "audio",
+  "building",
+  "city",
+  "clothing",
+  "color",
+  "country",
+  "creature",
+  "decor",
+  "document",
+  "environment",
+  "farm",
+  "food",
+  "fruit",
+  "furniture",
+  "image",
+  "ingredient",
+  "item",
+  "location",
+  "material",
+  "meal",
+  "music",
+  "nature",
+  "object",
+  "person",
+  "plant",
+  "place",
+  "protein",
+  "room",
+  "seafood",
+  "source",
+  "style",
+  "texture",
+  "vehicle",
+  "water",
+  "weapon",
+]);
 const libraryTagSuggestionTermsById = new Map(
   libraryTagDefinitions.map((tagDefinition) => [tagDefinition.id, getLibraryTagSuggestionTerms(tagDefinition)] as const),
 );
+const libraryTagDefinitionsByKey = createLibraryTagDefinitionLookup(libraryTagDefinitions);
+const libraryTagDefinitionsByMatch = createLibraryTagDefinitionsByMatchLookup(libraryTagDefinitions);
 
 export function getAssetModelKey(asset: Asset) {
   return `${asset.id}:${asset.path}`;
@@ -103,7 +144,14 @@ export function buildStructure(
   const masterLibraryAssets = assets.filter((asset) => !inventoryDocumentPaths.has(normalizePath(asset.path)));
   const sortedFolders = sortVirtualFoldersByName(virtualFolders);
   const legacyRootWrapper = sortedFolders.length === 1 && isLegacyVisualRootWrapper(sortedFolders[0]) ? sortedFolders[0] : null;
-  const assignedAssetIds = legacyRootWrapper ? new Set<number>() : getAssignedAssetIds(sortedFolders, masterLibraryAssets);
+  const topLevelAssetScopes = legacyRootWrapper ? null : getChildAssetScopes(sortedFolders, masterLibraryAssets);
+  const assignedAssetIds = legacyRootWrapper
+    ? new Set<number>()
+    : new Set(
+        [...(topLevelAssetScopes?.values() ?? [])]
+          .flatMap((scopedAssets) => scopedAssets)
+          .map((asset) => asset.id),
+      );
   const rootAssetNodes = legacyRootWrapper
     ? []
     : sortAssets(
@@ -114,7 +162,7 @@ export function buildStructure(
   const visibleLibraryChildren = legacyRootWrapper
     ? virtualFolderToNode(legacyRootWrapper, masterLibraryAssets, openNodeIds).children ?? []
     : [
-        ...sortedFolders.map((folder) => virtualFolderToNode(folder, masterLibraryAssets, openNodeIds)),
+        ...sortedFolders.map((folder) => virtualFolderToNode(folder, topLevelAssetScopes?.get(folder.id) ?? [], openNodeIds)),
         ...rootAssetNodes,
       ];
   const inventoryWriteNodes = inventoryWriteAssets.map((asset) => assetToStructureNode(asset));
@@ -375,10 +423,7 @@ export function createDefaultTopLevelLibraryNodesForAssets(assets: ScannedAsset[
   if (assets.length === 0) {
     return [];
   }
-
-  const libraryTemplate = libraryNodeTemplates.find((template) => template.id === defaultLibraryRootTemplateId);
-
-  return libraryTemplate ? [createVirtualFolderFromTemplate(libraryTemplate, libraryTemplate.name)] : [];
+  return [];
 }
 
 export function createVirtualFolderFromDraft(draft: AddLibraryNodeDraft): VirtualFolder {
@@ -482,13 +527,19 @@ export function getDirectAssetsForLibraryNodePath(folders: VirtualFolder[], fold
     return [];
   }
 
-  let scopedAssets = assets;
+  const topLevelFolder = path[0];
+
+  if (!topLevelFolder) {
+    return [];
+  }
+
+  let scopedAssets = getChildAssetScopes(sortVirtualFoldersByName(folders), assets).get(topLevelFolder.id) ?? [];
 
   for (const [index, folder] of path.entries()) {
-    const folderAssets = getAssetsForLibraryNode(folder, scopedAssets);
+    const folderAssets = index === 0 ? scopedAssets : getAssetsForLibraryNode(folder, scopedAssets);
 
     if (index === path.length - 1) {
-      return getDirectAssetsForLibraryNode(folder, scopedAssets);
+      return getDirectAssetsForLibraryNode(folder, folderAssets);
     }
 
     const nextFolder = path[index + 1];
@@ -517,9 +568,21 @@ export function getAssetPlacementSuggestions(asset: Asset, folders: VirtualFolde
     suggestions.push(...collectAssetPlacementSuggestions(folder, asset, assets, [folder]));
   }
 
+  if (suggestions.length === 0) {
+    suggestions.push(...getRootPlacementSuggestions(asset, folders));
+  }
+
   return dedupeAssetPlacementSuggestions(suggestions)
     .sort((first, second) => second.score - first.score || second.path.length - first.path.length || compareText(first.path.join(" "), second.path.join(" ")))
     .slice(0, 8);
+}
+
+export function getNewAssetPlacementSuggestions(suggestions: AssetPlacementSuggestion[], limit = 3) {
+  return suggestions.filter((suggestion) => suggestion.target === "new" && Boolean(suggestion.draft)).slice(0, limit);
+}
+
+export function getPreferredNewAssetPlacementSuggestion(suggestions: AssetPlacementSuggestion[]) {
+  return getNewAssetPlacementSuggestions(suggestions, 1)[0] ?? null;
 }
 
 export function collectAssetPlacementSuggestions(
@@ -560,7 +623,7 @@ export function getNewChildPlacementSuggestions(parentFolder: VirtualFolder, ass
   const parentTemplate = getLibraryNodeTemplateForSuggestionParent(parentFolder, libraryNodeTemplates);
   const parentFileTypes = getInheritedSuggestionFileTypes(parentTemplate);
   const existingChildNames = new Set(parentFolder.children.map((child) => normalizeLibraryMatchText(child.name)));
-  const candidateTemplates = getLibraryNodeChildSuggestionTemplates(parentTemplate);
+  const candidateTemplates = getPlacementSuggestionTemplates(parentTemplate);
   const suggestions: AssetPlacementSuggestion[] = [];
 
   for (const template of candidateTemplates) {
@@ -586,6 +649,52 @@ export function getNewChildPlacementSuggestions(parentFolder: VirtualFolder, ass
   }
 
   return suggestions;
+}
+
+function getRootPlacementSuggestions(asset: Asset, folders: VirtualFolder[]) {
+  const parentTemplate = getLibraryNodeTemplateForSuggestionParent(null, libraryNodeTemplates);
+  const parentFileTypes = getInheritedSuggestionFileTypes(parentTemplate);
+  const existingChildNames = new Set(folders.map((folder) => normalizeLibraryMatchText(folder.name)));
+  const candidateTemplates = getPlacementSuggestionTemplates(parentTemplate);
+  const suggestions: AssetPlacementSuggestion[] = [];
+
+  for (const template of candidateTemplates) {
+    const name = template.name;
+    const normalizedName = normalizeLibraryMatchText(name);
+
+    if (!normalizedName || existingChildNames.has(normalizedName)) {
+      continue;
+    }
+
+    const fileTypes = scopeLibraryNodeFileTypes(parentFileTypes, template.fileTypes);
+
+    if (!libraryNodeFileTypeListAllowsAsset(fileTypes, asset)) {
+      continue;
+    }
+
+    const draft = createLibraryNodeDraft(template, name, getLibraryNodeTagsFromTemplate(template, name), fileTypes);
+    const scoredSuggestion = scoreDraftPlacementSuggestion(draft, template, asset, [name], null);
+
+    if (scoredSuggestion && scoredSuggestion.score >= 30) {
+      suggestions.push(scoredSuggestion);
+    }
+  }
+
+  return suggestions;
+}
+
+function getPlacementSuggestionTemplates(parentTemplate: LibraryNodeTemplate) {
+  const candidateTemplates = getLibraryNodeChildSuggestionTemplates(parentTemplate);
+  const parentTemplatePath = getTagTemplatePath(parentTemplate.id);
+
+  if (parentTemplatePath.length === 0) {
+    return candidateTemplates;
+  }
+
+  return candidateTemplates.filter((template) => {
+    const templatePath = getTagTemplatePath(template.id);
+    return templatePath.length > 0 && templatePath[0] === parentTemplatePath[0];
+  });
 }
 
 export function getLibraryNodeChildSuggestionTemplates(parentTemplate: LibraryNodeTemplate) {
@@ -701,10 +810,11 @@ export function scoreAssetPlacementSuggestion(folder: VirtualFolder, asset: Asse
   const pathLabels = path.map((folderNode) => folderNode.name);
 
   return {
+    confidence: getAssetPlacementConfidence(scoredTerms.score),
     folderId: folder.id,
     matchedTerms: scoredTerms.matchedTerms,
     path: pathLabels,
-    reason: `Suggested from ${formatMatchedTerms(scoredTerms.matchedTerms)} in the file name or tags.`,
+    reason: `Suggested from ${formatMatchedTerms(scoredTerms.matchedTerms)} in the file name, path, or tags.`,
     score: scoredTerms.score,
     target: "existing",
   };
@@ -724,41 +834,108 @@ export function scoreDraftPlacementSuggestion(
   }
 
   return {
+    confidence: getAssetPlacementConfidence(scoredTerms.score + 6),
     draft,
     matchedTerms: scoredTerms.matchedTerms,
     parentFolderId,
     path,
-    reason: `Create this child from ${formatMatchedTerms(scoredTerms.matchedTerms)} in the file name or tags.`,
+    reason: `Create this child from ${formatMatchedTerms(scoredTerms.matchedTerms)} in the file name, path, or tags.`,
     score: scoredTerms.score + 6,
     target: "new",
   };
 }
 
 export function scoreAssetPlacementTerms(asset: Asset, terms: Array<[string, number]>, pathDepth: number) {
-  const assetText = normalizeLibraryMatchText([
-    asset.name,
-    asset.extension,
-    asset.type,
-    ...asset.tags,
-  ].join(" "));
+  const assetNameText = normalizeLibraryMatchText(asset.name);
+  const assetPathText = normalizeLibraryMatchText(asset.path);
+  const assetTagText = normalizeLibraryMatchText(asset.tags.join(" "));
+  const assetMetaText = normalizeLibraryMatchText([asset.extension, asset.type].join(" "));
   const matchedTerms: string[] = [];
+  const evidenceKinds = new Set<"name" | "path" | "tag" | "meta">();
+  let genericTagOnlyMatchCount = 0;
+  let strongMatchCount = 0;
   let score = pathDepth * 4;
 
   for (const [term, weight] of terms) {
-    if (normalizedTextIncludesTerm(assetText, term)) {
-      matchedTerms.push(term);
-      score += weight;
+    const normalizedTerm = normalizeLibraryMatchText(term);
+    const isGenericTag = assetPlacementGenericTagTerms.has(normalizedTerm);
+    const matchesName = normalizedTextIncludesTerm(assetNameText, normalizedTerm);
+    const matchesPath = normalizedTextIncludesTerm(assetPathText, normalizedTerm);
+    const matchesTag = normalizedTextIncludesTerm(assetTagText, normalizedTerm);
+    const matchesMeta = normalizedTextIncludesTerm(assetMetaText, normalizedTerm);
+
+    if (!matchesName && !matchesPath && !matchesTag && !matchesMeta) {
+      continue;
     }
+
+    let termScore = 0;
+
+    if (matchesName) {
+      evidenceKinds.add("name");
+      strongMatchCount += 1;
+      termScore += weight + 12;
+    }
+
+    if (matchesPath) {
+      evidenceKinds.add("path");
+      strongMatchCount += 1;
+      termScore += matchesName ? Math.max(6, Math.floor(weight / 4)) : Math.max(12, weight - 6);
+    }
+
+    if (matchesTag) {
+      evidenceKinds.add("tag");
+      termScore += isGenericTag ? Math.max(4, weight - 20) : Math.max(10, weight - 8);
+    }
+
+    if (matchesMeta) {
+      evidenceKinds.add("meta");
+      termScore += Math.max(4, Math.floor(weight / 3));
+    }
+
+    if (matchesTag && !matchesName && !matchesPath && !matchesMeta && isGenericTag) {
+      genericTagOnlyMatchCount += 1;
+    }
+
+    matchedTerms.push(term);
+    score += termScore;
   }
 
   if (matchedTerms.length === 0) {
     return null;
   }
 
+  if (genericTagOnlyMatchCount > 0) {
+    score -= genericTagOnlyMatchCount * 14;
+  }
+
+  if (strongMatchCount > 0 && evidenceKinds.has("tag")) {
+    score += 8;
+  }
+
+  if (evidenceKinds.has("name") && evidenceKinds.has("path")) {
+    score += 6;
+  }
+
+  if (!evidenceKinds.has("name") && !evidenceKinds.has("path") && genericTagOnlyMatchCount === matchedTerms.length) {
+    score -= 16;
+  }
+
   return {
     matchedTerms: [...new Set(matchedTerms)].slice(0, 8),
     score,
   };
+}
+
+export function getAssetPlacementConfidence(score: number): AssetPlacementSuggestion["confidence"] {
+  if (score >= 80) {
+    return "high";
+  }
+
+  if (score >= 48) {
+    return "medium";
+  }
+
+  return "low";
 }
 
 export function getLibraryNodeSuggestionTerms(folder: VirtualFolder) {
@@ -973,14 +1150,10 @@ export function getLibraryNodeRules(folder: VirtualFolder): LibraryNodeRule[] {
   const tags = getEffectiveLibraryNodeTags(template, folder);
 
   if (folder.rules && folder.rules.length > 0) {
-    if (folder.templateId && template.id !== "custom") {
-      const existingFileRules = folder.rules.filter((rule) => !isLibraryNodeContentRule(rule));
-      const refreshedContentRules = createLibraryNodeRulesFromTemplate(template, folder.name, tags).filter(isLibraryNodeContentRule);
+    const existingFileRules = folder.rules.filter((rule) => !isLibraryNodeContentRule(rule));
+    const refreshedContentRules = createLibraryNodeRulesFromTemplate(template, folder.name, tags).filter(isLibraryNodeContentRule);
 
-      return mergeLibraryNodeRules(existingFileRules, refreshedContentRules);
-    }
-
-    return mergeLibraryNodeRules(folder.rules);
+    return mergeLibraryNodeRules(existingFileRules, refreshedContentRules);
   }
 
   return createLibraryNodeRulesFromTemplate(template, folder.name, tags);
@@ -1035,6 +1208,10 @@ export function getLibraryNodeTagsFromTemplate(template: LibraryNodeTemplate, na
   if (template.id === "custom") {
     for (const term of normalizeLibraryMatchText(name).split(" ")) {
       addNormalizedLibraryMatchTerm(tags, term);
+    }
+
+    for (const tag of getCustomNodeCatalogTags(name)) {
+      addNormalizedLibraryMatchTerm(tags, normalizeLibraryMatchText(tag));
     }
   }
 
@@ -1250,6 +1427,100 @@ function getLibraryTagSuggestionTerms(tagDefinition: LibraryTagDefinition) {
   }
 
   return [...terms];
+}
+
+function getCustomNodeCatalogTags(name: string) {
+  const tagDefinition = getLibraryTagDefinitionByKey(name);
+
+  if (!tagDefinition) {
+    return [];
+  }
+
+  const tags = new Set<string>();
+  const pending = [tagDefinition];
+  const visitedTagIds = new Set<string>();
+
+  while (pending.length > 0) {
+    const currentTagDefinition = pending.pop();
+
+    if (!currentTagDefinition || visitedTagIds.has(currentTagDefinition.id)) {
+      continue;
+    }
+
+    visitedTagIds.add(currentTagDefinition.id);
+    addNormalizedLibraryMatchTerm(tags, normalizeLibraryMatchText(currentTagDefinition.id));
+
+    for (const relatedTagId of currentTagDefinition.matches ?? []) {
+      const relatedTagDefinition = getLibraryTagDefinitionByKey(relatedTagId);
+
+      if (relatedTagDefinition) {
+        pending.push(relatedTagDefinition);
+      } else {
+        addNormalizedLibraryMatchTerm(tags, normalizeLibraryMatchText(relatedTagId));
+      }
+    }
+
+    for (const relatedTagDefinition of libraryTagDefinitionsByMatch.get(getLibraryTagKey(currentTagDefinition.id)) ?? []) {
+      pending.push(relatedTagDefinition);
+    }
+  }
+
+  return [...tags];
+}
+
+function getLibraryTagDefinitionByKey(value: string) {
+  return libraryTagDefinitionsByKey.get(getLibraryTagKey(value)) ?? null;
+}
+
+function createLibraryTagDefinitionLookup(tagDefinitions: LibraryTagDefinition[]) {
+  const lookup = new Map<string, LibraryTagDefinition>();
+
+  function addLookupValue(value: string, tagDefinition: LibraryTagDefinition) {
+    const key = getLibraryTagKey(value);
+
+    if (key && !lookup.has(key)) {
+      lookup.set(key, tagDefinition);
+    }
+  }
+
+  for (const tagDefinition of tagDefinitions) {
+    addLookupValue(tagDefinition.id, tagDefinition);
+    addLookupValue(tagDefinition.label, tagDefinition);
+
+    for (const alias of tagDefinition.aliases ?? []) {
+      addLookupValue(alias, tagDefinition);
+    }
+  }
+
+  return lookup;
+}
+
+function createLibraryTagDefinitionsByMatchLookup(tagDefinitions: LibraryTagDefinition[]) {
+  const lookup = new Map<string, LibraryTagDefinition[]>();
+
+  for (const tagDefinition of tagDefinitions) {
+    for (const match of tagDefinition.matches ?? []) {
+      const key = getLibraryTagKey(match);
+
+      if (!key) {
+        continue;
+      }
+
+      const matchingDefinitions = lookup.get(key);
+
+      if (matchingDefinitions) {
+        matchingDefinitions.push(tagDefinition);
+      } else {
+        lookup.set(key, [tagDefinition]);
+      }
+    }
+  }
+
+  return lookup;
+}
+
+function getLibraryTagKey(value: string) {
+  return canonicalizeLibraryTag(normalizeLibraryMatchText(value));
 }
 
 function tagDefinitionSupportsAssetType(tagDefinition: LibraryTagDefinition, assetType: AssetType) {

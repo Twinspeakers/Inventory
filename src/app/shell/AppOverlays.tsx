@@ -19,6 +19,7 @@ import type {
 } from "../appTypes";
 import type { NvdStyleRole } from "../../features/nvdEditor";
 import { AddLibraryNodePanel } from "../library/AddLibraryNodePanel";
+import { getNewAssetPlacementSuggestions, getPreferredNewAssetPlacementSuggestion } from "../../features/libraryTree/libraryTreeModel";
 import {
   SettingsPanel,
   type ThemeColors,
@@ -122,7 +123,13 @@ export function AppOverlays({
   onRemoveAssetFromLibraryNode: (assetId: number, folderId: string) => void;
   onNvdSaveReminderEnabledChange: (enabled: boolean) => void;
   onNvdStyleResetConfirmationEnabledChange: (enabled: boolean) => void;
-  onOpenAddLibraryNodePanel: (parentFolderId: string | null, parentLabel: string) => void;
+  onOpenAddLibraryNodePanel: (
+    parentFolderId: string | null,
+    parentLabel: string,
+    initialQuery?: string,
+    preferredSuggestion?: AssetPlacementSuggestion | null,
+    preferredSuggestions?: AssetPlacementSuggestion[],
+  ) => void;
   onRefreshSourceFolder: (sourceId: string) => void;
   onRemoveSourceFolder: (sourceId: string) => void;
   onRenameAssetDisplayName: (assetId: number) => void;
@@ -282,8 +289,21 @@ export function AppOverlays({
             onAssetPlacementSuggestionAccept(suggestion);
           }}
           onOpenNewNode={() => {
+            const menu = libraryNodeContextMenu;
+            const preferredSuggestions = getNewAssetPlacementSuggestions(menu.assetPlacementSuggestions ?? []);
+            const preferredSuggestion = getPreferredNewAssetPlacementSuggestion(menu.assetPlacementSuggestions ?? []);
             onLibraryNodeContextMenuClose();
-            onOpenAddLibraryNodePanel(null, "Master");
+            onOpenAddLibraryNodePanel(
+              preferredSuggestion?.parentFolderId ?? (menu.target === "asset" ? menu.assetParentFolderId ?? null : null),
+              preferredSuggestion
+                ? preferredSuggestion.path[preferredSuggestion.path.length - 2] ?? "Master"
+                : menu.target === "asset"
+                  ? menu.assetParentPathLabels?.[menu.assetParentPathLabels.length - 1] ?? "Master"
+                : "Master",
+              preferredSuggestion?.draft?.name ?? "",
+              preferredSuggestion,
+              preferredSuggestions,
+            );
           }}
           onRemoveFromNode={() => {
             const menu = libraryNodeContextMenu;

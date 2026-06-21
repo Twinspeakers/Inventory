@@ -34,11 +34,12 @@ import {
   filterAssetsByEnabledSources,
   filterAssetsBySearchQuery,
   findFolder,
+  getAssetPlacementSuggestions,
   getScannedAssetModelKey,
   getSourceSummary,
   sortAssets,
 } from "../../features/libraryTree/libraryTreeModel";
-import { TAG_INFERENCE_VERSION, toAsset } from "../../libraryCatalog/tagInference";
+import { TAG_INFERENCE_VERSION, toAsset } from "../../libraryCatalog/tag-inference";
 import type { ModelTransform, ModelInspectorResult } from "../../sceneReaders/threeModelReader";
 import type { InventoryDocumentsState } from "../../features/inventoryProject";
 import type { SceneMode } from "../../features/sceneViewer";
@@ -207,6 +208,10 @@ export function useAppDerivedState({
     () => getRecentAssetTagSuggestions(selectedAsset, recentUserTagIds),
     [recentUserTagIds, selectedAsset],
   );
+  const assetPlacementSuggestions = useMemo(
+    () => (selectedAsset ? getAssetPlacementSuggestions(selectedAsset, virtualFolders, masterLibraryAssets).slice(0, 3) : []),
+    [masterLibraryAssets, selectedAsset, virtualFolders],
+  );
   const currentWorkspaceState = useMemo(
     () =>
       ({
@@ -295,6 +300,7 @@ export function useAppDerivedState({
   return {
     activeFolder,
     allAssets,
+    assetPlacementSuggestions,
     assetTagSuggestions,
     assets,
     currentLibraryState,

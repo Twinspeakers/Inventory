@@ -24,6 +24,8 @@ import {
   storageTags,
   sweetTags,
 } from "./food";
+import { genreTags } from "./genres";
+import { eventTags } from "./events";
 import {
   accessoryTags,
   artSupplyTags,
@@ -51,7 +53,7 @@ import {
   vehicleTags,
   weaponTags,
 } from "./objects";
-import { ageGroupTags, humanoidTags, relationshipTags, roleTags } from "./people";
+import { ageGroupTags, depictionTags, humanoidTags, relationshipTags, roleTags } from "./people";
 import {
   attractionTags,
   buildingTags,
@@ -78,8 +80,13 @@ import {
   metalTags,
   naturalMaterialTags,
 } from "./materials";
-import { styleTags } from "./styles/styles";
+import { conditionTags } from "./condition";
+import { sceneTags } from "./scene";
+import { artStyleTags, colorTags, presentationTags, renderStyleTags } from "./styles";
+import { surfaceTags } from "./surface";
 import { systemTags } from "./system/system";
+import { technicalTags } from "./technical";
+import { workflowTags } from "./workflow";
 
 export type LibraryTagSourceFile = {
   aliases?: string[];
@@ -116,6 +123,7 @@ export const libraryTagSourceSections: LibraryTagSourceSection[] = [
     description: "People-focused folders sourced from the tag library, including roles, relationships, age groups, and humanoids.",
     files: [
       { id: "age-groups", label: "age-groups.ts", tags: ageGroupTags },
+      { id: "depiction", label: "depiction.ts", tags: depictionTags },
       { id: "humanoids", label: "humanoids.ts", tags: humanoidTags },
       { id: "relationships", label: "relationships.ts", tags: relationshipTags },
       {
@@ -310,12 +318,92 @@ export const libraryTagSourceSections: LibraryTagSourceSection[] = [
     ],
   },
   {
-    id: "styles",
-    label: "Styles",
-    aliases: ["looks", "aesthetics"],
-    category: "Taxonomy",
-    description: "Style-focused folders sourced from the tag library.",
-    files: [{ id: "styles", label: "styles.ts", tags: styleTags }],
+    id: "color",
+    label: "Color",
+    aliases: ["palette", "colour"],
+    category: "Cross-Cutting",
+    description: "Color-focused folders sourced from the tag library.",
+    files: [{ id: "colors", label: "colors.ts", tags: colorTags }],
+  },
+  {
+    id: "art-style",
+    label: "Art Style",
+    aliases: ["art treatment", "visual style"],
+    category: "Cross-Cutting",
+    description: "Art-style folders sourced from the tag library, covering rendering treatment and aesthetic approach.",
+    files: [{ id: "art-styles", label: "art-styles.ts", tags: artStyleTags }],
+  },
+  {
+    id: "presentation",
+    label: "Presentation",
+    aliases: ["view", "camera angle"],
+    category: "Cross-Cutting",
+    description: "Presentation-focused folders sourced from the tag library, covering point of view and display orientation.",
+    files: [{ id: "presentation", label: "presentation.ts", tags: presentationTags }],
+  },
+  {
+    id: "render-style",
+    label: "Render Style",
+    aliases: ["mesh style", "technical look"],
+    category: "Cross-Cutting",
+    description: "Render-style folders sourced from the tag library, covering mesh density and technical visual treatment.",
+    files: [{ id: "render-styles", label: "render-styles.ts", tags: renderStyleTags }],
+  },
+  {
+    id: "genres",
+    label: "Genres",
+    aliases: ["worlds", "fiction settings"],
+    category: "Cross-Cutting",
+    description: "Genre-focused folders sourced from the tag library, covering world context and broad fictional or period settings.",
+    files: [{ id: "genres", label: "genres.ts", tags: genreTags }],
+  },
+  {
+    id: "events",
+    label: "Events",
+    aliases: ["occasions", "social context"],
+    category: "Cross-Cutting",
+    description: "Event-focused folders sourced from the tag library, covering occasions, gatherings, and celebration context.",
+    files: [{ id: "events", label: "events.ts", tags: eventTags }],
+  },
+  {
+    id: "scene",
+    label: "Scene",
+    aliases: ["atmosphere", "setting"],
+    category: "Cross-Cutting",
+    description: "Scene-focused folders sourced from the tag library, covering atmosphere, season, weather, and broad context.",
+    files: [{ id: "scene", label: "scene.ts", tags: sceneTags }],
+  },
+  {
+    id: "condition",
+    label: "Condition",
+    aliases: ["state", "wear"],
+    category: "Cross-Cutting",
+    description: "Condition-focused folders sourced from the tag library, covering wear, fill state, and physical state changes.",
+    files: [{ id: "condition", label: "condition.ts", tags: conditionTags }],
+  },
+  {
+    id: "surface",
+    label: "Surface",
+    aliases: ["finish", "surface quality"],
+    category: "Cross-Cutting",
+    description: "Surface-focused folders sourced from the tag library, covering finish, reflectivity, transparency, and tactile quality.",
+    files: [{ id: "surface", label: "surface.ts", tags: surfaceTags }],
+  },
+  {
+    id: "technical",
+    label: "Technical",
+    aliases: ["asset traits", "production metadata"],
+    category: "Cross-Cutting",
+    description: "Technical folders sourced from the tag library, covering asset format traits, maps, loops, and engine-facing metadata.",
+    files: [{ id: "technical", label: "technical.ts", tags: technicalTags }],
+  },
+  {
+    id: "workflow",
+    label: "Workflow",
+    aliases: ["pipeline", "status"],
+    category: "Cross-Cutting",
+    description: "Workflow-focused folders sourced from the tag library, covering production status, readiness, and next-step flags.",
+    files: [{ id: "workflow", label: "workflow.ts", tags: workflowTags }],
   },
 ];
 

@@ -52,6 +52,7 @@ export const foliageTags = [
     aliases: ["young tree", "seedling"],
     parents: ["tree"],
     implies: ["tree", "plant-life"],
+    matches: ["tree", "forest"],
   }),
   tag("seed", {
     label: "Seed",

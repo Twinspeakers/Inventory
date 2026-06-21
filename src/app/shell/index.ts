@@ -7,7 +7,7 @@ export {
   type SourceFolderContextMenuState,
 } from "./ContextMenus";
 export { Inspector } from "./inspector";
-export type { InspectorAsset, InspectorAssetPlacementSuggestion, InspectorAssetType } from "./inspector";
+export type { InspectorAsset, InspectorAssetType } from "./inspector";
 export { LibraryStructure, getNvdOutline } from "./LibraryStructure";
 export { MainWorkspace } from "./MainWorkspace";
 export { MenuBar } from "./MenuBar";

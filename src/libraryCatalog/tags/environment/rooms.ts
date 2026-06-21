@@ -89,7 +89,7 @@ export const roomTags = [
   }),
   tag("lobby", {
     label: "Lobby",
-    aliases: ["foyer", "reception area"],
+    aliases: ["foyer", "reception area", "entryway", "entrance"],
     parents: ["room"],
     implies: ["room", "building"],
   }),
@@ -114,7 +114,7 @@ export const roomTags = [
   }),
   tag("storage-room", {
     label: "Storage Room",
-    aliases: ["storeroom", "supply room"],
+    aliases: ["storeroom", "supply room", "stockroom", "back room", "backroom"],
     parents: ["room"],
     implies: ["room", "building"],
   }),

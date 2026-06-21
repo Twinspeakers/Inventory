@@ -3,7 +3,7 @@ import { tag } from "../../tag";
 export const ecosystemTags = [
   tag("coastal", {
     label: "Coastal",
-    aliases: ["coastline", "seaside environment", "shore environment"],
+    aliases: ["coastline", "seaside environment", "shore environment", "shoreline", "seashore", "waterfront"],
     parents: ["ecosystem"],
     implies: ["ecosystem", "water"],
     related: ["beach", "island"],
@@ -15,7 +15,7 @@ export const ecosystemTags = [
   }),
   tag("freshwater", {
     label: "Freshwater",
-    aliases: ["inland water", "fresh water habitat"],
+    aliases: ["inland water", "fresh water habitat", "riverland", "lakeside"],
     parents: ["ecosystem"],
     implies: ["ecosystem", "water"],
     related: ["river", "lake"],
@@ -25,12 +25,14 @@ export const ecosystemTags = [
     aliases: ["prairie", "meadowland"],
     parents: ["ecosystem"],
     implies: ["ecosystem", "grass"],
+    matches: ["grass"],
   }),
   tag("jungle", {
     label: "Jungle",
     aliases: ["tropical forest"],
     parents: ["ecosystem"],
     implies: ["ecosystem", "tree", "plant-life"],
+    matches: ["tree"],
   }),
   tag("marine", {
     label: "Marine",
@@ -43,12 +45,14 @@ export const ecosystemTags = [
     aliases: ["arctic", "icy region", "frozen region"],
     parents: ["ecosystem"],
     implies: ["ecosystem", "ice", "snow"],
+    matches: ["ice", "snow"],
   }),
   tag("rainforest", {
     label: "Rainforest",
     aliases: ["tropical rainforest"],
     parents: ["ecosystem"],
     implies: ["ecosystem", "tree", "plant-life"],
+    matches: ["tree"],
   }),
   tag("reef", {
     label: "Reef",
@@ -61,28 +65,32 @@ export const ecosystemTags = [
     aliases: ["savannah", "tropical grassland"],
     parents: ["grassland"],
     implies: ["grassland", "ecosystem", "grass"],
+    matches: ["grass"],
   }),
   tag("swamp", {
     label: "Swamp",
-    aliases: ["boggy wetland"],
+    aliases: ["boggy wetland", "marsh", "bog", "bayou", "mire"],
     parents: ["wetland"],
     implies: ["wetland", "ecosystem", "water"],
+    matches: ["wetland"],
   }),
   tag("tundra", {
     label: "Tundra",
     aliases: ["treeless plain", "frozen plain"],
     parents: ["ecosystem"],
     implies: ["ecosystem", "snow"],
+    matches: ["snow"],
   }),
   tag("volcanic", {
     label: "Volcanic",
     aliases: ["lava field", "volcanic region"],
     parents: ["ecosystem"],
     implies: ["ecosystem", "volcano", "rock"],
+    matches: ["volcano", "rock"],
   }),
   tag("wetland", {
     label: "Wetland",
-    aliases: ["wetlands", "marshland"],
+    aliases: ["wetlands", "marshland", "marshes", "fen"],
     parents: ["ecosystem"],
     implies: ["ecosystem", "water"],
   }),

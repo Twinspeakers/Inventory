@@ -1,14 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import { libraryNodeTemplates, type LibraryNodeTemplate } from "../../libraryCatalog";
-import type { Asset, VirtualFolder } from "../../app/appTypes";
+import type { Asset, ScannedAsset, VirtualFolder } from "../../app/appTypes";
 import {
+  createDefaultTopLevelLibraryNodesForAssets,
+  getAssetPlacementConfidence,
   getAssetPlacementSuggestions,
   getAddFolderSuggestions,
+  getDirectAssetsForLibraryNodePath,
   getNewChildPlacementSuggestions,
+  getNewAssetPlacementSuggestions,
+  getPreferredNewAssetPlacementSuggestion,
   insertFolder,
   libraryNodeIncludesAsset,
   rankTemplateForParentSuggestion,
+  scoreAssetPlacementTerms,
   setFolderAssetAssignment,
   setFolderAssetExclusion,
 } from "./libraryTreeModel";
@@ -66,11 +72,31 @@ function createAsset(overrides: Partial<Asset> = {}): Asset {
   };
 }
 
+function createScannedAsset(overrides: Partial<ScannedAsset> = {}): ScannedAsset {
+  return {
+    id: 1,
+    name: "mysterious-file",
+    path: "C:\\test\\odd\\mysterious-file.bin",
+    file_type: "Archive",
+    extension: "bin",
+    size_bytes: 1024,
+    modified_unix: null,
+    kept_tags: [],
+    tags: [],
+    notes: "",
+    ...overrides,
+  };
+}
+
 describe("library tree add-folder suggestions", () => {
   it("treats the Library root as a catch-all for every asset", () => {
     const libraryFolder = createFolder("library");
 
     expect(libraryNodeIncludesAsset(libraryFolder, createAsset())).toBe(true);
+  });
+
+  it("does not seed a legacy Library wrapper for new inventories", () => {
+    expect(createDefaultTopLevelLibraryNodesForAssets([createScannedAsset()])).toEqual([]);
   });
 
   it("prefers descendants from a taxonomy parent over unrelated branches", () => {
@@ -133,6 +159,73 @@ describe("library tree add-folder suggestions", () => {
     expect(suggestions.some((suggestion) => suggestion.target === "new" && suggestion.path.join(" / ").includes("Bank Unequip"))).toBe(false);
   });
 
+  it("prefers birds over food branches for a plain chicken inside animals", () => {
+    const animalsFolder = createFolder("tag:animals");
+    const suggestions = getNewChildPlacementSuggestions(
+      animalsFolder,
+      createAsset({
+        name: "chicken",
+        path: "C:\\test\\animals\\chicken.png",
+        type: "Image",
+        extension: "png",
+        tags: ["chicken", "bird", "farm-animal", "animal"],
+      }),
+      [animalsFolder],
+    );
+
+    expect(suggestions.some((suggestion) => suggestion.path[suggestion.path.length - 1] === "Birds")).toBe(true);
+    expect(suggestions.some((suggestion) => suggestion.path.includes("Animal Products"))).toBe(false);
+    const birdsIndex = suggestions.findIndex((suggestion) => suggestion.path[suggestion.path.length - 1] === "Birds");
+    const mammalsIndex = suggestions.findIndex((suggestion) => suggestion.path[suggestion.path.length - 1] === "Mammals");
+    const fishIndex = suggestions.findIndex((suggestion) => suggestion.path[suggestion.path.length - 1] === "Fish");
+
+    expect(birdsIndex).toBe(0);
+    expect(mammalsIndex === -1 || birdsIndex < mammalsIndex).toBe(true);
+    expect(fishIndex === -1 || birdsIndex < fishIndex).toBe(true);
+  });
+
+  it("scores path evidence above generic tag-only placement clues", () => {
+    const asset = createAsset({
+      name: "asset-01",
+      path: "C:\\test\\aviary\\birds\\asset-01.png",
+      type: "Image",
+      extension: "png",
+      tags: ["animal"],
+    });
+
+    const pathScore = scoreAssetPlacementTerms(asset, [["bird", 28]], 1);
+    const genericTagScore = scoreAssetPlacementTerms(asset, [["animal", 28]], 1);
+
+    expect(pathScore?.score ?? 0).toBeGreaterThan(genericTagScore?.score ?? 0);
+  });
+
+  it("keeps generic tag-only matches below stronger same-branch suggestions", () => {
+    const animalsFolder = createFolder("tag:animals");
+    const suggestions = getNewChildPlacementSuggestions(
+      animalsFolder,
+      createAsset({
+        name: "asset-01",
+        path: "C:\\test\\animals\\birds\\asset-01.png",
+        type: "Image",
+        extension: "png",
+        tags: ["animal"],
+      }),
+      [animalsFolder],
+    );
+
+    const birdsIndex = suggestions.findIndex((suggestion) => suggestion.path[suggestion.path.length - 1] === "Birds");
+    const mammalsIndex = suggestions.findIndex((suggestion) => suggestion.path[suggestion.path.length - 1] === "Mammals");
+
+    expect(birdsIndex).toBeGreaterThan(-1);
+    expect(mammalsIndex === -1 || birdsIndex < mammalsIndex).toBe(true);
+  });
+
+  it("maps placement scores into readable confidence bands", () => {
+    expect(getAssetPlacementConfidence(92)).toBe("high");
+    expect(getAssetPlacementConfidence(56)).toBe("medium");
+    expect(getAssetPlacementConfidence(34)).toBe("low");
+  });
+
   it("does not suggest a root folder that already exists at the top level", () => {
     const rootFolders = [createFolder("tag:people")];
     const suggestions = getAddFolderSuggestions(libraryNodeTemplates, null, "", rootFolders);
@@ -147,6 +240,54 @@ describe("library tree add-folder suggestions", () => {
 
     expect(foodIndex).toBeGreaterThan(-1);
     expect(suggestions.some((suggestion) => suggestion.name === "Clothing")).toBe(false);
+  });
+
+  it("suggests new root nodes for assets when the library tree is still empty", () => {
+    const asset = createAsset({
+      name: "chicken",
+      path: "C:\\test\\animals\\chicken.png",
+      type: "Image",
+      extension: "png",
+      tags: ["chicken", "bird", "animal"],
+    });
+
+    const suggestions = getAssetPlacementSuggestions(asset, [], [asset]);
+
+    expect(suggestions.some((suggestion) => suggestion.target === "new" && suggestion.parentFolderId === null)).toBe(true);
+    expect(suggestions.some((suggestion) => suggestion.path[0] === "Animals")).toBe(true);
+  });
+
+  it("prefers the strongest new-node placement for manual creation from an asset", () => {
+    const asset = createAsset({
+      name: "chicken",
+      path: "C:\\test\\animals\\chicken.png",
+      type: "Image",
+      extension: "png",
+      tags: ["chicken", "bird", "animal"],
+    });
+
+    const suggestions = getAssetPlacementSuggestions(asset, [], [asset]);
+    const preferredSuggestion = getPreferredNewAssetPlacementSuggestion(suggestions);
+
+    expect(preferredSuggestion?.target).toBe("new");
+    expect(preferredSuggestion?.draft?.name).toBe("Animals");
+  });
+
+  it("keeps a small ordered set of new-node placements for asset-aware panel choices", () => {
+    const asset = createAsset({
+      name: "chicken",
+      path: "C:\\test\\animals\\chicken.png",
+      type: "Image",
+      extension: "png",
+      tags: ["chicken", "bird", "animal"],
+    });
+
+    const suggestions = getAssetPlacementSuggestions(asset, [], [asset]);
+    const newSuggestions = getNewAssetPlacementSuggestions(suggestions, 3);
+
+    expect(newSuggestions.length).toBeGreaterThan(0);
+    expect(newSuggestions.every((suggestion) => suggestion.target === "new" && suggestion.draft)).toBe(true);
+    expect(newSuggestions[0]?.draft?.name).toBe("Animals");
   });
 
   it("can insert a new child folder under a parent without mutating unrelated branches", () => {
@@ -179,6 +320,162 @@ describe("library tree add-folder suggestions", () => {
     const excludedFolders = setFolderAssetExclusion([folder], folder.id, asset.id, true);
 
     expect(libraryNodeIncludesAsset(excludedFolders[0], asset)).toBe(false);
+  });
+
+  it("lets exact custom node names inherit catalog tag implications", () => {
+    const forestFolder: VirtualFolder = {
+      id: "vf-custom-forest",
+      name: "Forest",
+      assetIds: [],
+      children: [],
+    };
+    const treeAsset = createAsset({
+      name: "oak-tree",
+      path: "C:\\test\\nature\\oak-tree.png",
+      type: "Image",
+      extension: "png",
+      tags: ["tree"],
+    });
+
+    expect(libraryNodeIncludesAsset(forestFolder, treeAsset)).toBe(true);
+  });
+
+  it("lets custom habitat nodes discover specific tags through safe matches", () => {
+    const forestFolder: VirtualFolder = {
+      id: "vf-custom-forest-specific",
+      name: "Forest",
+      assetIds: [],
+      children: [],
+    };
+    const pineAsset = createAsset({
+      name: "pine",
+      path: "C:\\test\\nature\\pine.png",
+      type: "Image",
+      extension: "png",
+      tags: ["pine-tree"],
+    });
+
+    expect(libraryNodeIncludesAsset(forestFolder, pineAsset)).toBe(true);
+  });
+
+  it("refreshes stale custom node content rules from current semantics", () => {
+    const forestFolder: VirtualFolder = {
+      id: "vf-custom-forest-stale",
+      name: "Forest",
+      assetIds: [],
+      children: [],
+      rules: [{ field: "name", operator: "contains", value: "forest" }],
+    };
+    const treeAsset = createAsset({
+      name: "oak-tree",
+      path: "C:\\test\\nature\\oak-tree.png",
+      type: "Image",
+      extension: "png",
+      tags: ["tree"],
+    });
+
+    expect(libraryNodeIncludesAsset(forestFolder, treeAsset)).toBe(true);
+  });
+
+  it("lets forest custom nodes recognize forest-biased tree species", () => {
+    const forestFolder: VirtualFolder = {
+      id: "vf-custom-forest-species",
+      name: "Forest",
+      assetIds: [],
+      children: [],
+    };
+    const pineAsset = createAsset({
+      name: "pine",
+      path: "C:\\test\\nature\\pine.png",
+      type: "Image",
+      extension: "png",
+      tags: ["pine-tree", "tree", "forest"],
+    });
+
+    expect(libraryNodeIncludesAsset(forestFolder, pineAsset)).toBe(true);
+  });
+
+  it("lets swamp custom nodes recognize mangrove trees", () => {
+    const swampFolder: VirtualFolder = {
+      id: "vf-custom-swamp",
+      name: "Swamp",
+      assetIds: [],
+      children: [],
+    };
+    const mangroveAsset = createAsset({
+      name: "mangrove",
+      path: "C:\\test\\nature\\mangrove.png",
+      type: "Image",
+      extension: "png",
+      tags: ["mangrove-tree", "tree", "swamp"],
+    });
+
+    expect(libraryNodeIncludesAsset(swampFolder, mangroveAsset)).toBe(true);
+  });
+
+  it("lets custom farm animal nodes discover specific livestock tags", () => {
+    const farmAnimalFolder: VirtualFolder = {
+      id: "vf-custom-farm-animal",
+      name: "Farm Animal",
+      assetIds: [],
+      children: [],
+    };
+    const chickenAsset = createAsset({
+      name: "chicken",
+      path: "C:\\test\\animals\\chicken.png",
+      type: "Image",
+      extension: "png",
+      tags: ["chicken"],
+    });
+
+    expect(libraryNodeIncludesAsset(farmAnimalFolder, chickenAsset)).toBe(true);
+  });
+
+  it("does not let broad implied environments leak through custom node matching", () => {
+    const islandFolder: VirtualFolder = {
+      id: "vf-custom-island",
+      name: "Island",
+      assetIds: [],
+      children: [],
+    };
+    const waterAsset = createAsset({
+      name: "water-bottle",
+      path: "C:\\test\\objects\\water-bottle.png",
+      type: "Image",
+      extension: "png",
+      tags: ["water"],
+    });
+
+    expect(libraryNodeIncludesAsset(islandFolder, waterAsset)).toBe(false);
+  });
+
+  it("assigns ambiguous assets to a single top-level sibling branch", () => {
+    const forestFolder: VirtualFolder = {
+      id: "vf-custom-forest-root",
+      name: "Forest",
+      assetIds: [],
+      children: [],
+    };
+    const jungleFolder: VirtualFolder = {
+      id: "vf-custom-jungle-root",
+      name: "Jungle",
+      assetIds: [],
+      children: [],
+    };
+    const treeAsset = createAsset({
+      id: 10,
+      name: "tree",
+      path: "C:\\test\\nature\\tree.png",
+      type: "Image",
+      extension: "png",
+      tags: ["tree"],
+    });
+
+    const forestAssets = getDirectAssetsForLibraryNodePath([forestFolder, jungleFolder], forestFolder.id, [treeAsset]);
+    const jungleAssets = getDirectAssetsForLibraryNodePath([forestFolder, jungleFolder], jungleFolder.id, [treeAsset]);
+
+    expect(forestAssets.map((asset) => asset.id)).toContain(treeAsset.id);
+    expect(jungleAssets.map((asset) => asset.id)).not.toContain(treeAsset.id);
   });
 
   it("keeps suggesting deeper children for assets already placed inside a nested node", () => {

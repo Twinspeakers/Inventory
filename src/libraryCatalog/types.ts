@@ -33,6 +33,7 @@ export type LibraryTagDefinition = {
   aliases?: string[];
   parents?: string[];
   implies?: string[];
+  matches?: string[];
   related?: string[];
   locksToFileTypes?: LibraryNodeFileType[];
 };

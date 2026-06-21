@@ -9,6 +9,7 @@ import {
   normalizeLibraryMatchText,
   normalizeLibraryNodeTagValues,
   normalizedTextIncludesTerm,
+  type LibraryNodeFileType,
   type LibraryTagDefinition,
   type LibraryTagSourceFile,
   type LibraryTagSourceFolder,
@@ -121,6 +122,7 @@ export function TagLibraryBrowser({
     () => filterTagLibrarySectionEntries(sectionEntries, normalizedQuery),
     [normalizedQuery, sectionEntries],
   );
+  const tagDefinitionsById = useMemo(() => new Map(tags.map((tagDefinition) => [tagDefinition.id, tagDefinition] as const)), [tags]);
   const fileEntriesById = useMemo(
     () => new Map(visibleSections.flatMap((section) => section.files.map((file) => [file.id, file] as const))),
     [visibleSections],
@@ -143,6 +145,10 @@ export function TagLibraryBrowser({
       ? fileEntriesById.get(defaultSelection.fileId) ?? null
       : null;
   const selectedTagDefinition = selectedFile?.tags.find((tagDefinition) => tagDefinition.id === selectedTagId) ?? null;
+  const selectedTagRelationshipGroups = useMemo(
+    () => getTagRelationshipGroups(selectedTagDefinition, tagDefinitionsById),
+    [selectedTagDefinition, tagDefinitionsById],
+  );
   const isCreateProjectGroupCardSelected = selectedFile?.id === "project-file:new-group";
   const isProjectSectionSelected = selectedSection?.id === "project-tags";
   const modalClassName = isNativeWindowMode
@@ -942,6 +948,68 @@ export function TagLibraryBrowser({
                           );
                         })}
                       </div>
+                      {selectedTagDefinition ? (
+                        <section className="mt-4 rounded-sm border border-line bg-canvas p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${getLibraryTagKindDotClass(selectedTagDefinition.kind)}`}
+                                  aria-hidden="true"
+                                />
+                                <h4 className="truncate text-sm font-semibold text-ink">{selectedTagDefinition.label}</h4>
+                              </div>
+                              <p className="mt-1 text-[11px] text-muted">{selectedTagDefinition.id}</p>
+                            </div>
+                            <span className="tag-small shrink-0">{formatLibraryTagKindLabel(selectedTagDefinition.kind)}</span>
+                          </div>
+                          <div className="mt-3 space-y-3">
+                            {selectedTagDefinition.description ? (
+                              <p className="text-xs leading-5 text-muted">{selectedTagDefinition.description}</p>
+                            ) : selectedFile.kind === "project" ? (
+                              <p className="text-xs leading-5 text-muted">Project tag available only within this Inventory.</p>
+                            ) : (
+                              <p className="text-xs leading-5 text-muted">No description yet. Relationships below still help place this tag in the broader library.</p>
+                            )}
+                            {selectedTagDefinition.aliases && selectedTagDefinition.aliases.length > 0 ? (
+                              <div>
+                                <div className="mb-1 text-[11px] font-semibold uppercase tracking-normal text-muted">Aliases</div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {selectedTagDefinition.aliases.map((alias) => (
+                                    <span className="tag tag-custom" key={alias}>
+                                      {alias}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
+                            {selectedTagDefinition.locksToFileTypes && selectedTagDefinition.locksToFileTypes.length > 0 ? (
+                              <div>
+                                <div className="mb-1 text-[11px] font-semibold uppercase tracking-normal text-muted">File Types</div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {selectedTagDefinition.locksToFileTypes.map((fileType) => (
+                                    <span className="tag-small" key={fileType}>
+                                      {formatLibraryFileTypeLabel(fileType)}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
+                            {selectedTagRelationshipGroups.map((group) => (
+                              <div key={group.label}>
+                                <div className="mb-1 text-[11px] font-semibold uppercase tracking-normal text-muted">{group.label}</div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {group.values.map((value) => (
+                                    <span className="tag" key={`${group.label}:${value.id}`} title={value.id}>
+                                      {value.label}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+                      ) : null}
                     </>
                   ) : null}
                 </div>
@@ -1217,4 +1285,47 @@ function getLibraryTagKindDotClass(kind: LibraryTagDefinition["kind"]) {
     default:
       return "bg-[rgb(var(--color-brand-blue))]";
   }
+}
+
+function formatLibraryTagKindLabel(kind: LibraryTagDefinition["kind"]) {
+  switch (kind) {
+    case "system":
+      return "System";
+    case "style":
+      return "Style";
+    case "workflow":
+      return "Workflow";
+    case "content":
+    default:
+      return "Content";
+  }
+}
+
+function formatLibraryFileTypeLabel(fileType: LibraryNodeFileType) {
+  return fileType;
+}
+
+function getTagRelationshipGroups(
+  tagDefinition: LibraryTagDefinition | null,
+  tagDefinitionsById: Map<string, LibraryTagDefinition>,
+) {
+  if (!tagDefinition) {
+    return [];
+  }
+
+  const groups = [
+    { label: "Parents", values: tagDefinition.parents ?? [] },
+    { label: "Implies", values: tagDefinition.implies ?? [] },
+    { label: "Related", values: tagDefinition.related ?? [] },
+  ];
+
+  return groups
+    .map((group) => ({
+      label: group.label,
+      values: group.values.map((value) => ({
+        id: value,
+        label: tagDefinitionsById.get(value)?.label ?? value,
+      })),
+    }))
+    .filter((group) => group.values.length > 0);
 }

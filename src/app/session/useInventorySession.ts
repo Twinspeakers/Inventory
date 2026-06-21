@@ -15,7 +15,7 @@ import type {
 import { toActiveInventory } from "../../features/inventoryProject";
 import {
   getBaseName,
-} from "../../libraryCatalog/tagInference";
+} from "../../libraryCatalog/tag-inference";
 import type {
   ModelInspectorResult,
   ModelTransform,

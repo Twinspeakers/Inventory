@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashSet, VecDeque},
     fs::{self, OpenOptions},
-    io::Write,
+    io::{Read, Write},
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -18,6 +18,8 @@ struct AssetRecord {
     extension: String,
     size_bytes: u64,
     modified_unix: Option<u64>,
+    #[serde(default)]
+    content_clues: Vec<String>,
     #[serde(default)]
     kept_tags: Vec<String>,
     #[serde(default)]
@@ -423,6 +425,8 @@ const NVD_MIN_FONT_SIZE_PT: f64 = 6.0;
 const NVD_MAX_FONT_SIZE_PT: f64 = 144.0;
 const NVD_LAYOUT_MODE_PAGELESS: &str = "pageless";
 const NVD_LAYOUT_MODE_A4: &str = "a4";
+const MAX_CONTENT_CLUE_BYTES: usize = 16 * 1024;
+const MAX_CONTENT_CLUES: usize = 48;
 
 #[tauri::command]
 fn scan_folder(path: String) -> Result<ScanResult, String> {
@@ -486,6 +490,7 @@ fn scan_folder(path: String) -> Result<ScanResult, String> {
             let Some(file_type) = supported_file_type(&extension) else {
                 continue;
             };
+            let content_clues = infer_content_clues(&entry_path, &extension);
 
             let name = entry_path
                 .file_name()
@@ -509,6 +514,7 @@ fn scan_folder(path: String) -> Result<ScanResult, String> {
                 extension,
                 size_bytes: metadata.len(),
                 modified_unix,
+                content_clues,
                 notes: String::new(),
                 kept_tags: Vec::new(),
                 tags: Vec::new(),
@@ -574,6 +580,7 @@ fn load_library_state(app: AppHandle) -> Result<LibraryState, String> {
                 extension: row.get(4)?,
                 size_bytes: row.get::<_, i64>(5)? as u64,
                 modified_unix: row.get::<_, Option<i64>>(6)?.map(|value| value as u64),
+                content_clues: Vec::new(),
                 notes: row.get(7)?,
                 tags: serde_json::from_str::<Vec<String>>(&row.get::<_, String>(8)?)
                     .unwrap_or_default(),
@@ -1041,6 +1048,115 @@ fn supported_file_type(extension: &str) -> Option<&'static str> {
     }
 }
 
+fn infer_content_clues(path: &Path, extension: &str) -> Vec<String> {
+    if !supports_content_clues(extension) {
+        return Vec::new();
+    }
+
+    let Ok(contents) = read_limited_text_file(path, MAX_CONTENT_CLUE_BYTES) else {
+        return Vec::new();
+    };
+
+    extract_content_clues_from_text(&contents)
+}
+
+fn supports_content_clues(extension: &str) -> bool {
+    matches!(
+        extension,
+        "txt" | "md" | "json" | "csv" | "yaml" | "yml" | "xml" | "license"
+    )
+}
+
+fn read_limited_text_file(path: &Path, max_bytes: usize) -> Result<String, String> {
+    let mut file = fs::File::open(path).map_err(|error| error.to_string())?;
+    let mut buffer = vec![0_u8; max_bytes];
+    let bytes_read = file.read(&mut buffer).map_err(|error| error.to_string())?;
+    buffer.truncate(bytes_read);
+
+    if buffer.contains(&0) {
+        return Err("File contains binary data.".to_string());
+    }
+
+    Ok(String::from_utf8_lossy(&buffer).into_owned())
+}
+
+fn extract_content_clues_from_text(text: &str) -> Vec<String> {
+    let mut clues = Vec::new();
+    let mut seen = HashSet::new();
+
+    for raw_term in text
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .filter(|term| !term.is_empty())
+    {
+        let term = raw_term.to_ascii_lowercase();
+
+        if should_ignore_content_clue_term(&term) || !seen.insert(term.clone()) {
+            continue;
+        }
+
+        clues.push(term);
+
+        if clues.len() >= MAX_CONTENT_CLUES {
+            break;
+        }
+    }
+
+    clues
+}
+
+fn should_ignore_content_clue_term(term: &str) -> bool {
+    if term.len() <= 2
+        || term.len() >= 32
+        || term.chars().all(|character| character.is_ascii_digit())
+        || term.starts_with('v')
+            && term[1..]
+                .chars()
+                .all(|character| character.is_ascii_digit())
+    {
+        return true;
+    }
+
+    matches!(
+        term,
+        "all"
+            | "and"
+            | "are"
+            | "asset"
+            | "assets"
+            | "but"
+            | "csv"
+            | "data"
+            | "doc"
+            | "docs"
+            | "draft"
+            | "file"
+            | "files"
+            | "final"
+            | "for"
+            | "from"
+            | "guide"
+            | "into"
+            | "json"
+            | "library"
+            | "markdown"
+            | "misc"
+            | "note"
+            | "notes"
+            | "null"
+            | "pdf"
+            | "temp"
+            | "text"
+            | "that"
+            | "the"
+            | "this"
+            | "txt"
+            | "with"
+            | "xml"
+            | "yaml"
+            | "yml"
+    )
+}
+
 fn stable_asset_id(path: &str) -> usize {
     let mut hash = 14_695_981_039_346_656_037u64;
 
@@ -1139,6 +1255,7 @@ fn asset_record_from_nvd(
         extension: "nvd".to_string(),
         size_bytes: metadata.len(),
         modified_unix,
+        content_clues: Vec::new(),
         kept_tags: Vec::new(),
         notes: String::new(),
         tags: Vec::new(),
@@ -2463,6 +2580,7 @@ fn open_nvv_document_from_parts(
         extension: "nvv".to_string(),
         size_bytes: metadata.len(),
         modified_unix: Some(document.updated_at_unix),
+        content_clues: Vec::new(),
         kept_tags: Vec::new(),
         notes: String::new(),
         tags: Vec::new(),
@@ -3265,6 +3383,7 @@ mod tests {
                 extension: "nvd".to_string(),
                 size_bytes: 0,
                 modified_unix: None,
+                content_clues: Vec::new(),
                 kept_tags: Vec::new(),
                 notes: String::new(),
                 tags: Vec::new(),
@@ -3349,5 +3468,27 @@ mod tests {
         assert_eq!(reopened.canvas_width, 512.0);
         assert_eq!(reopened.canvas_height, 512.0);
         fs::remove_dir_all(root).expect("test folder should be removed");
+    }
+
+    #[test]
+    fn extracts_meaningful_content_clues_from_text_documents() {
+        let clues = extract_content_clues_from_text(
+            "# Forge Notes\nThe blacksmith keeps an anvil, hammer, and tongs in the workshop.\n",
+        );
+
+        assert!(clues.contains(&"forge".to_string()));
+        assert!(clues.contains(&"blacksmith".to_string()));
+        assert!(clues.contains(&"anvil".to_string()));
+        assert!(clues.contains(&"hammer".to_string()));
+        assert!(clues.contains(&"workshop".to_string()));
+    }
+
+    #[test]
+    fn ignores_low_signal_content_clue_terms() {
+        let clues = extract_content_clues_from_text(
+            "notes final misc v2 data json text file asset 1234 workshop shoreline",
+        );
+
+        assert_eq!(clues, vec!["workshop".to_string(), "shoreline".to_string()]);
     }
 }

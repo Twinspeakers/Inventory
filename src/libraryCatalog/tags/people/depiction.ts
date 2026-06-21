@@ -1,0 +1,121 @@
+import { tag } from "../../tag";
+
+export const depictionTags = [
+  tag("angry-expression", {
+    label: "Angry",
+    aliases: ["anger", "furious", "mad expression"],
+    parents: ["expression"],
+    implies: ["expression", "character", "person"],
+  }),
+  tag("bust-framing", {
+    label: "Bust",
+    aliases: ["bust portrait", "head and shoulders"],
+    parents: ["character-framing"],
+    implies: ["character-framing", "portrait-framing", "character", "person"],
+  }),
+  tag("calm-expression", {
+    label: "Calm",
+    aliases: ["peaceful", "relaxed expression"],
+    parents: ["expression"],
+    implies: ["expression", "character", "person"],
+  }),
+  tag("character-framing", {
+    label: "Character Framing",
+    aliases: ["character crop", "figure framing"],
+    parents: ["character"],
+    implies: ["character", "person"],
+  }),
+  tag("expression", {
+    label: "Expression",
+    aliases: ["facial expression", "emotion pose"],
+    parents: ["character"],
+    implies: ["character", "person"],
+  }),
+  tag("fighting-pose", {
+    label: "Fighting Pose",
+    aliases: ["combat pose", "battle stance"],
+    parents: ["pose"],
+    implies: ["pose", "character", "person"],
+    related: ["martial-arts", "weapon"],
+  }),
+  tag("full-body-character", {
+    label: "Full Body",
+    aliases: ["full figure", "full body shot"],
+    parents: ["character-framing"],
+    implies: ["character-framing", "character", "person"],
+  }),
+  tag("group-shot", {
+    label: "Group Shot",
+    aliases: ["group portrait", "ensemble shot"],
+    parents: ["character"],
+    implies: ["character", "person"],
+  }),
+  tag("jumping-pose", {
+    label: "Jumping Pose",
+    aliases: ["jump pose", "leaping"],
+    parents: ["pose"],
+    implies: ["pose", "character", "person"],
+  }),
+  tag("portrait-framing", {
+    label: "Portrait",
+    aliases: ["portrait shot", "character portrait"],
+    parents: ["character-framing"],
+    implies: ["character-framing", "character", "person"],
+  }),
+  tag("pose", {
+    label: "Pose",
+    aliases: ["body pose", "stance"],
+    parents: ["character"],
+    implies: ["character", "person"],
+  }),
+  tag("running-pose", {
+    label: "Running Pose",
+    aliases: ["run pose", "sprinting pose"],
+    parents: ["pose"],
+    implies: ["pose", "character", "person"],
+    related: ["running"],
+  }),
+  tag("sad-expression", {
+    label: "Sad",
+    aliases: ["sorrowful", "upset expression"],
+    parents: ["expression"],
+    implies: ["expression", "character", "person"],
+  }),
+  tag("seated-pose", {
+    label: "Seated Pose",
+    aliases: ["sitting pose", "sitting"],
+    parents: ["pose"],
+    implies: ["pose", "character", "person"],
+  }),
+  tag("smiling-expression", {
+    label: "Smiling",
+    aliases: ["smile", "happy expression"],
+    parents: ["expression"],
+    implies: ["expression", "character", "person"],
+  }),
+  tag("solo-character", {
+    label: "Solo Character",
+    aliases: ["single character", "one character"],
+    parents: ["character"],
+    implies: ["character", "person"],
+  }),
+  tag("standing-pose", {
+    label: "Standing Pose",
+    aliases: ["standing", "upright pose"],
+    parents: ["pose"],
+    implies: ["pose", "character", "person"],
+  }),
+  tag("surprised-expression", {
+    label: "Surprised",
+    aliases: ["shock", "startled expression"],
+    parents: ["expression"],
+    implies: ["expression", "character", "person"],
+  }),
+  tag("three-quarter-view", {
+    label: "Three-Quarter View",
+    aliases: ["3/4 view", "three quarter angle"],
+    parents: ["character-framing"],
+    implies: ["character-framing", "character", "person"],
+    related: ["front-view", "side-view"],
+  }),
+];

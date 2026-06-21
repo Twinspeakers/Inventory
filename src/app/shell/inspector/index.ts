@@ -1,6 +1,5 @@
 export { Inspector } from "./Inspector";
-export type { InspectorAsset, InspectorAssetPlacementSuggestion, InspectorAssetType } from "./inspectorTypes";
-export { AssetPlacementSuggestionCard } from "./asset/AssetPlacementSuggestionCard";
+export type { InspectorAsset, InspectorAssetType } from "./inspectorTypes";
 export { AssetTagEditor } from "./asset/AssetTagEditor";
 export { NotesSection } from "./asset/NotesSection";
 export { ModelInspector } from "./model/ModelInspector";
