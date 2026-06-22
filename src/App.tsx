@@ -25,6 +25,7 @@ import {
   normalizePath,
   useAppDerivedState,
   useEditorCommandState,
+  useImageAnalysis,
   useModelInspection,
   useTreeExpansion,
   useWorkspaceLayout,
@@ -534,6 +535,12 @@ export function App() {
     setStatusMessage,
   });
   const { selectedModelKey, selectedModelInspectorResult, selectedModelTransformOverride } = getSelectedModelState(selectedAsset);
+  const { requestAssetReanalysis } = useImageAnalysis({
+    activeInventory,
+    scanResult,
+    setScanResult,
+    setStatusMessage,
+  });
   useEffect(() => {
     if (!selectedAsset) {
       return;
@@ -1061,6 +1068,7 @@ export function App() {
         onAssetKeptTagsChange: updateAssetKeptTags,
         onAssetNotesChange: updateAssetNotes,
         onAssetRecentTagRemove: removeRecentUserTag,
+        onAssetReanalyze: requestAssetReanalysis,
         onAssetTagsChange: updateAssetTags,
         onOpenTagBrowser: () => {
           if (isTauriRuntime()) {

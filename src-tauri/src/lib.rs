@@ -21,6 +21,18 @@ struct AssetRecord {
     #[serde(default)]
     content_clues: Vec<String>,
     #[serde(default)]
+    analysis_caption: String,
+    #[serde(default)]
+    analysis_error: String,
+    #[serde(default)]
+    analysis_file_signature: String,
+    #[serde(default = "default_asset_analysis_status")]
+    analysis_status: String,
+    #[serde(default)]
+    analysis_suggested_tags: Vec<String>,
+    #[serde(default)]
+    analysis_version: u32,
+    #[serde(default)]
     kept_tags: Vec<String>,
     #[serde(default)]
     notes: String,
@@ -515,6 +527,12 @@ fn scan_folder(path: String) -> Result<ScanResult, String> {
                 size_bytes: metadata.len(),
                 modified_unix,
                 content_clues,
+                analysis_caption: String::new(),
+                analysis_error: String::new(),
+                analysis_file_signature: String::new(),
+                analysis_status: default_asset_analysis_status(),
+                analysis_suggested_tags: Vec::new(),
+                analysis_version: 0,
                 notes: String::new(),
                 kept_tags: Vec::new(),
                 tags: Vec::new(),
@@ -581,6 +599,12 @@ fn load_library_state(app: AppHandle) -> Result<LibraryState, String> {
                 size_bytes: row.get::<_, i64>(5)? as u64,
                 modified_unix: row.get::<_, Option<i64>>(6)?.map(|value| value as u64),
                 content_clues: Vec::new(),
+                analysis_caption: String::new(),
+                analysis_error: String::new(),
+                analysis_file_signature: String::new(),
+                analysis_status: default_asset_analysis_status(),
+                analysis_suggested_tags: Vec::new(),
+                analysis_version: 0,
                 notes: row.get(7)?,
                 tags: serde_json::from_str::<Vec<String>>(&row.get::<_, String>(8)?)
                     .unwrap_or_default(),
@@ -1256,6 +1280,12 @@ fn asset_record_from_nvd(
         size_bytes: metadata.len(),
         modified_unix,
         content_clues: Vec::new(),
+        analysis_caption: String::new(),
+        analysis_error: String::new(),
+        analysis_file_signature: String::new(),
+        analysis_status: default_asset_analysis_status(),
+        analysis_suggested_tags: Vec::new(),
+        analysis_version: 0,
         kept_tags: Vec::new(),
         notes: String::new(),
         tags: Vec::new(),
@@ -2142,6 +2172,10 @@ fn default_export_conflict_strategy() -> String {
     "rename".to_string()
 }
 
+fn default_asset_analysis_status() -> String {
+    "idle".to_string()
+}
+
 fn default_active_view() -> String {
     "all".to_string()
 }
@@ -2581,6 +2615,12 @@ fn open_nvv_document_from_parts(
         size_bytes: metadata.len(),
         modified_unix: Some(document.updated_at_unix),
         content_clues: Vec::new(),
+        analysis_caption: String::new(),
+        analysis_error: String::new(),
+        analysis_file_signature: String::new(),
+        analysis_status: default_asset_analysis_status(),
+        analysis_suggested_tags: Vec::new(),
+        analysis_version: 0,
         kept_tags: Vec::new(),
         notes: String::new(),
         tags: Vec::new(),
@@ -3384,6 +3424,12 @@ mod tests {
                 size_bytes: 0,
                 modified_unix: None,
                 content_clues: Vec::new(),
+                analysis_caption: String::new(),
+                analysis_error: String::new(),
+                analysis_file_signature: String::new(),
+                analysis_status: default_asset_analysis_status(),
+                analysis_suggested_tags: Vec::new(),
+                analysis_version: 0,
                 kept_tags: Vec::new(),
                 notes: String::new(),
                 tags: Vec::new(),

@@ -38,6 +38,8 @@ export type NvdHistoryState = {
 
 export type UndoContext = "library" | "nvd" | "nvv";
 
+export type AssetAnalysisStatus = "idle" | "running" | "done" | "error";
+
 export type ScannedAsset = {
   id: number;
   name: string;
@@ -47,6 +49,12 @@ export type ScannedAsset = {
   size_bytes: number;
   modified_unix: number | null;
   content_clues?: string[];
+  analysis_caption?: string;
+  analysis_error?: string;
+  analysis_file_signature?: string;
+  analysis_status?: AssetAnalysisStatus;
+  analysis_suggested_tags?: string[];
+  analysis_version?: number;
   kept_tags?: string[];
   notes?: string;
   tags?: string[];
@@ -133,6 +141,11 @@ export type Asset = {
   sizeBytes: number;
   modified: string;
   modifiedUnix: number | null;
+  analysisCaption: string;
+  analysisError: string;
+  analysisStatus: AssetAnalysisStatus;
+  analysisSuggestedTags: string[];
+  analysisVersion: number;
   defaultKeptTags: string[];
   keptTags: string[];
   systemTags: string[];

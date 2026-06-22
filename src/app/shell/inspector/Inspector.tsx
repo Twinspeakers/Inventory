@@ -43,6 +43,7 @@ type InspectorProps = {
   onAssetKeptTagsChange: (assetId: number, tags: string[]) => void;
   onAssetNotesChange: (assetId: number, notes: string) => void;
   onAssetRecentTagRemove: (tag: string) => void;
+  onAssetReanalyze: (assetId: number) => void;
   onAssetTagsChange: (assetId: number, tags: string[]) => void;
   onOpenTagBrowser: () => void;
   onModelTransformChange: (transform: ModelTransform) => void;
@@ -79,6 +80,7 @@ export function Inspector({
   onAssetKeptTagsChange,
   onAssetNotesChange,
   onAssetRecentTagRemove,
+  onAssetReanalyze,
   onAssetTagsChange,
   onOpenTagBrowser,
   onModelTransformChange,
@@ -165,6 +167,7 @@ export function Inspector({
             onAddTag={(tag) => onAssetAddTag(selectedAsset.id, tag)}
             onKeptTagsChange={(tags) => onAssetKeptTagsChange(selectedAsset.id, tags)}
             onOpenTagBrowser={onOpenTagBrowser}
+            onReanalyze={() => onAssetReanalyze(selectedAsset.id)}
             onRemoveRecentTag={onAssetRecentTagRemove}
             onTagsChange={(tags) => onAssetTagsChange(selectedAsset.id, tags)}
             suggestions={tagSuggestions}

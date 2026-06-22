@@ -1,4 +1,4 @@
-import { Save, Search, X } from "lucide-react";
+import { LoaderCircle, RefreshCw, Save, Search, X } from "lucide-react";
 import { normalizeLibraryMatchText, normalizeLibraryNodeTagValues } from "../../../../libraryCatalog";
 import type { InspectorAsset } from "../inspectorTypes";
 
@@ -7,6 +7,7 @@ export function AssetTagEditor({
   onAddTag,
   onKeptTagsChange,
   onOpenTagBrowser,
+  onReanalyze,
   onRemoveRecentTag,
   onTagsChange,
   suggestions,
@@ -15,6 +16,7 @@ export function AssetTagEditor({
   onAddTag: (tag: string) => void;
   onKeptTagsChange: (tags: string[]) => void;
   onOpenTagBrowser: () => void;
+  onReanalyze: () => void;
   onRemoveRecentTag: (tag: string) => void;
   onTagsChange: (tags: string[]) => void;
   suggestions: string[];
@@ -33,6 +35,9 @@ export function AssetTagEditor({
     const normalizedTag = normalizeLibraryMatchText(tag);
     return !normalizedSystemTags.has(normalizedTag) && !normalizedUserTags.has(normalizedTag);
   });
+  const canReanalyze = asset.type === "Image" && ["avif", "jpeg", "jpg", "png", "webp"].includes(asset.extension.toLowerCase());
+  const isRunning = asset.analysisStatus === "running";
+  const statusLabel = getAnalysisStatusLabel(asset);
 
   function removeTag(tagToRemove: string) {
     const normalizedTag = normalizeLibraryMatchText(tagToRemove);
@@ -56,6 +61,26 @@ export function AssetTagEditor({
 
   return (
     <section className="mt-4">
+      {canReanalyze ? (
+        <div className="rounded-sm border border-line bg-surface px-3 py-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold uppercase tracking-normal text-muted">Image Analysis</div>
+              <div className="mt-1 text-sm font-medium text-ink">{statusLabel}</div>
+            </div>
+            <button className="dark-icon-button h-8 min-w-8 px-2" disabled={isRunning} title="Reanalyze image" type="button" onClick={onReanalyze}>
+              {isRunning ? <LoaderCircle size={13} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={13} aria-hidden="true" />}
+            </button>
+          </div>
+          {asset.analysisCaption ? <p className="mt-2 text-xs leading-relaxed text-muted">{asset.analysisCaption}</p> : null}
+          {asset.analysisError ? <p className="mt-2 text-xs leading-relaxed text-copper">{asset.analysisError}</p> : null}
+          {asset.analysisSuggestedTags.length > 0 ? (
+            <p className="mt-2 text-[11px] uppercase tracking-normal text-muted">
+              Suggested by AI: {asset.analysisSuggestedTags.join(", ")}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       <div className="mt-2">
         <div className="flex items-center gap-3">
           <div className="text-[11px] font-semibold uppercase tracking-normal text-muted">Tags</div>
@@ -123,4 +148,18 @@ export function AssetTagEditor({
       ) : null}
     </section>
   );
+}
+
+function getAnalysisStatusLabel(asset: InspectorAsset) {
+  switch (asset.analysisStatus) {
+    case "running":
+      return "Analyzing in background";
+    case "error":
+      return "Analysis failed";
+    case "done":
+      return asset.analysisSuggestedTags.length > 0 ? `${asset.analysisSuggestedTags.length} AI tag suggestions ready` : "Analysis finished with no tag suggestions";
+    case "idle":
+    default:
+      return asset.analysisVersion > 0 ? "Waiting to reanalyze" : "Waiting to analyze";
+  }
 }

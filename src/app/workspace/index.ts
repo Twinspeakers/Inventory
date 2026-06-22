@@ -17,6 +17,7 @@ export {
 } from "./workspaceState";
 export { useAppDerivedState } from "./useAppDerivedState";
 export { useEditorCommandState } from "./useEditorCommandState";
+export { useImageAnalysis } from "./useImageAnalysis";
 export { useModelInspection } from "./useModelInspection";
 export { useTreeExpansion } from "./useTreeExpansion";
 export { useWorkspaceLayout } from "./useWorkspaceLayout";

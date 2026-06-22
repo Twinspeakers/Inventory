@@ -37,6 +37,7 @@ export const sourceFileExtensions = new Set([
 ]);
 
 export const TAG_INFERENCE_VERSION = 18;
+export const IMAGE_ANALYSIS_VERSION = 1;
 
 export const automaticCatalogTagIgnoredTerms = new Set([
   ...libraryNodeIgnoredMatchTerms,
@@ -279,6 +280,11 @@ export function toAsset(asset: ScannedAsset, modelResult?: ModelInspectorResult)
     sizeBytes: asset.size_bytes,
     modified: formatModified(asset.modified_unix),
     modifiedUnix: asset.modified_unix,
+    analysisCaption: asset.analysis_caption ?? "",
+    analysisError: asset.analysis_error ?? "",
+    analysisStatus: asset.analysis_status ?? "idle",
+    analysisSuggestedTags: normalizeLibraryNodeTagValues(asset.analysis_suggested_tags ?? []),
+    analysisVersion: asset.analysis_version ?? 0,
     defaultKeptTags,
     keptTags,
     systemTags,
@@ -311,6 +317,10 @@ function getAutomaticAssetTags(asset: ScannedAsset, modelResult?: ModelInspector
     addKnownLibraryTag(tags, tag);
   }
 
+  for (const tag of asset.analysis_suggested_tags ?? []) {
+    addKnownLibraryTag(tags, tag);
+  }
+
   for (const tag of getAutomaticModelInspectorTags(modelResult)) {
     addKnownLibraryTag(tags, tag);
   }
@@ -334,10 +344,35 @@ function getScannedAssetTagSearchText(asset: ScannedAsset) {
   const contentClueSearchText = normalizeLibraryMatchText((asset.content_clues ?? []).join(" "));
   return normalizeLibraryMatchText([
     asset.name,
+    asset.analysis_caption ?? "",
     contentClueSearchText,
     asset.extension,
     asset.file_type,
   ].join(" "));
+}
+
+export function inferImageAnalysisTagsFromCaption(caption: string) {
+  const trimmedCaption = caption.trim();
+
+  if (!trimmedCaption) {
+    return [];
+  }
+
+  return getAutomaticLibraryRegistryTags({
+    id: 0,
+    name: trimmedCaption,
+    path: trimmedCaption,
+    file_type: "Image",
+    extension: "png",
+    size_bytes: 0,
+    modified_unix: null,
+    content_clues: [trimmedCaption],
+    analysis_caption: trimmedCaption,
+    analysis_suggested_tags: [],
+    kept_tags: [],
+    notes: "",
+    tags: [],
+  }).slice(0, 8);
 }
 
 function getAutomaticLibraryRegistryTags(asset: ScannedAsset) {
