@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Box, Lightbulb } from "lucide-react";
 import { getAssetResourcePath, readPreviewBytes, toArrayBuffer } from "./previewIo";
 
@@ -47,6 +47,8 @@ type CachedThreeObject = {
   object?: import("three").Object3D;
   promise?: Promise<import("three").Object3D>;
 };
+
+type ThreePosterVariant = "stage" | "card" | "mini";
 
 const viewportCompassAxes: Array<{ key: ModelAxis; label: string }> = [
   { key: "x", label: "X" },
@@ -704,6 +706,71 @@ export function InspectorMiniThreePreview({ asset }: { asset: ThreeSceneAsset })
   );
 }
 
+export function ThreePosterPreview({
+  asset,
+  className = "",
+  variant = "card",
+}: {
+  asset: ThreeSceneAsset;
+  className?: string;
+  variant?: ThreePosterVariant;
+}) {
+  const extensionLabel = asset.extension.toUpperCase() || "3D";
+  const config = getThreePosterVariantConfig(variant);
+  const frameClassName = ["relative overflow-hidden border border-line bg-preview", config.frameClassName, className]
+    .filter(Boolean)
+    .join(" ");
+  const badgeStyle = {
+    fontSize: config.badgeFontSize,
+    letterSpacing: config.badgeLetterSpacing,
+    padding: config.badgePadding,
+  } satisfies CSSProperties;
+  const statusStyle = {
+    fontSize: config.statusFontSize,
+    padding: config.statusPadding,
+  } satisfies CSSProperties;
+
+  return (
+    <div className={frameClassName}>
+      <div
+        className="absolute inset-0 opacity-95"
+        style={{
+          background:
+            "radial-gradient(circle at 50% 24%, rgba(120, 190, 255, 0.26), transparent 30%), linear-gradient(180deg, rgba(36, 51, 69, 0.96), rgba(18, 24, 32, 0.98))",
+        }}
+      />
+      <div
+        className="absolute inset-x-0 bottom-0 h-[46%] opacity-40"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,0.035)), repeating-linear-gradient(90deg, rgba(140, 190, 255, 0.18) 0 1px, transparent 1px 22px), repeating-linear-gradient(0deg, rgba(140, 190, 255, 0.16) 0 1px, transparent 1px 22px)",
+        }}
+      />
+      <div className={`absolute inset-x-[12%] ${config.iconInsetClassName} flex items-center justify-center`}>
+        <div
+          className={`relative flex items-center justify-center rounded-full border border-sky-400/20 bg-white/5 text-sky-100 ${config.iconShellSizeClassName}`}
+          style={{ backdropFilter: "blur(1px)" }}
+        >
+          <div className={`absolute rounded-full border border-white/8 ${config.innerRingInsetClassName}`} />
+          <Box size={config.iconSize} strokeWidth={1.4} aria-hidden="true" />
+        </div>
+      </div>
+      <div
+        className={`absolute left-3 top-3 rounded-sm border border-white/10 bg-black/20 font-semibold text-white/70 ${config.showBadges ? "" : "hidden"}`}
+        style={badgeStyle}
+      >
+        {extensionLabel}
+      </div>
+      <div
+        className={`absolute bottom-3 left-3 rounded-sm border border-white/10 bg-black/20 font-medium text-white/60 ${config.showStatus ? "" : "hidden"}`}
+        style={statusStyle}
+      >
+        3D preview
+      </div>
+    </div>
+  );
+}
+
 export function getLiveModelDimensions(info: ModelInfo, transform: ModelTransform): ModelVector3 {
   return modelAxes.reduce<ModelVector3>(
     (dimensions, axis) => ({
@@ -1257,4 +1324,55 @@ function isHexColor(value: string) {
 
 function isLayoutResizeInProgress() {
   return document.body.classList.contains("is-resizing-pane") || document.body.classList.contains("is-resizing-row");
+}
+
+function getThreePosterVariantConfig(variant: ThreePosterVariant) {
+  switch (variant) {
+    case "stage":
+      return {
+        badgeFontSize: "0.72rem",
+        badgeLetterSpacing: "0.22em",
+        badgePadding: "0.45rem 0.72rem",
+        frameClassName: "flex h-full min-h-full items-center justify-center rounded-none",
+        iconInsetClassName: "bottom-10 top-10",
+        iconShellSizeClassName: "h-36 w-36",
+        iconSize: 64,
+        innerRingInsetClassName: "inset-5",
+        showBadges: true,
+        showStatus: true,
+        statusFontSize: "0.82rem",
+        statusPadding: "0.45rem 0.72rem",
+      };
+    case "mini":
+      return {
+        badgeFontSize: "0.5rem",
+        badgeLetterSpacing: "0.14em",
+        badgePadding: "0.18rem 0.4rem",
+        frameClassName: "h-full w-full rounded-sm",
+        iconInsetClassName: "bottom-2 top-2",
+        iconShellSizeClassName: "h-14 w-14",
+        iconSize: 24,
+        innerRingInsetClassName: "inset-2",
+        showBadges: false,
+        showStatus: false,
+        statusFontSize: "0.6rem",
+        statusPadding: "0.18rem 0.4rem",
+      };
+    case "card":
+    default:
+      return {
+        badgeFontSize: "0.62rem",
+        badgeLetterSpacing: "0.18em",
+        badgePadding: "0.28rem 0.55rem",
+        frameClassName: "rounded-sm",
+        iconInsetClassName: "bottom-5 top-5",
+        iconShellSizeClassName: "h-24 w-24",
+        iconSize: 42,
+        innerRingInsetClassName: "inset-3",
+        showBadges: true,
+        showStatus: true,
+        statusFontSize: "0.64rem",
+        statusPadding: "0.28rem 0.55rem",
+      };
+  }
 }

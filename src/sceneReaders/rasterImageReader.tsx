@@ -136,7 +136,7 @@ export function RasterImageThumbnail({ asset, fallback }: { asset: RasterImageAs
       {imageUrl ? (
         <img
           alt=""
-          className="max-h-[84%] max-w-[84%] object-contain"
+          className="h-full w-full object-cover"
           loading="lazy"
           src={imageUrl}
           onError={() => setDecodeFailed(true)}

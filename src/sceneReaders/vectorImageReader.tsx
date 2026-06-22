@@ -136,7 +136,7 @@ export function VectorImageThumbnail({ asset, fallback }: { asset: VectorImageAs
       {imageUrl ? (
         <img
           alt=""
-          className="h-[84%] w-[84%] object-contain"
+          className="h-full w-full object-cover"
           loading="lazy"
           src={imageUrl}
           onError={() => setDecodeFailed(true)}

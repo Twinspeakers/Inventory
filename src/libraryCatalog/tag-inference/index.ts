@@ -243,38 +243,6 @@ const audioNonSoundEffectTerms = [
 
 const likelySoundEffectAudioExtensions = new Set(["aif", "aiff", "flac", "ogg", "wav"]);
 const libraryTagDefinitionsByKey = createLibraryTagDefinitionLookup(libraryTagDefinitions);
-const lowSignalPathTerms = new Set([
-  "asset",
-  "assets",
-  "content",
-  "contents",
-  "export",
-  "exports",
-  "file",
-  "files",
-  "final",
-  "library",
-  "misc",
-  "mixed",
-  "new",
-  "pack",
-  "packs",
-  "set",
-  "sets",
-  "source",
-  "sources",
-  "temp",
-  "test",
-  "testing",
-  "texture",
-  "textures",
-  "untitled",
-  "v1",
-  "v2",
-  "v3",
-  "wip",
-]);
-
 const modelPolyTagThresholds = {
   low: 5_000,
   high: 50_000,
@@ -285,8 +253,6 @@ type AssetInferenceContext = {
   combinedText: string;
   extension: string;
   fileType: AssetType;
-  pathSearchText: string;
-  parentSearchText: string;
   searchText: string;
 };
 
@@ -365,11 +331,9 @@ function getDefaultKeptAssetTags(asset: ScannedAsset) {
 }
 
 function getScannedAssetTagSearchText(asset: ScannedAsset) {
-  const pathSearchText = getAssetPathSearchText(asset.path);
   const contentClueSearchText = normalizeLibraryMatchText((asset.content_clues ?? []).join(" "));
   return normalizeLibraryMatchText([
     asset.name,
-    pathSearchText,
     contentClueSearchText,
     asset.extension,
     asset.file_type,
@@ -395,15 +359,11 @@ function getAutomaticLibraryRegistryTags(asset: ScannedAsset) {
 
 function createAssetInferenceContext(asset: ScannedAsset): AssetInferenceContext {
   const searchText = getScannedAssetTagSearchText(asset);
-  const parentSearchText = normalizeLibraryMatchText(getAssetImmediateParentName(asset.path));
-  const pathSearchText = getAssetPathSearchText(asset.path);
 
   return {
-    combinedText: normalizeLibraryMatchText([searchText, pathSearchText, parentSearchText].join(" ")),
+    combinedText: searchText,
     extension: asset.extension.toLowerCase(),
     fileType: asset.file_type,
-    pathSearchText,
-    parentSearchText,
     searchText,
   };
 }
@@ -502,9 +462,7 @@ function pickWinningSenseId(rule: AmbiguousSenseRule, matches: CandidateTagMatch
     }
 
     score += countEvidenceMatches(context.combinedText, sense.positiveTerms) * 8;
-    score += countEvidenceMatches(context.pathSearchText, sense.positiveTerms) * 4;
     score -= countEvidenceMatches(context.combinedText, sense.negativeTerms ?? []) * 8;
-    score -= countEvidenceMatches(context.pathSearchText, sense.negativeTerms ?? []) * 4;
 
     if (score > bestScore) {
       bestScore = score;
@@ -712,68 +670,6 @@ function getAutomaticModelInspectorTags(modelResult?: ModelInspectorResult) {
 function getAssetImmediateParentName(path: string) {
   const directory = getAssetDirectoryPath(path);
   return directory ? getBaseName(directory) : "";
-}
-
-function getAssetPathSearchText(path: string) {
-  const segments = getAssetDirectoryPathSegments(path);
-  const weightedSegments: string[] = [];
-
-  for (const [index, segment] of segments.entries()) {
-    const distanceFromLeaf = segments.length - index - 1;
-    const repeatCount = distanceFromLeaf === 0 ? 3 : distanceFromLeaf === 1 ? 2 : 1;
-
-    for (const term of normalizePathSegmentTerms(segment)) {
-      for (let count = 0; count < repeatCount; count += 1) {
-        weightedSegments.push(term);
-      }
-    }
-  }
-
-  return normalizeLibraryMatchText(weightedSegments.join(" "));
-}
-
-function getAssetDirectoryPathSegments(path: string) {
-  const directoryPath = getAssetDirectoryPath(path);
-
-  if (!directoryPath) {
-    return [];
-  }
-
-  return directoryPath
-    .split(/[\\/]+/)
-    .map((segment) => segment.trim())
-    .filter(Boolean)
-    .slice(-4);
-}
-
-function normalizePathSegmentTerms(segment: string) {
-  const normalizedSegment = normalizeLibraryMatchText(segment);
-
-  if (!normalizedSegment) {
-    return [];
-  }
-
-  const terms = normalizedSegment
-    .split(" ")
-    .map((term) => canonicalizeLibraryTag(term))
-    .filter((term) => Boolean(term) && !shouldIgnorePathTerm(term));
-
-  if (terms.length === 0) {
-    return [];
-  }
-
-  return [terms.join(" "), ...terms];
-}
-
-function shouldIgnorePathTerm(term: string) {
-  return (
-    !term ||
-    term.length <= 2 ||
-    /^\d+$/.test(term) ||
-    /^v\d+$/.test(term) ||
-    lowSignalPathTerms.has(term) ||
-    isIgnoredLibraryMatchTerm(term)
-  );
 }
 
 function getAssetDirectoryPath(path: string) {

@@ -279,53 +279,20 @@ describe("tag inference", () => {
     expect(controllerAsset.systemTags).toContain("electronic device");
   });
 
-  it("recognizes ecosystem aliases from path context like bayou and shoreline", () => {
-    const swampAsset = toAsset(createScannedAsset({
-      name: "asset-01",
-      path: "C:/library/biomes/bayou/asset-01.png",
-      file_type: "Image",
-      extension: "png",
-    }));
-    const coastalAsset = toAsset(createScannedAsset({
-      name: "asset-02",
-      path: "C:/library/regions/shoreline/asset-02.png",
-      file_type: "Image",
-      extension: "png",
-    }));
-
-    expect(swampAsset.systemTags).toContain("swamp");
-    expect(swampAsset.systemTags).toContain("wetland");
-    expect(coastalAsset.systemTags).toContain("coastal");
-  });
-
-  it("recognizes building and room aliases like forge and stockroom", () => {
-    const forgeAsset = toAsset(createScannedAsset({
-      name: "asset-01",
-      path: "C:/library/buildings/forge/asset-01.glb",
-      file_type: "3D",
-      extension: "glb",
-    }));
-    const stockroomAsset = toAsset(createScannedAsset({
-      name: "asset-02",
-      path: "C:/library/interiors/stockroom/asset-02.png",
-      file_type: "Image",
-      extension: "png",
-    }));
-
-    expect(forgeAsset.systemTags).toContain("workshop");
-    expect(stockroomAsset.systemTags).toContain("storage room");
-  });
-
-  it("uses nearby path segments to rescue vague filenames", () => {
+  it("does not infer semantic tags from source folder names", () => {
     const asset = toAsset(createScannedAsset({
-      name: "asset-01",
-      path: "C:/library/animals/birds/asset-01.png",
+      name: "icon",
+      path: "C:/Users/me/Documents/Radiant City/ui/icon.svg",
       file_type: "Image",
-      extension: "png",
+      extension: "svg",
     }));
 
-    expect(asset.systemTags).toContain("bird");
-    expect(asset.systemTags).toContain("animal");
+    expect(asset.systemTags).toContain("image");
+    expect(asset.systemTags).toContain("icon");
+    expect(asset.systemTags).not.toContain("city");
+    expect(asset.systemTags).not.toContain("location");
+    expect(asset.systemTags).not.toContain("paper");
+    expect(asset.systemTags).not.toContain("paper-document");
   });
 
   it("uses text document content clues to rescue vague internal notes", () => {
@@ -401,16 +368,6 @@ describe("tag inference", () => {
     expect(asset.systemTags).toContain("character");
   });
 
-  it("ignores low-signal path folders when inferring tags", () => {
-    const asset = toAsset(createScannedAsset({
-      name: "asset-01",
-      path: "C:/library/assets/final/misc/asset-01.png",
-      file_type: "Image",
-      extension: "png",
-    }));
-
-    expect(asset.systemTags).toEqual(["image"]);
-  });
 });
 
 describe("asset tag suggestions", () => {
@@ -472,5 +429,21 @@ describe("asset tag suggestions", () => {
     const suggestions = getAssetTagSuggestions(asset, [asset, sibling], []);
 
     expect(suggestions).not.toContain("city-abu-dhabi");
+  });
+
+  it("does not suggest semantic tags from source folder names alone", () => {
+    const asset = toAsset(createScannedAsset({
+      name: "icon",
+      path: "C:/Users/me/Documents/Radiant City/ui/icon.svg",
+      file_type: "Image",
+      extension: "svg",
+    }));
+
+    const suggestions = getAssetTagSuggestions(asset, [asset], []);
+
+    expect(suggestions).not.toContain("city");
+    expect(suggestions).not.toContain("location");
+    expect(suggestions).not.toContain("paper");
+    expect(suggestions).not.toContain("paper-document");
   });
 });

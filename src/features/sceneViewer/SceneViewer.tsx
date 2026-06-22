@@ -32,7 +32,6 @@ import {
   NvdEditor,
   NvdFontSelector,
   NvdFontSizeSelector,
-  NvdThumbnail,
   NvdZoomSelector,
   DEFAULT_NVD_ZOOM_PERCENT,
   stepNvdZoomPercent,
@@ -42,17 +41,18 @@ import {
 } from "../nvdEditor";
 import { DEFAULT_NVV_ZOOM_PERCENT, NvvEditor, NvvZoomSelector, stepNvvZoomPercent } from "../nvvEditor";
 import { NativeHub, type NativeHubAsset, type NativeHubView } from "../nativeHubs";
-import { AudioThumbnail, isWaveAudioAsset } from "../../sceneReaders/audioReader";
-import { MarkdownPreview, MarkdownThumbnail, isMarkdownExtension } from "../../sceneReaders/markdownDocumentReader";
-import { PdfPreview, PdfThumbnail } from "../../sceneReaders/pdfDocumentReader";
-import { RasterImagePreview, RasterImageThumbnail } from "../../sceneReaders/rasterImageReader";
+import { AudioThumbnail } from "../../sceneReaders/audioReader";
+import { MarkdownPreview, isMarkdownExtension } from "../../sceneReaders/markdownDocumentReader";
+import { PdfPreview } from "../../sceneReaders/pdfDocumentReader";
+import { RasterImagePreview } from "../../sceneReaders/rasterImageReader";
 import {
   ThreePreview,
   ThreeThumbnail,
   type ModelInspectorResult,
   type ModelTransform,
 } from "../../sceneReaders/threeModelReader";
-import { VectorImagePreview, VectorImageThumbnail, isVectorImageExtension } from "../../sceneReaders/vectorImageReader";
+import { VectorImagePreview, isVectorImageExtension } from "../../sceneReaders/vectorImageReader";
+import { getAssetFileUrl } from "../../sceneReaders/previewIo";
 
 type SceneAssetType = "Image" | "3D" | "Audio" | "Document" | "Archive";
 
@@ -717,41 +717,75 @@ export function AssetThumbnail({
   asset: SceneViewerAsset;
   nvdDocument?: OpenedNvdDocument | null;
 }) {
-  if (isWaveAudioAsset(asset)) {
+  if (asset.type === "Audio") {
     return <AudioThumbnail asset={asset} />;
   }
 
-  if (asset.type === "Image" && isVectorImageExtension(asset.extension)) {
-    return <VectorImageThumbnail asset={asset} fallback={<FallbackThumbnail asset={asset} />} />;
-  }
-
   if (asset.type === "Image") {
-    return <RasterImageThumbnail asset={asset} fallback={<FallbackThumbnail asset={asset} />} />;
+    return <ImageThumbnail asset={asset} />;
   }
 
-  if (asset.type === "Document" && asset.extension === "pdf") {
-    return <PdfThumbnail asset={asset} fallback={<FallbackThumbnail asset={asset} />} />;
-  }
-
-  if (asset.type === "Document" && isMarkdownExtension(asset.extension)) {
-    return <MarkdownThumbnail asset={asset} fallback={<FallbackThumbnail asset={asset} />} />;
-  }
-
-  if (asset.type === "Document" && asset.extension.toLowerCase() === "nvd") {
-    return (
-      <NvdThumbnail
-        asset={asset}
-        fallback={<FallbackThumbnail asset={asset} />}
-        openedDocument={nvdDocument}
-      />
-    );
-  }
-
-  if (asset.type === "3D" && ["glb", "gltf", "obj", "stl"].includes(asset.extension)) {
+  if (asset.type === "3D" && ["glb", "gltf", "obj", "stl"].includes(asset.extension.toLowerCase())) {
     return <ThreeThumbnail asset={asset} />;
   }
 
   return <FallbackThumbnail asset={asset} />;
+}
+
+function ImageThumbnail({ asset }: { asset: SceneViewerAsset }) {
+  const [failed, setFailed] = useState(false);
+  const [fitMode, setFitMode] = useState<"contain" | "cover">(() => getThumbnailFitMode(asset.extension));
+
+  useEffect(() => {
+    setFailed(false);
+    setFitMode(getThumbnailFitMode(asset.extension));
+  }, [asset.extension, asset.path]);
+
+  if (failed) {
+    return <FallbackThumbnail asset={asset} />;
+  }
+
+  return (
+    <div
+      className={`relative aspect-[4/3] overflow-hidden rounded-sm border border-line ${
+        fitMode === "contain" ? "transparent-checkerboard bg-surface" : "bg-preview"
+      }`}
+    >
+      <img
+        alt=""
+        className={fitMode === "contain" ? "h-full w-full p-3 object-contain" : "h-full w-full object-cover"}
+        decoding="async"
+        loading="lazy"
+        src={getAssetFileUrl(asset.path)}
+        onLoad={(event) => {
+          setFitMode(getThumbnailFitMode(asset.extension, event.currentTarget.naturalWidth, event.currentTarget.naturalHeight));
+        }}
+        onError={() => setFailed(true)}
+      />
+      <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/10" />
+    </div>
+  );
+}
+
+function getThumbnailFitMode(extension: string, width?: number, height?: number) {
+  const normalizedExtension = extension.toLowerCase();
+
+  if (normalizedExtension === "svg") {
+    return "contain";
+  }
+
+  if (!width || !height) {
+    return "cover";
+  }
+
+  const maxDimension = Math.max(width, height);
+  const pixelArea = width * height;
+
+  if (maxDimension <= 320 || pixelArea <= 160_000) {
+    return "contain";
+  }
+
+  return "cover";
 }
 
 function FallbackThumbnail({ asset }: { asset: SceneViewerAsset }) {

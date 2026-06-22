@@ -96,7 +96,50 @@ describe("library tree add-folder suggestions", () => {
   });
 
   it("does not seed a legacy Library wrapper for new inventories", () => {
-    expect(createDefaultTopLevelLibraryNodesForAssets([createScannedAsset()])).toEqual([]);
+    const folders = createDefaultTopLevelLibraryNodesForAssets([
+      createScannedAsset({
+        name: "chicken",
+        path: "C:\\test\\animals\\chicken.png",
+        file_type: "Image",
+        extension: "png",
+        tags: ["chicken", "bird", "animal"],
+      }),
+    ]);
+
+    expect(folders).toHaveLength(1);
+    expect(folders[0]?.name).toBe("Animals");
+    expect(folders[0]?.children.map((child) => child.name)).toContain("Birds");
+  });
+
+  it("groups multiple starter assets into stable top-level branches", () => {
+    const folders = createDefaultTopLevelLibraryNodesForAssets([
+      createScannedAsset({
+        id: 1,
+        name: "sparrow",
+        path: "C:\\test\\animals\\birds\\sparrow.png",
+        file_type: "Image",
+        extension: "png",
+        tags: ["sparrow", "bird", "animal"],
+      }),
+      createScannedAsset({
+        id: 2,
+        name: "oak-tree",
+        path: "C:\\test\\nature\\trees\\oak-tree.png",
+        file_type: "Image",
+        extension: "png",
+        tags: ["oak", "tree", "forest", "nature"],
+      }),
+      createScannedAsset({
+        id: 3,
+        name: "rose",
+        path: "C:\\test\\nature\\flowers\\rose.png",
+        file_type: "Image",
+        extension: "png",
+        tags: ["rose", "flower", "plant", "nature"],
+      }),
+    ]);
+
+    expect(folders.map((folder) => folder.name)).toEqual(expect.arrayContaining(["Animals", "Natural World"]));
   });
 
   it("prefers descendants from a taxonomy parent over unrelated branches", () => {
@@ -117,6 +160,13 @@ describe("library tree add-folder suggestions", () => {
     expect(rankTemplateForParentSuggestion(treesTemplate, parentTemplate, "")).toBeLessThan(
       rankTemplateForParentSuggestion(animalsTemplate, parentTemplate, ""),
     );
+  });
+
+  it("does not rank an ancestor template as a child suggestion within its own branch", () => {
+    const naturalMaterialsTemplate = getTemplate("tag:materials/natural-materials");
+    const materialsTemplate = getTemplate("tag:materials");
+
+    expect(rankTemplateForParentSuggestion(materialsTemplate, naturalMaterialsTemplate, "")).toBeGreaterThanOrEqual(600);
   });
 
   it("keeps earlier top-level taxonomy groups ahead of later ones in the add-folder panel", () => {
@@ -218,6 +268,20 @@ describe("library tree add-folder suggestions", () => {
 
     expect(birdsIndex).toBeGreaterThan(-1);
     expect(mammalsIndex === -1 || birdsIndex < mammalsIndex).toBe(true);
+  });
+
+  it("does not let document tags satisfy the Materials umbrella by substring alone", () => {
+    const materialsFolder = createFolder("tag:materials");
+    const asset = createAsset({
+      name: "icon",
+      path: "C:\\test\\ui\\icon.svg",
+      type: "Image",
+      extension: "svg",
+      systemTags: ["image", "paper-document"],
+      tags: ["image", "paper-document"],
+    });
+
+    expect(libraryNodeIncludesAsset(materialsFolder, asset)).toBe(false);
   });
 
   it("maps placement scores into readable confidence bands", () => {
@@ -356,6 +420,25 @@ describe("library tree add-folder suggestions", () => {
     });
 
     expect(libraryNodeIncludesAsset(forestFolder, pineAsset)).toBe(true);
+  });
+
+  it("lets custom node names match source folder names without turning them into tags", () => {
+    const radiantCityFolder: VirtualFolder = {
+      id: "vf-custom-radiant-city",
+      name: "Radiant City",
+      assetIds: [],
+      children: [],
+    };
+    const iconAsset = createAsset({
+      name: "icon",
+      path: "C:\\Users\\brigh\\Documents\\Radiant City\\ui\\icon.svg",
+      type: "Image",
+      extension: "svg",
+      tags: ["image", "icon"],
+      systemTags: ["image", "icon"],
+    });
+
+    expect(libraryNodeIncludesAsset(radiantCityFolder, iconAsset)).toBe(true);
   });
 
   it("refreshes stale custom node content rules from current semantics", () => {

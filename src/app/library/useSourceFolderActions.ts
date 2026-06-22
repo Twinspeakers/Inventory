@@ -19,6 +19,7 @@ import { normalizePath } from "../workspace/workspaceState";
 
 export function useSourceFolderActions({
   activeInventory,
+  autoSeedLibraryStructureEnabled,
   inventoryDocuments,
   scanResult,
   selectedId,
@@ -35,6 +36,7 @@ export function useSourceFolderActions({
   setVirtualFolders,
 }: {
   activeInventory: ActiveInventory | null;
+  autoSeedLibraryStructureEnabled: boolean;
   inventoryDocuments: InventoryDocumentsState;
   scanResult: ScanResult | null;
   selectedId: number | null;
@@ -286,7 +288,7 @@ export function useSourceFolderActions({
       }));
       const nextSourceFolders = [...sourceFolders, ...newSourceFolders];
       const defaultLibraryNodes =
-        sourceFolders.length === 0 && virtualFolders.length === 0
+        autoSeedLibraryStructureEnabled && sourceFolders.length === 0 && virtualFolders.length === 0
           ? createDefaultTopLevelLibraryNodesForAssets(newlyScannedAssets)
           : [];
 

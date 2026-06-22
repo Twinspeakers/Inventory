@@ -85,7 +85,7 @@ function buildSourceFolderTemplate(
 
   const templateId = getTagTemplateId(context.path);
   const templateName = context.isSection ? folder.label : getSourceFolderTemplateName(folder);
-  const templateTags = collectSourceFolderTags(folder);
+  const templateTags = getSourceFolderTemplateTags(folder, context);
   const template: LibraryNodeTemplate = {
     id: templateId,
     name: templateName,
@@ -182,6 +182,30 @@ function collectSourceFolderTags(folder: LibraryTagSourceFolder): LibraryTagDefi
     ...folder.files.flatMap((file) => file.tags),
     ...(folder.folders ?? []).flatMap((childFolder) => collectSourceFolderTags(childFolder)),
   ];
+}
+
+function getSourceFolderTemplateTags(
+  folder: LibraryTagSourceFolder,
+  context: {
+    path: string[];
+    section: LibraryTagSourceSection;
+    sectionLabel: string;
+    isSection: boolean;
+  },
+) {
+  const allFolderTags = collectSourceFolderTags(folder);
+
+  if (!context.isSection) {
+    return allFolderTags;
+  }
+
+  const rootSemanticFiles = folder.files.filter((file) => file.id === "general");
+
+  if (rootSemanticFiles.length === 0) {
+    return allFolderTags;
+  }
+
+  return rootSemanticFiles.flatMap((file) => file.tags);
 }
 
 function getTemplateSuggestedTags(tags: LibraryTagDefinition[]) {

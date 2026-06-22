@@ -30,6 +30,7 @@ import { TagLibraryBrowser } from "../../features/tagLibrary/TagLibraryBrowser";
 
 export function AppOverlays({
   addLibraryNodePanel,
+  autoSeedLibraryStructureEnabled,
   availableThemes,
   customThemes,
   isNvdCloseConfirmationOpen,
@@ -53,6 +54,7 @@ export function AppOverlays({
   virtualFolders,
   hideFutureNvdStyleResetConfirmations,
   onAddLibraryNodePanelClose,
+  onAutoSeedLibraryStructureEnabledChange,
   onCloseActiveNvdDocument,
   onCloseNvdCloseConfirmation,
   onConfirmNvdStyleReset,
@@ -89,6 +91,7 @@ export function AppOverlays({
   onRenameSelectedAsset,
 }: {
   addLibraryNodePanel: AddLibraryNodePanelState | null;
+  autoSeedLibraryStructureEnabled: boolean;
   availableThemes: ThemeDefinition[];
   customThemes: ThemeDefinition[];
   isNvdCloseConfirmationOpen: boolean;
@@ -112,6 +115,7 @@ export function AppOverlays({
   virtualFolders: VirtualFolder[];
   hideFutureNvdStyleResetConfirmations: boolean;
   onAddLibraryNodePanelClose: () => void;
+  onAutoSeedLibraryStructureEnabledChange: (enabled: boolean) => void;
   onCloseActiveNvdDocument: () => void;
   onCloseNvdCloseConfirmation: () => void;
   onConfirmNvdStyleReset: () => void;
@@ -157,10 +161,12 @@ export function AppOverlays({
     <>
       {isSettingsOpen ? (
         <SettingsPanel
+          autoSeedLibraryStructureEnabled={autoSeedLibraryStructureEnabled}
           availableThemes={availableThemes}
           canDeleteSelectedTheme={customThemes.some((theme) => theme.id === selectedThemeId)}
           nvdSaveReminderEnabled={nvdSaveReminderEnabled}
           nvdStyleResetConfirmationEnabled={nvdStyleResetConfirmationEnabled}
+          onAutoSeedLibraryStructureEnabledChange={onAutoSeedLibraryStructureEnabledChange}
           onClose={onSettingsClose}
           onDeleteTheme={onDeleteTheme}
           onNvdSaveReminderEnabledChange={onNvdSaveReminderEnabledChange}

@@ -4,6 +4,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownAZ,
   ArrowUpAZ,
@@ -19,7 +20,7 @@ import {
   TableProperties,
   type LucideIcon,
 } from "lucide-react";
-import { AudioCardActions, isWaveAudioAsset } from "../../sceneReaders/audioReader";
+import { AudioCardActions, isPlayableAudioAsset } from "../../sceneReaders/audioReader";
 import type { OpenedNvdDocument } from "../inventoryProject";
 import { AssetThumbnail } from "../sceneViewer";
 
@@ -49,6 +50,10 @@ export const MIN_ASSET_SHELF_HEIGHT = 180;
 export const COLLAPSED_ASSET_SHELF_HEIGHT = 52;
 
 export const detailsColumnKeys: DetailsColumnKey[] = ["name", "type", "size", "modified", "tags"];
+const GRID_OVERSCAN_ROWS = 2;
+const DETAILS_OVERSCAN_ROWS = 6;
+const DETAILS_ROW_HEIGHT = 70;
+const DETAILS_ROW_GAP = 4;
 
 export const defaultDetailsColumnWidths: DetailsColumnWidths = {
   name: 300,
@@ -324,35 +329,25 @@ export function AssetShelf<TAsset extends AssetShelfAsset>({
                     </div>
                   ))}
                 </div>
-                <div className="mt-1 space-y-1">
-                  {assets.map((asset) => (
-                    <AssetDetailsRow
-                      asset={asset}
-                      gridStyle={detailsGridStyle}
-                      key={asset.id}
-                      nvdDocument={nvdDocument}
-                      onOpenContextMenu={onOpenAssetContextMenu}
-                      onSelectAsset={onSelectAsset}
-                      selected={asset.id === selectedAsset?.id}
-                    />
-                  ))}
-                </div>
+                <VirtualizedDetailsRows
+                  assets={assets}
+                  gridStyle={detailsGridStyle}
+                  nvdDocument={nvdDocument}
+                  onOpenContextMenu={onOpenAssetContextMenu}
+                  onSelectAsset={onSelectAsset}
+                  selectedAssetId={selectedAsset?.id ?? null}
+                />
               </div>
             ) : (
-              <div className={getAssetGridClassName(viewMode)}>
-                {assets.map((asset) => (
-                  <AssetCard
-                    asset={asset}
-                    key={asset.id}
-                    mode={viewMode}
-                    nvdDocument={nvdDocument}
-                    onOpenContextMenu={onOpenAssetContextMenu}
-                    onPlayAudio={onPlayAudio}
-                    onSelectAsset={onSelectAsset}
-                    selected={asset.id === selectedAsset?.id}
-                  />
-                ))}
-              </div>
+              <VirtualizedAssetGrid
+                assets={assets}
+                mode={viewMode}
+                nvdDocument={nvdDocument}
+                onOpenContextMenu={onOpenAssetContextMenu}
+                onPlayAudio={onPlayAudio}
+                onSelectAsset={onSelectAsset}
+                selectedAssetId={selectedAsset?.id ?? null}
+              />
             )}
           </div>
         </div>
@@ -400,6 +395,122 @@ export function AssetShelf<TAsset extends AssetShelfAsset>({
   );
 }
 
+function VirtualizedAssetGrid<TAsset extends AssetShelfAsset>({
+  assets,
+  mode,
+  nvdDocument,
+  onOpenContextMenu,
+  onPlayAudio,
+  onSelectAsset,
+  selectedAssetId,
+}: {
+  assets: TAsset[];
+  mode: Exclude<AssetViewMode, "details">;
+  nvdDocument: OpenedNvdDocument | null;
+  onOpenContextMenu: (asset: TAsset, event: ReactMouseEvent<HTMLElement>) => void;
+  onPlayAudio: (asset: TAsset) => void;
+  onSelectAsset: (id: number) => void;
+  selectedAssetId: number | null;
+}) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const viewport = useElementViewport(scrollRef);
+  const layout = getGridVirtualLayout(viewport.width, mode, assets.length);
+  const totalRows = Math.max(1, Math.ceil(assets.length / layout.columnCount));
+  const visibleRowStart = Math.max(0, Math.floor(viewport.scrollTop / layout.rowHeight) - GRID_OVERSCAN_ROWS);
+  const visibleRowEnd = Math.min(
+    totalRows,
+    Math.ceil((viewport.scrollTop + viewport.height) / layout.rowHeight) + GRID_OVERSCAN_ROWS,
+  );
+  const startIndex = visibleRowStart * layout.columnCount;
+  const endIndex = Math.min(assets.length, visibleRowEnd * layout.columnCount);
+  const visibleAssets = assets.slice(startIndex, endIndex);
+
+  return (
+    <div className="h-full min-h-0 overflow-auto" ref={scrollRef}>
+      <div style={{ height: totalRows * layout.rowHeight, position: "relative" }}>
+        <div
+          className={getAssetGridClassName(mode)}
+          style={{
+            left: 0,
+            position: "absolute",
+            right: 0,
+            top: visibleRowStart * layout.rowHeight,
+          }}
+        >
+          {visibleAssets.map((asset) => (
+            <AssetCard
+              asset={asset}
+              key={asset.id}
+              mode={mode}
+              nvdDocument={nvdDocument}
+              onOpenContextMenu={onOpenContextMenu}
+              onPlayAudio={onPlayAudio}
+              onSelectAsset={onSelectAsset}
+              selected={asset.id === selectedAssetId}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VirtualizedDetailsRows<TAsset extends AssetShelfAsset>({
+  assets,
+  gridStyle,
+  nvdDocument,
+  onOpenContextMenu,
+  onSelectAsset,
+  selectedAssetId,
+}: {
+  assets: TAsset[];
+  gridStyle: CSSProperties;
+  nvdDocument: OpenedNvdDocument | null;
+  onOpenContextMenu: (asset: TAsset, event: ReactMouseEvent<HTMLElement>) => void;
+  onSelectAsset: (id: number) => void;
+  selectedAssetId: number | null;
+}) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const viewport = useElementViewport(scrollRef);
+  const rowStep = DETAILS_ROW_HEIGHT + DETAILS_ROW_GAP;
+  const visibleRowStart = Math.max(0, Math.floor(viewport.scrollTop / rowStep) - DETAILS_OVERSCAN_ROWS);
+  const visibleRowEnd = Math.min(
+    assets.length,
+    Math.ceil((viewport.scrollTop + viewport.height) / rowStep) + DETAILS_OVERSCAN_ROWS,
+  );
+  const visibleAssets = assets.slice(visibleRowStart, visibleRowEnd);
+  const totalHeight = Math.max(0, assets.length * rowStep - DETAILS_ROW_GAP);
+
+  return (
+    <div className="mt-1 h-full min-h-0 overflow-auto" ref={scrollRef}>
+      <div style={{ height: totalHeight, position: "relative" }}>
+        <div
+          style={{
+            left: 0,
+            position: "absolute",
+            right: 0,
+            top: visibleRowStart * rowStep,
+          }}
+        >
+          <div className="space-y-1">
+            {visibleAssets.map((asset) => (
+              <AssetDetailsRow
+                asset={asset}
+                gridStyle={gridStyle}
+                key={asset.id}
+                nvdDocument={nvdDocument}
+                onOpenContextMenu={onOpenContextMenu}
+                onSelectAsset={onSelectAsset}
+                selected={asset.id === selectedAssetId}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AssetCard<TAsset extends AssetShelfAsset>({
   asset,
   mode,
@@ -428,7 +539,7 @@ function AssetCard<TAsset extends AssetShelfAsset>({
     }
   }
 
-  const audioActions = isWaveAudioAsset(asset) ? (
+  const audioActions = isPlayableAudioAsset(asset) ? (
     <AudioCardActions asset={asset} onPlayAudio={onPlayAudio} />
   ) : null;
 
@@ -444,7 +555,7 @@ function AssetCard<TAsset extends AssetShelfAsset>({
       >
         <AssetThumbnail asset={asset} nvdDocument={nvdDocument} />
         {audioActions}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 p-2.5 text-white" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.95)" }}>
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 p-2.5 text-white" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.95)" }}>
           <h3 className="truncate text-sm font-semibold">{asset.name}</h3>
           <p className="mt-0.5 truncate text-xs text-white/75">
             {asset.type} / .{asset.extension} / {asset.size}
@@ -473,7 +584,7 @@ function AssetCard<TAsset extends AssetShelfAsset>({
       >
         <AssetThumbnail asset={asset} nvdDocument={nvdDocument} />
         {audioActions}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 px-2.5 py-2 text-center text-white" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.95)" }}>
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 px-2.5 py-2 text-center text-white" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.95)" }}>
           <h3 className="truncate text-[13px] font-semibold">{asset.name}</h3>
         </div>
       </div>
@@ -581,6 +692,63 @@ function getViewTitle(activeView: LibraryView) {
     default:
       return "Workspace";
   }
+}
+
+function useElementViewport(ref: React.RefObject<HTMLElement | null>) {
+  const [viewport, setViewport] = useState({ height: 0, scrollTop: 0, width: 0 });
+
+  useEffect(() => {
+    const element = ref.current;
+
+    if (!element) {
+      return;
+    }
+
+    const updateViewport = () => {
+      setViewport({
+        height: element.clientHeight,
+        scrollTop: element.scrollTop,
+        width: element.clientWidth,
+      });
+    };
+
+    updateViewport();
+
+    const handleScroll = () => {
+      setViewport((current) => ({
+        ...current,
+        scrollTop: element.scrollTop,
+      }));
+    };
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateViewport();
+    });
+
+    resizeObserver.observe(element);
+    element.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => {
+      resizeObserver.disconnect();
+      element.removeEventListener("scroll", handleScroll);
+    };
+  }, [ref]);
+
+  return viewport;
+}
+
+function getGridVirtualLayout(width: number, mode: Exclude<AssetViewMode, "details">, itemCount: number) {
+  const minColumnWidth = mode === "extra-large" ? 260 : mode === "large" ? 210 : 150;
+  const gap = mode === "extra-large" ? 12 : mode === "large" ? 10 : 8;
+  const safeWidth = Math.max(width, minColumnWidth);
+  const columnCount = Math.max(1, Math.floor((safeWidth + gap) / (minColumnWidth + gap)));
+  const itemWidth = (safeWidth - gap * (columnCount - 1)) / columnCount;
+  const rowHeight = itemWidth * 0.75 + 0.5;
+
+  return {
+    columnCount: itemCount > 0 ? columnCount : 1,
+    rowHeight,
+  };
 }
 
 function isPrimaryPointer(event: ReactPointerEvent<HTMLElement>) {

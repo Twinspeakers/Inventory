@@ -3,6 +3,7 @@ import {
   areThemeColorsEqual,
   isHexColor,
   premadeThemes,
+  readAutoSeedLibraryStructureEnabled,
   readCustomThemes,
   readNvdSaveReminderEnabled,
   readNvdStyleResetConfirmationEnabled,
@@ -10,6 +11,7 @@ import {
   readStoredThemeEditorLayout,
   readStoredThemeId,
   readStoredThemeName,
+  storeAutoSeedLibraryStructureEnabled,
   storeCustomThemes,
   storeNvdSaveReminderEnabled,
   storeNvdStyleResetConfirmationEnabled,
@@ -22,6 +24,9 @@ import {
 } from "../../features/settings";
 
 export function useAppSettings({ setStatusMessage }: { setStatusMessage: (message: string) => void }) {
+  const [autoSeedLibraryStructureEnabled, setAutoSeedLibraryStructureEnabled] = useState(() =>
+    readAutoSeedLibraryStructureEnabled(),
+  );
   const [nvdSaveReminderEnabled, setNvdSaveReminderEnabled] = useState(() => readNvdSaveReminderEnabled());
   const [nvdStyleResetConfirmationEnabled, setNvdStyleResetConfirmationEnabled] = useState(() =>
     readNvdStyleResetConfirmationEnabled(),
@@ -112,6 +117,11 @@ export function useAppSettings({ setStatusMessage }: { setStatusMessage: (messag
     storeNvdSaveReminderEnabled(enabled);
   }
 
+  function updateAutoSeedLibraryStructureEnabled(enabled: boolean) {
+    setAutoSeedLibraryStructureEnabled(enabled);
+    storeAutoSeedLibraryStructureEnabled(enabled);
+  }
+
   function updateNvdStyleResetConfirmationEnabled(enabled: boolean) {
     setNvdStyleResetConfirmationEnabled(enabled);
     storeNvdStyleResetConfirmationEnabled(enabled);
@@ -125,6 +135,7 @@ export function useAppSettings({ setStatusMessage }: { setStatusMessage: (messag
 
   return {
     availableThemes,
+    autoSeedLibraryStructureEnabled,
     customThemes,
     isSettingsOpen,
     nvdSaveReminderEnabled,
@@ -143,6 +154,7 @@ export function useAppSettings({ setStatusMessage }: { setStatusMessage: (messag
     setIsSettingsOpen,
     setThemeEditorLayout,
     setThemeName,
+    updateAutoSeedLibraryStructureEnabled,
     updateNvdSaveReminderEnabled,
     updateNvdStyleResetConfirmationEnabled,
     updateThemeColor,

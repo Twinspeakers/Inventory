@@ -31,4 +31,10 @@ export const systemTags = [
     aliases: ["raster", "vector", "png", "jpg", "jpeg", "svg", "avif"],
     locksToFileTypes: ["Image"],
   }),
+  tag("icon", {
+    label: "Icon",
+    kind: "system",
+    aliases: ["app icon", "ui icon"],
+    locksToFileTypes: ["Image"],
+  }),
 ];

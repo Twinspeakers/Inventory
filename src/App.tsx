@@ -60,6 +60,7 @@ import {
   type SessionHistory,
 } from "./features/editors";
 import {
+  createDefaultTopLevelLibraryNodesForAssets,
   findFolder,
   initialVirtualFolders,
 } from "./features/libraryTree/libraryTreeModel";
@@ -158,6 +159,7 @@ export function App() {
   } = useModelInspection();
   const {
     availableThemes,
+    autoSeedLibraryStructureEnabled,
     customThemes,
     isSettingsOpen,
     nvdSaveReminderEnabled,
@@ -175,6 +177,7 @@ export function App() {
     setIsSettingsOpen,
     setThemeEditorLayout,
     setThemeName,
+    updateAutoSeedLibraryStructureEnabled,
     updateNvdSaveReminderEnabled,
     updateNvdStyleResetConfirmationEnabled,
     updateThemeColor,
@@ -293,6 +296,7 @@ export function App() {
     toggleSourceFolder,
   } = useSourceFolderActions({
     activeInventory,
+    autoSeedLibraryStructureEnabled,
     inventoryDocuments,
     scanResult,
     selectedId,
@@ -308,6 +312,9 @@ export function App() {
     setStatusMessage,
     setVirtualFolders,
   });
+  const sourceAssetIdSet = new Set(sourceFolders.flatMap((folder) => folder.assetIds));
+  const sourceScannedAssets = (scanResult?.assets ?? []).filter((asset) => sourceAssetIdSet.has(asset.id));
+  const canRegenerateStarterLibraryStructure = Boolean(activeInventory) && sourceScannedAssets.length > 0;
   useEffect(() => {
     syncSourceFoldersRef.current = () => syncSourceFolders({ silentNoChanges: true, background: true });
   }, [syncSourceFolders]);
@@ -685,6 +692,27 @@ export function App() {
     }
   }
 
+  function regenerateStarterLibraryStructure() {
+    if (!activeInventory) {
+      setStatusMessage("Create or open an Inventory before regenerating library structure.");
+      return;
+    }
+
+    if (sourceScannedAssets.length === 0) {
+      setStatusMessage("Add source folders before regenerating starter library structure.");
+      return;
+    }
+
+    const nextVirtualFolders = createDefaultTopLevelLibraryNodesForAssets(sourceScannedAssets);
+    setVirtualFolders(nextVirtualFolders);
+    setSelectedFolderId(null);
+    setActiveView("all");
+    openTreeNodePath(["library"]);
+    setStatusMessage(
+      `Regenerated starter library structure from ${sourceFolders.length} source folder${sourceFolders.length === 1 ? "" : "s"}.`,
+    );
+  }
+
   function playAudioAsset(asset: Asset) {
     if (!isPlayableAudioAsset(asset)) {
       setStatusMessage("That audio format cannot be played here yet.");
@@ -903,15 +931,19 @@ export function App() {
       libraryStructure={{
         activeView,
         activeNvdOutline: getNvdOutline(activeNvdDocument?.document ?? null),
+        autoSeedLibraryStructureEnabled,
+        canRegenerateStarterLibraryStructure,
         canCreateFolder: Boolean(activeInventory),
         canShowNvdNavigation: Boolean(activeInventory) && sceneMode === "nvd-document",
         collapsed: leftPaneCollapsed,
         editingAssetId: editingLibraryAssetId,
         editingFolderId: editingLibraryFolderId,
         nodes: structure,
+        onAutoSeedLibraryStructureEnabledChange: updateAutoSeedLibraryStructureEnabled,
         onCreateFolder: createFolder,
         onNavigateNvdBlock: navigateToNvdBlock,
         onOpenNodeContextMenu: openLibraryNodeContextMenu,
+        onRegenerateStarterLibraryStructure: regenerateStarterLibraryStructure,
         onRenameAssetStart: (assetId) => {
           setEditingLibraryFolderId(null);
           setEditingLibraryAssetId(assetId);
@@ -1055,6 +1087,7 @@ export function App() {
       }}
       overlays={{
         addLibraryNodePanel,
+        autoSeedLibraryStructureEnabled,
         availableThemes,
         customThemes,
         hideFutureNvdStyleResetConfirmations,
@@ -1078,6 +1111,7 @@ export function App() {
         themeName,
         virtualFolders,
         onAddLibraryNodePanelClose: () => setAddLibraryNodePanel(null),
+        onAutoSeedLibraryStructureEnabledChange: updateAutoSeedLibraryStructureEnabled,
         onClearPendingNvdStyleResetRole: () => setPendingNvdStyleResetRole(null),
         onCloseActiveNvdDocument: () => void closeActiveNvdDocument(),
         onCloseNvdCloseConfirmation: () => setIsNvdCloseConfirmationOpen(false),

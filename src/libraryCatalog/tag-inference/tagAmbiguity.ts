@@ -133,6 +133,24 @@ export const ambiguousSenseRules: AmbiguousSenseRule[] = [
     ],
   },
   {
+    id: "gathering",
+    triggerTerms: ["gathering"],
+    defaultSenseId: "event",
+    senses: [
+      {
+        id: "event",
+        tagIds: ["gathering-event"],
+        positiveTerms: ["assembly", "celebration", "ceremony", "crowd", "event", "festival", "party", "social"],
+        defaultPriority: 2,
+      },
+      {
+        id: "activity",
+        tagIds: ["collecting"],
+        positiveTerms: ["archive", "collection", "curating", "gather", "hobby", "inventory", "sorting"],
+      },
+    ],
+  },
+  {
     id: "goose",
     triggerTerms: ["goose"],
     defaultSenseId: "animal",
@@ -199,6 +217,78 @@ export const ambiguousSenseRules: AmbiguousSenseRule[] = [
         id: "device",
         tagIds: ["mouse-device"],
         positiveTerms: ["click", "computer", "cursor", "gaming", "hardware", "usb"],
+      },
+    ],
+  },
+  {
+    id: "forge",
+    triggerTerms: ["forge"],
+    defaultSenseId: "place",
+    senses: [
+      {
+        id: "place",
+        tagIds: ["workshop"],
+        positiveTerms: ["anvil", "blacksmith", "building", "room", "shop", "smithy", "studio", "workroom", "workshop"],
+        defaultPriority: 1,
+      },
+      {
+        id: "object",
+        tagIds: ["furnace"],
+        positiveTerms: ["crafting", "furnace", "industrial", "metalworking", "prop", "smelter", "station"],
+      },
+    ],
+  },
+  {
+    id: "frozen",
+    triggerTerms: ["frozen"],
+    defaultSenseId: "condition",
+    senses: [
+      {
+        id: "condition",
+        tagIds: ["frozen-state"],
+        positiveTerms: ["cold", "ice covered", "state", "still frozen", "winter"],
+        defaultPriority: 1,
+      },
+      {
+        id: "material",
+        tagIds: ["ice"],
+        positiveTerms: ["frost", "glacier", "ice", "material", "snow", "water"],
+      },
+    ],
+  },
+  {
+    id: "market",
+    triggerTerms: ["market"],
+    defaultSenseId: "place",
+    senses: [
+      {
+        id: "place",
+        tagIds: ["market"],
+        positiveTerms: ["bazaar", "marketplace", "place", "shop", "stall", "street", "vendor"],
+        defaultPriority: 2,
+      },
+      {
+        id: "event",
+        tagIds: ["market-event"],
+        positiveTerms: ["crowd", "day", "event", "festival", "gathering", "seasonal", "street market"],
+      },
+    ],
+  },
+  {
+    id: "metallic",
+    triggerTerms: ["metallic"],
+    defaultSenseId: "material",
+    senses: [
+      {
+        id: "material",
+        tagIds: ["metal"],
+        positiveTerms: ["alloy", "iron", "material", "metal", "ore", "steel"],
+        defaultPriority: 1,
+      },
+      {
+        id: "texture",
+        tagIds: ["metallic-map"],
+        positiveTerms: ["map", "metalness", "pbr", "shader", "texture"],
       },
     ],
   },
@@ -289,6 +379,24 @@ export const ambiguousSenseRules: AmbiguousSenseRule[] = [
         id: "material",
         tagIds: ["silver"],
         positiveTerms: ["ingot", "jewelry", "metal", "ore", "ring"],
+      },
+    ],
+  },
+  {
+    id: "weathered",
+    triggerTerms: ["weathered"],
+    defaultSenseId: "surface",
+    senses: [
+      {
+        id: "surface",
+        tagIds: ["weathered-finish"],
+        positiveTerms: ["finish", "patina", "rough", "sun worn", "surface", "texture"],
+        defaultPriority: 1,
+      },
+      {
+        id: "condition",
+        tagIds: ["worn"],
+        positiveTerms: ["aged", "condition", "damaged", "used", "worn"],
       },
     ],
   },

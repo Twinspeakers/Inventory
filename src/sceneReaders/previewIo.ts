@@ -33,6 +33,10 @@ export function getAssetResourcePath(path: string) {
   return convertFileSrc(path.slice(0, separatorIndex + 1));
 }
 
+export function getAssetFileUrl(path: string) {
+  return convertFileSrc(path);
+}
+
 export function getImageMimeType(extension: string) {
   switch (extension.toLowerCase()) {
     case "avif":

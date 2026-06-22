@@ -5,7 +5,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from "react";
 import { useEffect, useRef, useState } from "react";
-import { Backpack, ChevronDown, ChevronLeft, ChevronRight, FolderSearch, ListTree, Plus } from "lucide-react";
+import { Backpack, ChevronDown, ChevronLeft, ChevronRight, FolderSearch, ListTree, Plus, RefreshCcw } from "lucide-react";
 import type { LibraryView } from "../../features/assetShelf";
 import type { NvdDocument } from "../../features/inventoryProject";
 import { getNvdStyleRole, type NvdStyleRole } from "../../features/nvdEditor";
@@ -14,14 +14,18 @@ import type { LeftPaneView, NvdOutlineEntry, SourceFolder, StructureNode } from 
 export function LibraryStructure({
   activeView,
   activeNvdOutline,
+  autoSeedLibraryStructureEnabled,
+  canRegenerateStarterLibraryStructure,
   canCreateFolder,
   canShowNvdNavigation,
   collapsed,
   editingAssetId,
   editingFolderId,
   nodes,
+  onAutoSeedLibraryStructureEnabledChange,
   onCreateFolder,
   onNavigateNvdBlock,
+  onRegenerateStarterLibraryStructure,
   onRenameAssetStart,
   onRenameAssetCancel,
   onRenameAssetSubmit,
@@ -49,14 +53,18 @@ export function LibraryStructure({
 }: {
   activeView: LibraryView;
   activeNvdOutline: NvdOutlineEntry[];
+  autoSeedLibraryStructureEnabled: boolean;
+  canRegenerateStarterLibraryStructure: boolean;
   canCreateFolder: boolean;
   canShowNvdNavigation: boolean;
   collapsed: boolean;
   editingAssetId: number | null;
   editingFolderId: string | null;
   nodes: StructureNode[];
+  onAutoSeedLibraryStructureEnabledChange: (enabled: boolean) => void;
   onCreateFolder: () => void;
   onNavigateNvdBlock: (blockIndex: number) => void;
+  onRegenerateStarterLibraryStructure: () => void;
   onRenameAssetStart: (assetId: number) => void;
   onRenameAssetCancel: () => void;
   onRenameAssetSubmit: (assetId: number, name: string) => void;
@@ -152,6 +160,36 @@ export function LibraryStructure({
             </div>
           </div>
           <div className="flex items-center gap-1">
+            {isLibraryPane ? (
+              <button
+                aria-pressed={autoSeedLibraryStructureEnabled}
+                className={`library-auto-pill ${autoSeedLibraryStructureEnabled ? "library-auto-pill-on" : ""}`}
+                title="Toggle automatic starter library structure"
+                type="button"
+                onClick={() => onAutoSeedLibraryStructureEnabledChange(!autoSeedLibraryStructureEnabled)}
+              >
+                <span className="library-auto-pill-label">AUTO</span>
+                <span className={`library-auto-pill-toggle ${autoSeedLibraryStructureEnabled ? "library-auto-pill-toggle-on" : ""}`}>
+                  <span className="library-auto-pill-toggle-thumb" />
+                </span>
+              </button>
+            ) : null}
+            {isLibraryPane ? (
+              <button
+                className="dark-icon-button"
+                aria-label="Regenerate starter library structure"
+                disabled={!canRegenerateStarterLibraryStructure}
+                title={
+                  canRegenerateStarterLibraryStructure
+                    ? "Regenerate starter library structure"
+                    : "Add source folders to regenerate starter library structure"
+                }
+                type="button"
+                onClick={onRegenerateStarterLibraryStructure}
+              >
+                <RefreshCcw size={14} aria-hidden="true" />
+              </button>
+            ) : null}
             <button className="dark-icon-button" aria-label={`Minimize ${paneLabel.toLowerCase()}`} title={`Minimize ${paneLabel.toLowerCase()}`} type="button" onClick={onToggleCollapsed}>
               <ChevronLeft size={14} aria-hidden="true" />
             </button>

@@ -6,10 +6,12 @@ import { ThemeSettings } from "./themes/ThemeSettings";
 import type { ThemeColors, ThemeDefinition, ThemeEditorLayout } from "./themes/themeTypes";
 
 export function SettingsPanel({
+  autoSeedLibraryStructureEnabled,
   availableThemes,
   canDeleteSelectedTheme,
   nvdSaveReminderEnabled,
   nvdStyleResetConfirmationEnabled,
+  onAutoSeedLibraryStructureEnabledChange,
   onClose,
   onDeleteTheme,
   onNvdSaveReminderEnabledChange,
@@ -25,10 +27,12 @@ export function SettingsPanel({
   themeEditorLayout,
   themeName,
 }: {
+  autoSeedLibraryStructureEnabled: boolean;
   availableThemes: ThemeDefinition[];
   canDeleteSelectedTheme: boolean;
   nvdSaveReminderEnabled: boolean;
   nvdStyleResetConfirmationEnabled: boolean;
+  onAutoSeedLibraryStructureEnabledChange: (enabled: boolean) => void;
   onClose: () => void;
   onDeleteTheme: () => void;
   onNvdSaveReminderEnabledChange: (enabled: boolean) => void;
@@ -99,7 +103,10 @@ export function SettingsPanel({
           </header>
 
           {activeSection === "general" ? (
-            <GeneralSettings />
+            <GeneralSettings
+              autoSeedLibraryStructureEnabled={autoSeedLibraryStructureEnabled}
+              onAutoSeedLibraryStructureEnabledChange={onAutoSeedLibraryStructureEnabledChange}
+            />
           ) : activeSection === "notifications" ? (
             <NotificationSettings
               nvdSaveReminderEnabled={nvdSaveReminderEnabled}
