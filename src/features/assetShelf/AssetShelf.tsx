@@ -12,7 +12,6 @@ import {
   FilePlus2,
   FolderOpen,
   FolderSearch,
-  GalleryHorizontal,
   LayoutGrid,
   ListFilter,
   Maximize2,
@@ -88,7 +87,6 @@ const assetSortOptions: Array<{ key: AssetSortKey; label: string }> = [
 
 const assetViewOptions: Array<{ icon: LucideIcon; label: string; mode: AssetViewMode }> = [
   { icon: Maximize2, label: "Large icons", mode: "extra-large" },
-  { icon: GalleryHorizontal, label: "Medium icons", mode: "large" },
   { icon: LayoutGrid, label: "Small icons", mode: "medium" },
   { icon: TableProperties, label: "Details", mode: "details" },
 ];
@@ -426,7 +424,7 @@ function VirtualizedAssetGrid<TAsset extends AssetShelfAsset>({
   const visibleAssets = assets.slice(startIndex, endIndex);
 
   return (
-    <div className="h-full min-h-0 overflow-auto" ref={scrollRef}>
+    <div className="h-full min-h-0 overflow-auto pr-2.5" ref={scrollRef}>
       <div style={{ height: totalRows * layout.rowHeight, position: "relative" }}>
         <div
           className={getAssetGridClassName(mode)}
@@ -482,7 +480,7 @@ function VirtualizedDetailsRows<TAsset extends AssetShelfAsset>({
   const totalHeight = Math.max(0, assets.length * rowStep - DETAILS_ROW_GAP);
 
   return (
-    <div className="mt-1 h-full min-h-0 overflow-auto" ref={scrollRef}>
+    <div className="mt-1 h-full min-h-0 overflow-auto pr-2.5" ref={scrollRef}>
       <div style={{ height: totalHeight, position: "relative" }}>
         <div
           style={{

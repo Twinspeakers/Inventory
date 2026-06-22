@@ -24,7 +24,7 @@ import type { LibraryNodeContextMenuState, SourceFolderContextMenuState } from "
 import {
   defaultTreeOpenNodeIds,
   isAssetSortKey,
-  isAssetViewMode,
+  normalizeAssetViewMode,
   normalizeDetailsColumnWidths,
   normalizeModelTransformOverrides,
   projectStorageKeys,
@@ -182,7 +182,7 @@ export function useInventorySession({
       );
       setAssetSortKey(isAssetSortKey(workspaceState.assetSortKey) ? workspaceState.assetSortKey : "name");
       setAssetSortDirection(workspaceState.assetSortDirection === "desc" ? "desc" : "asc");
-      setAssetViewMode(isAssetViewMode(workspaceState.assetViewMode) ? workspaceState.assetViewMode : "medium");
+      setAssetViewMode(normalizeAssetViewMode(workspaceState.assetViewMode));
       setDetailsColumnWidths(normalizeDetailsColumnWidths(workspaceState.detailsColumnWidths));
     }
 

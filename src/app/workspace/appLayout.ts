@@ -161,7 +161,7 @@ export function readStoredAssetViewMode(): AssetViewMode {
   }
 
   const value = window.localStorage.getItem(assetShelfStorageKeys.viewMode);
-  return isAssetViewMode(value) ? value : "medium";
+  return normalizeAssetViewMode(value);
 }
 
 export function readStoredDetailsColumnWidths(): DetailsColumnWidths {
@@ -295,5 +295,14 @@ export function isAssetSortKey(value: string | null): value is AssetSortKey {
 
 export function isAssetViewMode(value: string | null): value is AssetViewMode {
   return value === "extra-large" || value === "large" || value === "medium" || value === "details";
+}
+
+export function normalizeAssetViewMode(value: string | null | undefined): AssetViewMode {
+  if (value === "large") {
+    return "extra-large";
+  }
+
+  const normalizedValue = value ?? null;
+  return isAssetViewMode(normalizedValue) ? normalizedValue : "medium";
 }
 

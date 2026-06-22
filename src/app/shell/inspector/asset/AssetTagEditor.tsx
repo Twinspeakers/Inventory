@@ -1,4 +1,4 @@
-import { Save, X } from "lucide-react";
+import { Save, Search, X } from "lucide-react";
 import { normalizeLibraryMatchText, normalizeLibraryNodeTagValues } from "../../../../libraryCatalog";
 import type { InspectorAsset } from "../inspectorTypes";
 
@@ -57,13 +57,19 @@ export function AssetTagEditor({
   return (
     <section className="mt-4">
       <div className="mt-2">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
           <div className="text-[11px] font-semibold uppercase tracking-normal text-muted">Tags</div>
-          <button className="tag-add-button" type="button" onClick={onOpenTagBrowser}>
-            <span>Browse Tags</span>
-          </button>
         </div>
         <div className="mt-1.5 flex flex-wrap gap-1.5">
+          <button
+            aria-label="Browse tags"
+            className="tag tag-add-button w-7 shrink-0 px-0"
+            title="Browse tags"
+            type="button"
+            onClick={onOpenTagBrowser}
+          >
+            <Search size={13} aria-hidden="true" />
+          </button>
           {asset.systemTags.map((tag) => {
             const normalizedTag = normalizeLibraryMatchText(tag);
             const isKept = normalizedKeptTags.has(normalizedTag);
@@ -98,9 +104,9 @@ export function AssetTagEditor({
           ) : null}
         </div>
       </div>
-      <div className="mt-3">
-        <div className="text-[11px] font-semibold uppercase tracking-normal text-muted">Recent Tags</div>
-        {availableSuggestions.length > 0 ? (
+      {availableSuggestions.length > 0 ? (
+        <div className="mt-3">
+          <div className="text-[11px] font-semibold uppercase tracking-normal text-muted">Recent Tags</div>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {availableSuggestions.map((tag) => (
               <div className="tag tag-chip-shell" key={tag}>
@@ -113,10 +119,8 @@ export function AssetTagEditor({
               </div>
             ))}
           </div>
-        ) : (
-          <p className="mt-1.5 text-[11px] text-muted">Tags you add manually will appear here for quick reuse.</p>
-        )}
-      </div>
+        </div>
+      ) : null}
     </section>
   );
 }
