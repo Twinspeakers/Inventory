@@ -3,34 +3,34 @@ import { describe, expect, it } from "vitest";
 import { runImageAutoTagging, runImageAutoTaggingFromCandidates } from "./runImageAutoTagging";
 
 describe("runImageAutoTagging", () => {
-  it("prefers classifier evidence for fruit-style subjects", () => {
+  it("keeps caption-led fruit tags and avoids broader classifier fallbacks", () => {
     const result = runImageAutoTagging({
       caption: "a pile of oranges sitting on top of a counter",
       classifierConcepts: [
         { label: "fruit", score: 0.28 },
-        { label: "lemon", score: 0.24 },
+        { label: "orange fruit", score: 0.24 },
         { label: "food", score: 0.14 },
-        { label: "room", score: 0.12 },
+        { label: "indoor scene", score: 0.12 },
       ],
     });
 
     expect(result.autoTags).toContain("fruit");
-    expect(result.autoTags).not.toContain("room");
+    expect(result.autoTags).not.toContain("food");
   });
 
-  it("promotes beach over generic terrain when the scene evidence stacks up", () => {
+  it("lets caption scene tags beat generic classifier scene drift", () => {
     const result = runImageAutoTagging({
-      caption: "a beach with a bunch of animals on it",
+      caption: "a beach with a distant river view",
       classifierConcepts: [
         { label: "beach", score: 0.24 },
-        { label: "sand", score: 0.21 },
-        { label: "coast", score: 0.18 },
-        { label: "animal", score: 0.16 },
+        { label: "river", score: 0.18 },
+        { label: "outdoor scene", score: 0.16 },
       ],
     });
 
     expect(result.autoTags).toContain("beach");
-    expect(result.autoTags).not.toContain("terrain");
+    expect(result.autoTags).toContain("river");
+    expect(result.autoTags).not.toContain("outdoors");
   });
 
   it("does not turn traffic sign evidence into paper documents", () => {
@@ -39,7 +39,7 @@ describe("runImageAutoTagging", () => {
       classifierConcepts: [
         { label: "road", score: 0.22 },
         { label: "traffic sign", score: 0.2 },
-        { label: "paper document", score: 0.04 },
+        { label: "paper document", score: 0.12 },
       ],
     });
 
@@ -47,13 +47,60 @@ describe("runImageAutoTagging", () => {
     expect(result.autoTags).not.toContain("paper-document");
   });
 
-  it("falls back to caption candidates when classifier evidence is absent", () => {
+  it("suppresses broader food tags when fruit wins", () => {
     const result = runImageAutoTagging({
-      caption: "a stone castle beside a river",
-      classifierConcepts: [],
+      caption: "an apple on a table",
+      classifierConcepts: [
+        { label: "fruit", score: 0.3, familyId: "broad", stage: "broad" },
+        { label: "food", score: 0.26, familyId: "broad", stage: "broad" },
+        { label: "apple", score: 0.27, familyId: "food", stage: "family" },
+        { label: "bread", score: 0.11, familyId: "food", stage: "family" },
+      ],
     });
 
-    expect(result.autoTags).toContain("building");
+    expect(result.autoTags).toContain("fruit");
+    expect(result.autoTags).not.toContain("food");
+  });
+
+  it("allows classifier support to add a specific tag the caption missed", () => {
+    const result = runImageAutoTagging({
+      caption: "a rider going down a hill",
+      classifierConcepts: [
+        { label: "outdoor scene", score: 0.3, familyId: "broad", stage: "broad" },
+        { label: "vehicle", score: 0.24, familyId: "broad", stage: "broad" },
+        { label: "hill", score: 0.27, familyId: "nature", stage: "family" },
+        { label: "dirt bike", score: 0.26, familyId: "transport", stage: "family" },
+      ],
+    });
+
+    expect(result.autoTags).toContain("transport");
+    expect(result.autoTags).toContain("hill");
+  });
+
+  it("prefers caption truth over wrong classifier guesses", () => {
+    const result = runImageAutoTagging({
+      caption: "a distant hillside with a valley view",
+      classifierConcepts: [
+        { label: "vehicle", score: 0.28, familyId: "broad", stage: "broad" },
+        { label: "city", score: 0.26, familyId: "broad", stage: "broad" },
+      ],
+    });
+
+    expect(result.autoTags).toContain("hill");
+    expect(result.autoTags).not.toContain("transport");
+    expect(result.autoTags).not.toContain("city");
+  });
+
+  it("falls back to classifier tags when the caption path has nothing useful", () => {
+    const result = runImageAutoTagging({
+      caption: "",
+      classifierConcepts: [
+        { label: "castle", score: 0.31, familyId: "places", stage: "family" },
+        { label: "river", score: 0.28, familyId: "nature", stage: "family" },
+      ],
+    });
+
+    expect(result.autoTags).toContain("castle");
   });
 });
 

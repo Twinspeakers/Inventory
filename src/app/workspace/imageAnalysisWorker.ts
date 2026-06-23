@@ -1,5 +1,10 @@
 import { pipeline } from "@huggingface/transformers";
-import { imageClassifierCandidateLabels } from "../../libraryCatalog/autoTagging/modelConceptMap";
+import {
+  broadVisionCandidateLabels,
+  getVisionPromptFamilyCandidateLabels,
+  selectVisionPromptFamilies,
+} from "../../libraryCatalog/autoTagging/modelConceptMap";
+import type { VisionPromptFamilyId, VisionPromptStage } from "../../libraryCatalog/autoTagging";
 
 type AnalyzeImageMessage = {
   fileUrl: string;
@@ -11,8 +16,10 @@ type WorkerResponseMessage =
   | {
       caption: string;
       concepts: Array<{
+        familyId?: VisionPromptFamilyId;
         label: string;
         score: number;
+        stage?: VisionPromptStage;
       }>;
       requestId: number;
       type: "analysis-complete";
@@ -26,8 +33,10 @@ type WorkerResponseMessage =
 type ImageCaptioner = Awaited<ReturnType<typeof pipeline<"image-to-text">>>;
 type ZeroShotImageClassifier = Awaited<ReturnType<typeof pipeline<"zero-shot-image-classification">>>;
 type WorkerImageConcept = {
+  familyId?: VisionPromptFamilyId;
   label: string;
   score: number;
+  stage?: VisionPromptStage;
 };
 
 let captionerPromise: Promise<ImageCaptioner> | null = null;
@@ -90,7 +99,7 @@ function normalizeClassifierOutput(output: Awaited<ReturnType<ZeroShotImageClass
 
   return concepts
     .sort((first, second) => second.score - first.score)
-    .slice(0, 12);
+    .slice(0, 8);
 }
 
 function flattenClassifierOutput(output: Awaited<ReturnType<ZeroShotImageClassifier>>): WorkerImageConcept[] {
@@ -101,9 +110,11 @@ function flattenClassifierOutput(output: Awaited<ReturnType<ZeroShotImageClassif
   const flattened = output.length > 0 && Array.isArray(output[0]) ? output[0] : output;
   return flattened.flatMap((concept) =>
     isWorkerImageConcept(concept)
-      ? [{
+        ? [{
+          familyId: concept.familyId,
           label: concept.label,
           score: concept.score,
+          stage: concept.stage,
         }]
       : [],
   );
@@ -120,6 +131,33 @@ function isWorkerImageConcept(value: unknown): value is WorkerImageConcept {
   );
 }
 
+async function classifyImageConcepts(classifier: ZeroShotImageClassifier, fileUrl: string) {
+  const broadConcepts = normalizeClassifierOutput(await classifier(fileUrl, broadVisionCandidateLabels)).map((concept) => ({
+    ...concept,
+    familyId: "broad" as const,
+    stage: "broad" as const,
+  }));
+
+  const selectedFamilyIds = selectVisionPromptFamilies(broadConcepts);
+  const familyConceptOutputs = await Promise.all(
+    selectedFamilyIds.map(async (familyId) => {
+      const familyLabels = getVisionPromptFamilyCandidateLabels(familyId);
+
+      if (familyLabels.length === 0) {
+        return [];
+      }
+
+      return normalizeClassifierOutput(await classifier(fileUrl, familyLabels)).map((concept) => ({
+        ...concept,
+        familyId,
+        stage: "family" as const,
+      }));
+    }),
+  );
+
+  return [...broadConcepts, ...familyConceptOutputs.flat()];
+}
+
 self.addEventListener("message", async (event: MessageEvent<AnalyzeImageMessage>) => {
   const message = event.data;
 
@@ -131,10 +169,10 @@ self.addEventListener("message", async (event: MessageEvent<AnalyzeImageMessage>
     const [captioner, classifier] = await Promise.all([getCaptioner(), getClassifier()]);
     const [captionOutput, classifierOutput] = await Promise.all([
       captioner(message.fileUrl),
-      classifier(message.fileUrl, imageClassifierCandidateLabels),
+      classifyImageConcepts(classifier, message.fileUrl),
     ]);
     const caption = getCaptionFromOutput(captionOutput);
-    const concepts = normalizeClassifierOutput(classifierOutput);
+    const concepts = classifierOutput;
     postWorkerMessage({
       caption,
       concepts,

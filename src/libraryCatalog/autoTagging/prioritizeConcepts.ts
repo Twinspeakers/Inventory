@@ -1,10 +1,6 @@
 import { normalizeLibraryMatchText } from "../normalization";
 import { getImageClassifierConceptDefinition, type ImageConceptKind } from "./modelConceptMap";
-
-export type ImageClassifierConcept = {
-  label: string;
-  score: number;
-};
+import type { ImageClassifierConcept } from "./visionPromptTypes";
 
 export type PrioritizedImageConcept = {
   adjustedScore: number;

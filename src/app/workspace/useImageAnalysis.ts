@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { ActiveInventory } from "../../features/inventoryProject";
 import { runImageAutoTagging } from "../../libraryCatalog/autoTagging";
+import type { VisionPromptFamilyId, VisionPromptStage } from "../../libraryCatalog/autoTagging";
 import { IMAGE_ANALYSIS_VERSION } from "../../libraryCatalog/tag-inference";
 import { getAssetFileUrl } from "../../sceneReaders/previewIo";
 import type { ScanResult, ScannedAsset } from "../appTypes";
@@ -19,8 +20,10 @@ type WorkerResponseMessage =
   | {
       caption: string;
       concepts: Array<{
+        familyId?: VisionPromptFamilyId;
         label: string;
         score: number;
+        stage?: VisionPromptStage;
       }>;
       requestId: number;
       type: "analysis-complete";

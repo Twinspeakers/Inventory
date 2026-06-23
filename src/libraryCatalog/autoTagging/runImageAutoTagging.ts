@@ -1,25 +1,31 @@
 import type { AnalysisEvidenceCandidate } from "../../app/appTypes";
 import type { ImageAnalysisCandidate } from "../tag-inference";
 import { inferImageAnalysisCandidatesFromCaption } from "../tag-inference";
+import { extractCaptionPromptCandidates } from "./extractCaptionPromptCandidates";
 import { mapCandidateToAllowedAutoTagId } from "./mapping";
-import { allowedImageAutoTagIds, imageAutoTagMinScores, MAX_IMAGE_AUTO_TAGS } from "./policies";
-import { prioritizeImageClassifierConcepts, type ImageClassifierConcept } from "./prioritizeConcepts";
+import { allowedImageAutoTagIds, imageAutoTagSuppressions, MAX_IMAGE_AUTO_TAGS } from "./policies";
+import { scoreVisionConcepts } from "./scoreVisionConcepts";
 import type { ImageAnalysisInput, ImageAutoTagResult } from "./types";
+import type { ImageClassifierConcept } from "./visionPromptTypes";
 
 export function runImageAutoTagging(input: ImageAnalysisInput): ImageAutoTagResult {
+  const captionResult = runCaptionPrimaryAutoTagging(input.caption);
   const classifierResult = runClassifierFirstAutoTagging(input.classifierConcepts ?? []);
 
-  if (classifierResult.autoTags.length > 0) {
+  if (captionResult.autoTags.length === 0) {
     return {
       autoTags: classifierResult.autoTags,
-      evidence: [...classifierResult.evidence, ...buildCaptionEvidence(input.caption)],
+      evidence: [...classifierResult.evidence, ...buildCaptionEvidence(input.caption, classifierResult.autoTags)],
     };
   }
 
-  const captionFallback = runCaptionFallbackAutoTagging(input.caption);
+  const autoTags = mergeCaptionAndClassifierAutoTags(captionResult.autoTags, classifierResult);
   return {
-    autoTags: captionFallback.autoTags,
-    evidence: [...classifierResult.evidence, ...captionFallback.evidence],
+    autoTags,
+    evidence: [
+      ...buildAcceptedCaptionEvidence(captionResult.evidence, autoTags),
+      ...buildAcceptedClassifierEvidence(classifierResult.evidence, autoTags),
+    ],
   };
 }
 
@@ -51,51 +57,98 @@ export function runImageAutoTaggingFromCandidates(candidates: ImageAnalysisCandi
 }
 
 function runClassifierFirstAutoTagging(classifierConcepts: ImageClassifierConcept[]): ImageAutoTagResult {
-  const prioritizedConcepts = prioritizeImageClassifierConcepts(classifierConcepts);
-  const autoTags: string[] = [];
-  const seenAutoTagIds = new Set<string>();
-  const evidence: AnalysisEvidenceCandidate[] = [];
-
-  for (const concept of prioritizedConcepts) {
-    const mappedTagId = concept.mappedTagId ? mapCandidateToAllowedAutoTagId(concept.mappedTagId, allowedImageAutoTagIds) : null;
-    const minimumScore = mappedTagId ? imageAutoTagMinScores[mappedTagId] ?? 0.18 : Number.POSITIVE_INFINITY;
-    const accepted =
-      mappedTagId !== null &&
-      concept.regionRole !== "background" &&
-      concept.adjustedScore >= minimumScore &&
-      !seenAutoTagIds.has(mappedTagId) &&
-      autoTags.length < MAX_IMAGE_AUTO_TAGS;
-
-    if (accepted && mappedTagId) {
-      seenAutoTagIds.add(mappedTagId);
-      autoTags.push(mappedTagId);
-    }
-
-    evidence.push({
-      accepted,
-      mappedTagId,
-      matchedTerms: concept.rawLabels,
-      rawTagId: concept.label,
-      regionRole: concept.regionRole,
-      score: concept.adjustedScore,
-      source: "classifier",
-    });
-  }
-
-  return { autoTags, evidence };
+  return scoreVisionConcepts(classifierConcepts);
 }
 
-function runCaptionFallbackAutoTagging(caption: string) {
-  return runImageAutoTaggingFromCandidates(inferImageAnalysisCandidatesFromCaption(caption));
+function runCaptionPrimaryAutoTagging(caption: string) {
+  return runImageAutoTaggingFromCandidates(mergeCaptionCandidates(caption));
 }
 
-function buildCaptionEvidence(caption: string) {
-  return inferImageAnalysisCandidatesFromCaption(caption).map<AnalysisEvidenceCandidate>((candidate) => ({
-    accepted: false,
+function buildCaptionEvidence(caption: string, acceptedTagIds: string[]) {
+  return mergeCaptionCandidates(caption).map<AnalysisEvidenceCandidate>((candidate) => ({
+    accepted: acceptedTagIds.includes(mapCandidateToAllowedAutoTagId(candidate.tagId, allowedImageAutoTagIds) ?? ""),
     mappedTagId: mapCandidateToAllowedAutoTagId(candidate.tagId, allowedImageAutoTagIds),
     matchedTerms: candidate.matchedTerms,
     rawTagId: candidate.tagId,
     score: candidate.score,
     source: "caption",
   }));
+}
+
+function mergeCaptionAndClassifierAutoTags(captionAutoTags: string[], classifierResult: ImageAutoTagResult) {
+  const mergedAutoTags = [...captionAutoTags];
+  const seenTagIds = new Set(mergedAutoTags);
+
+  for (const tagId of classifierResult.autoTags) {
+    if (mergedAutoTags.length >= MAX_IMAGE_AUTO_TAGS || seenTagIds.has(tagId)) {
+      continue;
+    }
+
+    if (isClassifierTagSuppressedByCaption(tagId, mergedAutoTags)) {
+      continue;
+    }
+
+    if (!hasSpecificClassifierSupport(tagId, classifierResult.evidence)) {
+      continue;
+    }
+
+    mergedAutoTags.push(tagId);
+    seenTagIds.add(tagId);
+  }
+
+  return mergedAutoTags;
+}
+
+function isClassifierTagSuppressedByCaption(tagId: string, captionAutoTags: string[]) {
+  const suppressedByCaptionTags = new Set(captionAutoTags.flatMap((captionTagId) => imageAutoTagSuppressions[captionTagId] ?? []));
+  return suppressedByCaptionTags.has(tagId);
+}
+
+function buildAcceptedCaptionEvidence(evidence: AnalysisEvidenceCandidate[], acceptedTagIds: string[]) {
+  return evidence.map((candidate) => ({
+    ...candidate,
+    accepted: candidate.mappedTagId !== null && acceptedTagIds.includes(candidate.mappedTagId),
+  }));
+}
+
+function buildAcceptedClassifierEvidence(evidence: AnalysisEvidenceCandidate[], acceptedTagIds: string[]) {
+  return evidence.map((candidate) => ({
+    ...candidate,
+    accepted: candidate.accepted && candidate.mappedTagId !== null && acceptedTagIds.includes(candidate.mappedTagId),
+  }));
+}
+
+function hasSpecificClassifierSupport(tagId: string, evidence: AnalysisEvidenceCandidate[]) {
+  return evidence.some(
+    (candidate) =>
+      candidate.source === "classifier" &&
+      candidate.accepted &&
+      candidate.mappedTagId === tagId &&
+      !candidate.matchedTerms.includes("broad"),
+  );
+}
+
+function mergeCaptionCandidates(caption: string) {
+  const mergedCandidates = new Map<string, ImageAnalysisCandidate>();
+
+  for (const candidate of [
+    ...extractCaptionPromptCandidates(caption),
+    ...inferImageAnalysisCandidatesFromCaption(caption),
+  ]) {
+    const existingCandidate = mergedCandidates.get(candidate.tagId);
+
+    if (!existingCandidate) {
+      mergedCandidates.set(candidate.tagId, {
+        matchedTerms: [...candidate.matchedTerms],
+        score: candidate.score,
+        tagId: candidate.tagId,
+      });
+      continue;
+    }
+
+    existingCandidate.matchedTerms = [...new Set([...existingCandidate.matchedTerms, ...candidate.matchedTerms])];
+    existingCandidate.score = Math.max(existingCandidate.score, candidate.score);
+  }
+
+  return [...mergedCandidates.values()].sort((first, second) => second.score - first.score);
 }

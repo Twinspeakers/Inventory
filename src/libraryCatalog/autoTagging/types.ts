@@ -1,5 +1,6 @@
 import type { AnalysisEvidenceCandidate } from "../../app/appTypes";
-import type { ImageClassifierConcept, PrioritizedImageConcept } from "./prioritizeConcepts";
+import type { PrioritizedImageConcept } from "./prioritizeConcepts";
+import type { ImageClassifierConcept } from "./visionPromptTypes";
 
 export type ImageAutoTagResult = {
   autoTags: string[];

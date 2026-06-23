@@ -37,7 +37,7 @@ export const sourceFileExtensions = new Set([
 ]);
 
 export const TAG_INFERENCE_VERSION = 18;
-export const IMAGE_ANALYSIS_VERSION = 3;
+export const IMAGE_ANALYSIS_VERSION = 5;
 
 export type ImageAnalysisCandidate = {
   matchedTerms: string[];
