@@ -8,6 +8,12 @@ export const humanoidTags = [
     implies: ["humanoid", "person"],
     related: ["machine", "robot"],
   }),
+  tag("boy", {
+    label: "Boy",
+    aliases: ["young boy", "male child"],
+    parents: ["human"],
+    implies: ["human", "person"],
+  }),
   tag("angel", {
     label: "Angel",
     aliases: ["celestial", "divine being"],
@@ -70,6 +76,12 @@ export const humanoidTags = [
     parents: ["mythic-humanoid"],
     implies: ["mythic-humanoid", "humanoid", "person"],
   }),
+  tag("girl", {
+    label: "Girl",
+    aliases: ["young girl", "female child"],
+    parents: ["human"],
+    implies: ["human", "person"],
+  }),
   tag("goblin", {
     label: "Goblin",
     aliases: ["goblinkin"],
@@ -100,6 +112,12 @@ export const humanoidTags = [
     parents: ["mythic-humanoid"],
     implies: ["mythic-humanoid", "humanoid", "person"],
     related: ["fish", "water"],
+  }),
+  tag("man", {
+    label: "Man",
+    aliases: ["male person", "adult male"],
+    parents: ["human"],
+    implies: ["human", "person"],
   }),
   tag("mythic-humanoid", {
     label: "Mythic Humanoid",
@@ -142,5 +160,11 @@ export const humanoidTags = [
     parents: ["humanoid"],
     implies: ["humanoid", "person"],
     related: ["bone"],
+  }),
+  tag("woman", {
+    label: "Woman",
+    aliases: ["female person", "adult female"],
+    parents: ["human"],
+    implies: ["human", "person"],
   }),
 ];

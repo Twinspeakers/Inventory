@@ -66,7 +66,7 @@ export function getAssetTagSuggestions(
   }
 
   const existingTagIds = new Set(normalizeLibraryNodeTagValues(asset.tags));
-  const currentTagIds = new Set(normalizeLibraryNodeTagValues([...asset.systemTags, ...asset.keptTags, ...asset.userTags]));
+  const currentTagIds = getTrustedAssetTagIds(asset);
   const folderContextTagIds = getAssetFolderContextTagIds(asset, folders, libraryNodeIncludesAsset);
   const siblingTagCounts = getAssetSiblingTagCounts(asset, assets);
   const cooccurringTagCounts = getAssetCooccurringTagCounts(asset, assets, currentTagIds);
@@ -314,7 +314,7 @@ function getAssetSiblingTagCounts(asset: Asset, assets: Asset[]) {
       continue;
     }
 
-    for (const tagId of new Set(normalizeLibraryNodeTagValues(candidate.tags))) {
+    for (const tagId of getTrustedAssetTagIds(candidate)) {
       siblingTagCounts.set(tagId, (siblingTagCounts.get(tagId) ?? 0) + 1);
     }
   }
@@ -334,7 +334,7 @@ function getAssetCooccurringTagCounts(asset: Asset, assets: Asset[], currentTagI
       continue;
     }
 
-    const candidateTagIds = new Set(normalizeLibraryNodeTagValues(candidate.tags));
+    const candidateTagIds = getTrustedAssetTagIds(candidate);
 
     if (![...currentTagIds].some((tagId) => candidateTagIds.has(tagId))) {
       continue;
@@ -353,4 +353,8 @@ function getAssetCooccurringTagCounts(asset: Asset, assets: Asset[], currentTagI
 function getAssetDirectoryPath(path: string) {
   const separatorIndex = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/"));
   return separatorIndex === -1 ? "" : path.slice(0, separatorIndex);
+}
+
+function getTrustedAssetTagIds(asset: Pick<Asset, "systemTags" | "keptTags" | "userTags">) {
+  return new Set(normalizeLibraryNodeTagValues([...asset.systemTags, ...asset.keptTags, ...asset.userTags]));
 }

@@ -1,4 +1,4 @@
-import type { Asset, AssetType, ScannedAsset } from "../../app/appTypes";
+import type { AnalysisEvidenceCandidate, Asset, AssetType, ScannedAsset } from "../../app/appTypes";
 import type { ModelInspectorResult } from "../../sceneReaders/threeModelReader";
 import {
   addNormalizedLibraryMatchTerm,
@@ -9,7 +9,7 @@ import {
   normalizeLibraryNodeTagValues,
   normalizedTextIncludesTerm,
 } from "../normalization";
-import { libraryTagDefinitions } from "../tags";
+import { libraryTagDefinitions, libraryTagSourceSections, type LibraryTagSourceFolder } from "../tags";
 import type { LibraryTagDefinition } from "../types";
 import { ambiguousSenseRules, type AmbiguousSenseDefinition, type AmbiguousSenseRule } from "./tagAmbiguity";
 
@@ -37,7 +37,13 @@ export const sourceFileExtensions = new Set([
 ]);
 
 export const TAG_INFERENCE_VERSION = 18;
-export const IMAGE_ANALYSIS_VERSION = 1;
+export const IMAGE_ANALYSIS_VERSION = 3;
+
+export type ImageAnalysisCandidate = {
+  matchedTerms: string[];
+  score: number;
+  tagId: string;
+};
 
 export const automaticCatalogTagIgnoredTerms = new Set([
   ...libraryNodeIgnoredMatchTerms,
@@ -244,6 +250,54 @@ const audioNonSoundEffectTerms = [
 
 const likelySoundEffectAudioExtensions = new Set(["aif", "aiff", "flac", "ogg", "wav"]);
 const libraryTagDefinitionsByKey = createLibraryTagDefinitionLookup(libraryTagDefinitions);
+const libraryTagSectionById = createLibraryTagSectionLookup(libraryTagSourceSections);
+const imageCaptionExcludedSectionIds = new Set(["activities", "events", "workflow"]);
+const imageCaptionColorTagIds = new Set(["black", "blue", "brown", "gray", "green", "orange-color", "pink", "purple", "red", "white", "yellow"]);
+const imageCaptionBroadLivingTagIds = new Set(["animal", "bird", "fish", "mammal", "person"]);
+const imageCaptionGenericTagIds = new Set([
+  "activity",
+  "animal",
+  "archive",
+  "artifact",
+  "audio",
+  "building",
+  "character",
+  "city",
+  "clothing",
+  "color",
+  "country",
+  "creature",
+  "decor",
+  "document",
+  "environment",
+  "event",
+  "farm",
+  "food",
+  "fruit",
+  "furniture",
+  "humanoid",
+  "image",
+  "ingredient",
+  "item",
+  "location",
+  "material",
+  "meal",
+  "nature",
+  "object",
+  "person",
+  "plant",
+  "place",
+  "prop",
+  "role",
+  "room",
+  "scene",
+  "sport",
+  "style",
+  "surface-finish",
+  "texture",
+  "vehicle",
+  "water",
+]);
 const modelPolyTagThresholds = {
   low: 5_000,
   high: 50_000,
@@ -266,6 +320,7 @@ type CandidateTagMatch = {
 
 export function toAsset(asset: ScannedAsset, modelResult?: ModelInspectorResult): Asset {
   const systemTags = normalizeLibraryNodeTagValues(getAutomaticAssetTags(asset, modelResult));
+  const autoTags = normalizeLibraryNodeTagValues(asset.auto_tags ?? asset.analysis_suggested_tags ?? []);
   const defaultKeptTags = normalizeLibraryNodeTagValues(getDefaultKeptAssetTags(asset)).filter((tag) => systemTags.includes(tag));
   const keptTags = normalizeLibraryNodeTagValues([...defaultKeptTags, ...(asset.kept_tags ?? [])]);
   const userTags = normalizeLibraryNodeTagValues(asset.tags ?? []);
@@ -281,14 +336,16 @@ export function toAsset(asset: ScannedAsset, modelResult?: ModelInspectorResult)
     modified: formatModified(asset.modified_unix),
     modifiedUnix: asset.modified_unix,
     analysisCaption: asset.analysis_caption ?? "",
+    analysisEvidence: asset.analysis_evidence ?? buildAnalysisEvidenceFromSuggestedTags(autoTags),
     analysisError: asset.analysis_error ?? "",
     analysisStatus: asset.analysis_status ?? "idle",
-    analysisSuggestedTags: normalizeLibraryNodeTagValues(asset.analysis_suggested_tags ?? []),
+    analysisSuggestedTags: autoTags,
     analysisVersion: asset.analysis_version ?? 0,
+    autoTags,
     defaultKeptTags,
     keptTags,
     systemTags,
-    tags: normalizeLibraryNodeTagValues([...systemTags, ...keptTags, ...userTags]),
+    tags: normalizeLibraryNodeTagValues([...systemTags, ...autoTags, ...keptTags, ...userTags]),
     userTags,
     notes: asset.notes ?? "",
     color: typeColors[asset.file_type],
@@ -317,10 +374,6 @@ function getAutomaticAssetTags(asset: ScannedAsset, modelResult?: ModelInspector
     addKnownLibraryTag(tags, tag);
   }
 
-  for (const tag of asset.analysis_suggested_tags ?? []) {
-    addKnownLibraryTag(tags, tag);
-  }
-
   for (const tag of getAutomaticModelInspectorTags(modelResult)) {
     addKnownLibraryTag(tags, tag);
   }
@@ -341,10 +394,14 @@ function getDefaultKeptAssetTags(asset: ScannedAsset) {
 }
 
 function getScannedAssetTagSearchText(asset: ScannedAsset) {
+  return getAssetTagSearchText(asset, false);
+}
+
+function getAssetTagSearchText(asset: ScannedAsset, includeAnalysisCaption: boolean) {
   const contentClueSearchText = normalizeLibraryMatchText((asset.content_clues ?? []).join(" "));
   return normalizeLibraryMatchText([
     asset.name,
-    asset.analysis_caption ?? "",
+    includeAnalysisCaption ? asset.analysis_caption ?? "" : "",
     contentClueSearchText,
     asset.extension,
     asset.file_type,
@@ -352,13 +409,19 @@ function getScannedAssetTagSearchText(asset: ScannedAsset) {
 }
 
 export function inferImageAnalysisTagsFromCaption(caption: string) {
+  return inferImageAnalysisCandidatesFromCaption(caption)
+    .flatMap((candidate) => getTagDefinitionOutputTags(getLibraryTagDefinitionByKey(candidate.tagId) ?? null))
+    .slice(0, 8);
+}
+
+export function inferImageAnalysisCandidatesFromCaption(caption: string) {
   const trimmedCaption = caption.trim();
 
   if (!trimmedCaption) {
     return [];
   }
 
-  return getAutomaticLibraryRegistryTags({
+  const asset: ScannedAsset = {
     id: 0,
     name: trimmedCaption,
     path: trimmedCaption,
@@ -368,11 +431,21 @@ export function inferImageAnalysisTagsFromCaption(caption: string) {
     modified_unix: null,
     content_clues: [trimmedCaption],
     analysis_caption: trimmedCaption,
+    analysis_evidence: [],
     analysis_suggested_tags: [],
+    auto_tags: [],
     kept_tags: [],
     notes: "",
     tags: [],
-  }).slice(0, 8);
+  };
+  const context = createAssetInferenceContext(asset, true);
+  const candidates = collectCandidateTagMatches(asset, context);
+  const resolvedMatches = resolveCandidateTagMatches(candidates, context);
+  return getRankedImageCaptionTagMatches(resolvedMatches, context).map(({ match, score }) => ({
+    matchedTerms: match.matchedTerms,
+    score,
+    tagId: match.definition.id,
+  }));
 }
 
 function getAutomaticLibraryRegistryTags(asset: ScannedAsset) {
@@ -392,8 +465,8 @@ function getAutomaticLibraryRegistryTags(asset: ScannedAsset) {
   return [...tags];
 }
 
-function createAssetInferenceContext(asset: ScannedAsset): AssetInferenceContext {
-  const searchText = getScannedAssetTagSearchText(asset);
+function createAssetInferenceContext(asset: ScannedAsset, includeAnalysisCaption = false): AssetInferenceContext {
+  const searchText = getAssetTagSearchText(asset, includeAnalysisCaption);
 
   return {
     combinedText: searchText,
@@ -526,6 +599,167 @@ function dedupeCandidateTagMatches(matches: CandidateTagMatch[]) {
   }
 
   return dedupedMatches;
+}
+
+function getRankedImageCaptionTagMatches(matches: CandidateTagMatch[], context: AssetInferenceContext) {
+  const scoredMatches = matches
+    .map((match) => ({ match, score: scoreImageCaptionTagMatch(match, context) }))
+    .filter(({ score }) => score > 0)
+    .sort((first, second) => second.score - first.score || second.match.matchedTerms.length - first.match.matchedTerms.length);
+
+  const hasConcreteNonColorMatch = scoredMatches.some(({ match, score }) => score >= 18 && !isImageCaptionColorTag(match.definition));
+  const acceptedTagIds = new Set<string>();
+  const acceptedLabels = new Set<string>();
+  const acceptedMatches: CandidateTagMatch[] = [];
+
+  for (const { match } of scoredMatches) {
+    const tagId = match.definition.id;
+    const tagLabel = normalizeLibraryMatchText(match.definition.label);
+
+    if (acceptedTagIds.has(tagId)) {
+      continue;
+    }
+
+    if (imageCaptionExcludedSectionIds.has(getLibraryTagSectionId(match.definition))) {
+      continue;
+    }
+
+    if (hasConcreteNonColorMatch && isImageCaptionColorTag(match.definition)) {
+      continue;
+    }
+
+    if (acceptedLabels.has(tagLabel) && isImageCaptionColorTag(match.definition)) {
+      continue;
+    }
+
+    if (acceptedMatches.some((acceptedMatch) => imageCaptionTagsConflict(acceptedMatch.definition, match.definition))) {
+      continue;
+    }
+
+    acceptedMatches.push(match);
+    acceptedTagIds.add(tagId);
+    acceptedLabels.add(tagLabel);
+  }
+
+  return acceptedMatches.map((match) => ({
+    match,
+    score: scoreImageCaptionTagMatch(match, context),
+  }));
+}
+
+function scoreImageCaptionTagMatch(match: CandidateTagMatch, context: AssetInferenceContext) {
+  const matchedTerms = match.matchedTerms;
+  const definition = match.definition;
+  let score = matchedTerms.length * 12;
+  const normalizedLabel = normalizeLibraryMatchText(definition.label);
+  const normalizedId = normalizeLibraryMatchText(definition.id);
+
+  if (matchedTerms.includes(normalizedId) || matchedTerms.includes(normalizedLabel)) {
+    score += 12;
+  }
+
+  if (imageCaptionExcludedSectionIds.has(getLibraryTagSectionId(definition))) {
+    score -= 40;
+  }
+
+  if (isImageCaptionColorTag(definition)) {
+    score -= 20;
+  }
+
+  if (isImageCaptionSpecificLivingTag(definition)) {
+    score -= 10;
+  } else if (isImageCaptionBroadLivingTag(definition)) {
+    score -= 6;
+  }
+
+  if (imageCaptionGenericTagIds.has(definition.id)) {
+    score -= 8;
+  }
+
+  if (definition.id === "orange-color" && hasFoodEvidence(context.combinedText)) {
+    score -= 18;
+  }
+
+  return score;
+}
+
+function isImageCaptionColorTag(tagDefinition: LibraryTagDefinition) {
+  return imageCaptionColorTagIds.has(tagDefinition.id) || getLibraryTagSectionId(tagDefinition) === "color";
+}
+
+function isImageCaptionBroadLivingTag(tagDefinition: LibraryTagDefinition) {
+  return imageCaptionBroadLivingTagIds.has(tagDefinition.id);
+}
+
+function isImageCaptionSpecificLivingTag(tagDefinition: LibraryTagDefinition) {
+  if (isImageCaptionBroadLivingTag(tagDefinition)) {
+    return false;
+  }
+
+  const relatedTagIds = [tagDefinition.id, ...(tagDefinition.parents ?? []), ...(tagDefinition.implies ?? [])];
+  return relatedTagIds.some((tagId) => imageCaptionBroadLivingTagIds.has(tagId));
+}
+
+function hasFoodEvidence(text: string) {
+  return [
+    "fruit",
+    "fruits",
+    "food",
+    "produce",
+    "citrus",
+    "lemon",
+    "lemons",
+    "orange",
+    "oranges",
+    "lime",
+    "limes",
+    "grapefruit",
+    "mandarin",
+    "tangerine",
+  ].some((term) => normalizedTextIncludesTerm(text, normalizeLibraryMatchText(term)));
+}
+
+function imageCaptionTagsConflict(first: LibraryTagDefinition, second: LibraryTagDefinition) {
+  if (first.id === second.id) {
+    return false;
+  }
+
+  const firstLabel = normalizeLibraryMatchText(first.label);
+  const secondLabel = normalizeLibraryMatchText(second.label);
+
+  if (firstLabel === secondLabel) {
+    return true;
+  }
+
+  return (
+    first.id === "orange-color" && second.id === "orange" ||
+    first.id === "orange" && second.id === "orange-color"
+  );
+}
+
+function getLibraryTagSectionId(tagDefinition: LibraryTagDefinition) {
+  return libraryTagSectionById.get(tagDefinition.id) ?? "";
+}
+
+function getTagDefinitionOutputTags(tagDefinition: LibraryTagDefinition | null) {
+  if (!tagDefinition) {
+    return [];
+  }
+
+  const tags = new Set<string>();
+  addLibraryTagDefinitionTags(tags, tagDefinition);
+  return [...tags];
+}
+
+function buildAnalysisEvidenceFromSuggestedTags(tags: string[]): AnalysisEvidenceCandidate[] {
+  return tags.map((tagId) => ({
+    accepted: true,
+    mappedTagId: tagId,
+    matchedTerms: [tagId],
+    rawTagId: tagId,
+    score: 0,
+    source: "caption",
+  }));
 }
 
 function libraryTagDefinitionCanMatchAsset(asset: ScannedAsset, tagDefinition: LibraryTagDefinition) {
@@ -710,6 +944,30 @@ function getAssetImmediateParentName(path: string) {
 function getAssetDirectoryPath(path: string) {
   const separatorIndex = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/"));
   return separatorIndex === -1 ? "" : path.slice(0, separatorIndex);
+}
+
+function createLibraryTagSectionLookup(sections: typeof libraryTagSourceSections) {
+  const lookup = new Map<string, string>();
+
+  function visitFolder(sectionId: string, folder: LibraryTagSourceFolder) {
+    for (const file of folder.files) {
+      for (const tagDefinition of file.tags) {
+        if (!lookup.has(tagDefinition.id)) {
+          lookup.set(tagDefinition.id, sectionId);
+        }
+      }
+    }
+
+    for (const childFolder of folder.folders ?? []) {
+      visitFolder(sectionId, childFolder);
+    }
+  }
+
+  for (const section of sections) {
+    visitFolder(section.id, section);
+  }
+
+  return lookup;
 }
 
 function normalizedTextIncludesAnyTerm(text: string, terms: string[]) {

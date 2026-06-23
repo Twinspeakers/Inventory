@@ -74,9 +74,14 @@ export function AssetTagEditor({
           </div>
           {asset.analysisCaption ? <p className="mt-2 text-xs leading-relaxed text-muted">{asset.analysisCaption}</p> : null}
           {asset.analysisError ? <p className="mt-2 text-xs leading-relaxed text-copper">{asset.analysisError}</p> : null}
-          {asset.analysisSuggestedTags.length > 0 ? (
+          {asset.autoTags.length > 0 ? (
             <p className="mt-2 text-[11px] uppercase tracking-normal text-muted">
-              Suggested by AI: {asset.analysisSuggestedTags.join(", ")}
+              Automatic tags: {asset.autoTags.join(", ")}
+            </p>
+          ) : null}
+          {asset.analysisEvidence.length > asset.autoTags.length ? (
+            <p className="mt-1 text-[11px] uppercase tracking-normal text-muted">
+              {asset.analysisEvidence.length - asset.autoTags.length} extra analysis signals kept as internal evidence
             </p>
           ) : null}
         </div>
@@ -113,6 +118,11 @@ export function AssetTagEditor({
               </button>
             );
           })}
+          {asset.autoTags.map((tag) => (
+            <span className="tag tag-system" key={`auto:${tag}`} title={`${tag} was applied automatically from image analysis`}>
+              <span>{tag}</span>
+            </span>
+          ))}
           {keptOnlyTags.map((tag) => (
             <button className="tag tag-keep-button tag-kept" key={tag} title={`Stop keeping ${tag}`} type="button" onClick={() => toggleKeptTag(tag)}>
               <span>{tag}</span>
@@ -157,7 +167,7 @@ function getAnalysisStatusLabel(asset: InspectorAsset) {
     case "error":
       return "Analysis failed";
     case "done":
-      return asset.analysisSuggestedTags.length > 0 ? `${asset.analysisSuggestedTags.length} AI tag suggestions ready` : "Analysis finished with no tag suggestions";
+      return asset.autoTags.length > 0 ? `${asset.autoTags.length} automatic tags applied` : "Analysis finished with no automatic tags";
     case "idle":
     default:
       return asset.analysisVersion > 0 ? "Waiting to reanalyze" : "Waiting to analyze";

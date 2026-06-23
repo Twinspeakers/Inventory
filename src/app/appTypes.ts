@@ -40,6 +40,16 @@ export type UndoContext = "library" | "nvd" | "nvv";
 
 export type AssetAnalysisStatus = "idle" | "running" | "done" | "error";
 
+export type AnalysisEvidenceCandidate = {
+  accepted: boolean;
+  mappedTagId: string | null;
+  matchedTerms: string[];
+  rawTagId: string;
+  regionRole?: "background" | "primary" | "secondary";
+  score: number;
+  source: "caption" | "classifier";
+};
+
 export type ScannedAsset = {
   id: number;
   name: string;
@@ -50,11 +60,13 @@ export type ScannedAsset = {
   modified_unix: number | null;
   content_clues?: string[];
   analysis_caption?: string;
+  analysis_evidence?: AnalysisEvidenceCandidate[];
   analysis_error?: string;
   analysis_file_signature?: string;
   analysis_status?: AssetAnalysisStatus;
   analysis_suggested_tags?: string[];
   analysis_version?: number;
+  auto_tags?: string[];
   kept_tags?: string[];
   notes?: string;
   tags?: string[];
@@ -142,10 +154,12 @@ export type Asset = {
   modified: string;
   modifiedUnix: number | null;
   analysisCaption: string;
+  analysisEvidence: AnalysisEvidenceCandidate[];
   analysisError: string;
   analysisStatus: AssetAnalysisStatus;
   analysisSuggestedTags: string[];
   analysisVersion: number;
+  autoTags: string[];
   defaultKeptTags: string[];
   keptTags: string[];
   systemTags: string[];

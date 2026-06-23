@@ -1,0 +1,88 @@
+import { tag } from "../../tag";
+
+export const catTags = [
+  tag("bengal-cat", {
+    label: "Bengal Cat",
+    aliases: ["bengal"],
+    parents: ["cat"],
+    implies: ["cat", "mammal", "animal"],
+    matches: ["cat"],
+  }),
+  tag("british-shorthair", {
+    label: "British Shorthair",
+    aliases: ["british shorthair cat"],
+    parents: ["cat"],
+    implies: ["cat", "mammal", "animal"],
+    matches: ["cat"],
+  }),
+  tag("calico-cat", {
+    label: "Calico Cat",
+    aliases: ["calico"],
+    parents: ["cat"],
+    implies: ["cat", "mammal", "animal"],
+    matches: ["cat"],
+  }),
+  tag("maine-coon", {
+    label: "Maine Coon",
+    aliases: ["maine coon cat"],
+    parents: ["cat"],
+    implies: ["cat", "mammal", "animal"],
+    matches: ["cat"],
+  }),
+  tag("persian-cat", {
+    label: "Persian Cat",
+    aliases: ["persian"],
+    parents: ["cat"],
+    implies: ["cat", "mammal", "animal"],
+    matches: ["cat"],
+  }),
+  tag("ragdoll-cat", {
+    label: "Ragdoll Cat",
+    aliases: ["ragdoll"],
+    parents: ["cat"],
+    implies: ["cat", "mammal", "animal"],
+    matches: ["cat"],
+  }),
+  tag("scottish-fold", {
+    label: "Scottish Fold",
+    aliases: ["scottish fold cat"],
+    parents: ["cat"],
+    implies: ["cat", "mammal", "animal"],
+    matches: ["cat"],
+  }),
+  tag("siamese-cat", {
+    label: "Siamese Cat",
+    aliases: ["siamese"],
+    parents: ["cat"],
+    implies: ["cat", "mammal", "animal"],
+    matches: ["cat"],
+  }),
+  tag("sphynx-cat", {
+    label: "Sphynx Cat",
+    aliases: ["sphynx"],
+    parents: ["cat"],
+    implies: ["cat", "mammal", "animal"],
+    matches: ["cat"],
+  }),
+  tag("tabby-cat", {
+    label: "Tabby Cat",
+    aliases: ["tabby"],
+    parents: ["cat"],
+    implies: ["cat", "mammal", "animal"],
+    matches: ["cat"],
+  }),
+  tag("tortoiseshell-cat", {
+    label: "Tortoiseshell Cat",
+    aliases: ["tortoiseshell", "tortie"],
+    parents: ["cat"],
+    implies: ["cat", "mammal", "animal"],
+    matches: ["cat"],
+  }),
+  tag("tuxedo-cat", {
+    label: "Tuxedo Cat",
+    aliases: ["tuxedo kitten"],
+    parents: ["cat"],
+    implies: ["cat", "mammal", "animal"],
+    matches: ["cat"],
+  }),
+];

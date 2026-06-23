@@ -28,6 +28,7 @@ export const safeCrossDomainCollisionTerms = new Set([
   "instrument",
   "letter",
   "light",
+  "lab",
   "lookout",
   "reef",
   "sand",

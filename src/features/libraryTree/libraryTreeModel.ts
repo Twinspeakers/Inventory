@@ -389,11 +389,13 @@ export function mergeScannedAssets(existingAssets: ScannedAsset[], newAssets: Sc
     assetsByPath.set(pathKey, {
       ...asset,
       analysis_caption: existingAsset?.analysis_caption ?? asset.analysis_caption ?? "",
+      analysis_evidence: existingAsset?.analysis_evidence ?? asset.analysis_evidence ?? [],
       analysis_error: existingAsset?.analysis_error ?? asset.analysis_error ?? "",
       analysis_file_signature: existingAsset?.analysis_file_signature ?? asset.analysis_file_signature ?? "",
       analysis_status: existingAsset?.analysis_status ?? asset.analysis_status ?? "idle",
       analysis_suggested_tags: existingAsset?.analysis_suggested_tags ?? asset.analysis_suggested_tags ?? [],
       analysis_version: existingAsset?.analysis_version ?? asset.analysis_version ?? 0,
+      auto_tags: existingAsset?.auto_tags ?? asset.auto_tags ?? existingAsset?.analysis_suggested_tags ?? asset.analysis_suggested_tags ?? [],
       name: existingAsset?.name ?? asset.name,
       kept_tags: existingAsset?.kept_tags ?? asset.kept_tags ?? [],
       notes: existingAsset?.notes ?? asset.notes ?? "",

@@ -3,6 +3,8 @@ import { hobbyTags, skillTags, sportTags } from "./activities";
 import {
   amphibianTags,
   birdTags,
+  catTags,
+  dogTags,
   fishTags,
   insectTags,
   invertebrateTags,
@@ -151,6 +153,16 @@ export const libraryTagSourceSections: LibraryTagSourceSection[] = [
         id: "birds",
         label: "Birds",
         files: [{ id: "birds", label: "birds.ts", tags: birdTags }],
+      },
+      {
+        id: "cats",
+        label: "Cats",
+        files: [{ id: "cats", label: "cats.ts", tags: catTags }],
+      },
+      {
+        id: "dogs",
+        label: "Dogs",
+        files: [{ id: "dogs", label: "dogs.ts", tags: dogTags }],
       },
       {
         id: "fish",

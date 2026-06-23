@@ -1,0 +1,90 @@
+import { tag } from "../../tag";
+
+export const dogTags = [
+  tag("beagle", {
+    label: "Beagle",
+    parents: ["dog"],
+    implies: ["dog", "mammal", "animal"],
+    matches: ["dog"],
+  }),
+  tag("border-collie", {
+    label: "Border Collie",
+    parents: ["dog"],
+    implies: ["dog", "mammal", "animal"],
+    matches: ["dog"],
+  }),
+  tag("bulldog", {
+    label: "Bulldog",
+    aliases: ["english bulldog", "french bulldog"],
+    parents: ["dog"],
+    implies: ["dog", "mammal", "animal"],
+    matches: ["dog"],
+  }),
+  tag("chihuahua", {
+    label: "Chihuahua",
+    parents: ["dog"],
+    implies: ["dog", "mammal", "animal"],
+    matches: ["dog"],
+  }),
+  tag("corgi", {
+    label: "Corgi",
+    aliases: ["welsh corgi"],
+    parents: ["dog"],
+    implies: ["dog", "mammal", "animal"],
+    matches: ["dog"],
+  }),
+  tag("dachshund", {
+    label: "Dachshund",
+    aliases: ["sausage dog", "wiener dog"],
+    parents: ["dog"],
+    implies: ["dog", "mammal", "animal"],
+    matches: ["dog"],
+  }),
+  tag("dalmatian", {
+    label: "Dalmatian",
+    parents: ["dog"],
+    implies: ["dog", "mammal", "animal"],
+    matches: ["dog"],
+  }),
+  tag("german-shepherd", {
+    label: "German Shepherd",
+    aliases: ["alsatian"],
+    parents: ["dog"],
+    implies: ["dog", "mammal", "animal"],
+    matches: ["dog"],
+  }),
+  tag("golden-retriever", {
+    label: "Golden Retriever",
+    parents: ["dog"],
+    implies: ["dog", "mammal", "animal"],
+    matches: ["dog"],
+  }),
+  tag("husky", {
+    label: "Husky",
+    aliases: ["siberian husky"],
+    parents: ["dog"],
+    implies: ["dog", "mammal", "animal"],
+    matches: ["dog"],
+  }),
+  tag("labrador-retriever", {
+    label: "Labrador Retriever",
+    aliases: ["labrador", "labrador dog", "lab"],
+    parents: ["dog"],
+    implies: ["dog", "mammal", "animal"],
+    matches: ["dog"],
+  }),
+  tag("poodle", {
+    label: "Poodle",
+    aliases: ["toy poodle", "standard poodle"],
+    parents: ["dog"],
+    implies: ["dog", "mammal", "animal"],
+    matches: ["dog"],
+  }),
+  tag("shiba-inu", {
+    label: "Shiba Inu",
+    aliases: ["shiba"],
+    parents: ["dog"],
+    implies: ["dog", "mammal", "animal"],
+    matches: ["dog"],
+  }),
+];

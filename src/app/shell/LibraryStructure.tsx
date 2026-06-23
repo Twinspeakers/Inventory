@@ -5,7 +5,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from "react";
 import { useEffect, useRef, useState } from "react";
-import { Backpack, ChevronDown, ChevronLeft, ChevronRight, FolderSearch, ListTree, Plus, RefreshCcw } from "lucide-react";
+import { Backpack, ChevronDown, ChevronLeft, ChevronRight, ListTree, Plus, RefreshCcw, X } from "lucide-react";
 import type { LibraryView } from "../../features/assetShelf";
 import type { NvdDocument } from "../../features/inventoryProject";
 import { getNvdStyleRole, type NvdStyleRole } from "../../features/nvdEditor";
@@ -15,6 +15,7 @@ export function LibraryStructure({
   activeView,
   activeNvdOutline,
   autoSeedLibraryStructureEnabled,
+  canOpenFolder,
   canRegenerateStarterLibraryStructure,
   canCreateFolder,
   canShowNvdNavigation,
@@ -25,6 +26,7 @@ export function LibraryStructure({
   onAutoSeedLibraryStructureEnabledChange,
   onCreateFolder,
   onNavigateNvdBlock,
+  onOpenFolder,
   onRegenerateStarterLibraryStructure,
   onRenameAssetStart,
   onRenameAssetCancel,
@@ -42,6 +44,7 @@ export function LibraryStructure({
   onToggleCollapsed,
   onToggleSourceCollapsed,
   onToggleSourceFolder,
+  onRemoveSourceFolder,
   onOpenSourceFolderContextMenu,
   onToggleTreeNode,
   onOpenNodeContextMenu,
@@ -54,6 +57,7 @@ export function LibraryStructure({
   activeView: LibraryView;
   activeNvdOutline: NvdOutlineEntry[];
   autoSeedLibraryStructureEnabled: boolean;
+  canOpenFolder: boolean;
   canRegenerateStarterLibraryStructure: boolean;
   canCreateFolder: boolean;
   canShowNvdNavigation: boolean;
@@ -64,6 +68,7 @@ export function LibraryStructure({
   onAutoSeedLibraryStructureEnabledChange: (enabled: boolean) => void;
   onCreateFolder: () => void;
   onNavigateNvdBlock: (blockIndex: number) => void;
+  onOpenFolder: () => void;
   onRegenerateStarterLibraryStructure: () => void;
   onRenameAssetStart: (assetId: number) => void;
   onRenameAssetCancel: () => void;
@@ -81,6 +86,7 @@ export function LibraryStructure({
   onToggleCollapsed: () => void;
   onToggleSourceCollapsed: () => void;
   onToggleSourceFolder: (sourceId: string) => void;
+  onRemoveSourceFolder: (sourceId: string) => void;
   onOpenSourceFolderContextMenu: (folder: SourceFolder, event: ReactMouseEvent<HTMLElement>) => void;
   onToggleTreeNode: (nodeId: string) => void;
   onOpenNodeContextMenu: (node: StructureNode, event: ReactMouseEvent<HTMLElement>) => void;
@@ -233,9 +239,12 @@ export function LibraryStructure({
             <SourceFoldersPanel
               collapsed={sourceSectionCollapsed}
               height={sourceSectionHeight}
+              canOpenFolder={canOpenFolder}
+              onOpenFolder={onOpenFolder}
               onResizeStart={onSourceResizeStart}
               onToggleCollapsed={onToggleSourceCollapsed}
               onToggleSourceFolder={onToggleSourceFolder}
+              onRemoveSourceFolder={onRemoveSourceFolder}
               onOpenSourceFolderContextMenu={onOpenSourceFolderContextMenu}
               sourceFolders={sourceFolders}
             />
@@ -315,17 +324,23 @@ function getNvdHeadingDepth(role: Exclude<NvdStyleRole, "p">) {
 function SourceFoldersPanel({
   collapsed,
   height,
+  canOpenFolder,
+  onOpenFolder,
   onResizeStart,
   onToggleCollapsed,
   onToggleSourceFolder,
+  onRemoveSourceFolder,
   onOpenSourceFolderContextMenu,
   sourceFolders,
 }: {
   collapsed: boolean;
   height: number;
+  canOpenFolder: boolean;
+  onOpenFolder: () => void;
   onResizeStart: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onToggleCollapsed: () => void;
   onToggleSourceFolder: (sourceId: string) => void;
+  onRemoveSourceFolder: (sourceId: string) => void;
   onOpenSourceFolderContextMenu: (folder: SourceFolder, event: ReactMouseEvent<HTMLElement>) => void;
   sourceFolders: SourceFolder[];
 }) {
@@ -346,7 +361,16 @@ function SourceFoldersPanel({
       ) : null}
       <div className="flex h-9 shrink-0 items-center justify-between px-3">
         <div className="flex min-w-0 items-center gap-2 text-xs font-semibold uppercase text-muted">
-          <FolderSearch size={13} aria-hidden="true" />
+          <button
+            aria-label="Add source folder"
+            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-ink text-app transition hover:bg-steel disabled:cursor-not-allowed disabled:bg-surface-raised disabled:text-muted"
+            disabled={!canOpenFolder}
+            title="Add Source Folder..."
+            type="button"
+            onClick={onOpenFolder}
+          >
+            <Plus size={12} aria-hidden="true" />
+          </button>
           <span>Source Folders</span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -368,24 +392,38 @@ function SourceFoldersPanel({
         {sourceFolders.length > 0 ? (
           <div className="overflow-hidden rounded-sm border border-line">
             {sourceFolders.map((folder) => (
-              <button
-                className={`source-folder-row ${folder.enabled ? "" : "source-folder-row-disabled"}`}
-                key={folder.id}
-                onClick={() => onToggleSourceFolder(folder.id)}
-                onContextMenu={(event) => onOpenSourceFolderContextMenu(folder, event)}
-                title={folder.path}
-              >
-                <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{folder.name}</span>
-                <span className="flex shrink-0 items-center gap-2">
-                  <span className="truncate text-[11px] text-muted">
-                    {folder.assetIds.length} asset{folder.assetIds.length === 1 ? "" : "s"}
-                    {folder.skippedEntries > 0 ? `, ${folder.skippedEntries} skipped` : ""}
+              <div className={`source-folder-row ${folder.enabled ? "" : "source-folder-row-disabled"}`} key={folder.id}>
+                <button
+                  className="flex h-full min-w-0 flex-1 items-center justify-between gap-2 text-left"
+                  type="button"
+                  onClick={() => onToggleSourceFolder(folder.id)}
+                  onContextMenu={(event) => onOpenSourceFolderContextMenu(folder, event)}
+                  title={folder.path}
+                >
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{folder.name}</span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span className="truncate text-[11px] text-muted">
+                      {folder.assetIds.length} asset{folder.assetIds.length === 1 ? "" : "s"}
+                      {folder.skippedEntries > 0 ? `, ${folder.skippedEntries} skipped` : ""}
+                    </span>
+                    <span className={`source-folder-toggle ${folder.enabled ? "source-folder-toggle-on" : ""}`} aria-hidden="true">
+                      <span />
+                    </span>
                   </span>
-                  <span className={`source-folder-toggle ${folder.enabled ? "source-folder-toggle-on" : ""}`} aria-hidden="true">
-                    <span />
-                  </span>
-                </span>
-              </button>
+                </button>
+                <button
+                  aria-label={`Close ${folder.name}`}
+                  className="dark-icon-button h-5 w-5 shrink-0 border-transparent bg-transparent"
+                  title={`Close ${folder.name}`}
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onRemoveSourceFolder(folder.id);
+                  }}
+                >
+                  <X size={12} aria-hidden="true" />
+                </button>
+              </div>
             ))}
           </div>
         ) : (

@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { ActiveInventory } from "../../features/inventoryProject";
-import { IMAGE_ANALYSIS_VERSION, inferImageAnalysisTagsFromCaption } from "../../libraryCatalog/tag-inference";
+import { runImageAutoTagging } from "../../libraryCatalog/autoTagging";
+import { IMAGE_ANALYSIS_VERSION } from "../../libraryCatalog/tag-inference";
 import { getAssetFileUrl } from "../../sceneReaders/previewIo";
 import type { ScanResult, ScannedAsset } from "../appTypes";
 
@@ -17,6 +18,10 @@ type WorkerRequestMessage = {
 type WorkerResponseMessage =
   | {
       caption: string;
+      concepts: Array<{
+        label: string;
+        score: number;
+      }>;
       requestId: number;
       type: "analysis-complete";
     }
@@ -79,7 +84,10 @@ export function useImageAnalysis({
         return;
       }
 
-      const suggestedTags = inferImageAnalysisTagsFromCaption(message.caption);
+      const autoTagResult = runImageAutoTagging({
+        caption: message.caption,
+        classifierConcepts: message.concepts,
+      });
 
       setScanResult((currentScanResult) =>
         updateAssetAnalysis(currentScanResult, inFlightRequest.assetId, (asset) => {
@@ -90,11 +98,13 @@ export function useImageAnalysis({
           return {
             ...asset,
             analysis_caption: message.caption,
+            analysis_evidence: autoTagResult.evidence,
             analysis_error: "",
             analysis_file_signature: inFlightRequest.signature,
             analysis_status: "done",
-            analysis_suggested_tags: suggestedTags,
+            analysis_suggested_tags: autoTagResult.autoTags,
             analysis_version: IMAGE_ANALYSIS_VERSION,
+            auto_tags: autoTagResult.autoTags,
           };
         }),
       );
@@ -143,16 +153,18 @@ export function useImageAnalysis({
 
   function requestAssetReanalysis(assetId: number) {
     setScanResult((currentScanResult) =>
-      updateAssetAnalysis(currentScanResult, assetId, (asset) => ({
-        ...asset,
-        analysis_caption: "",
-        analysis_error: "",
-        analysis_file_signature: "",
-        analysis_status: "idle",
-        analysis_suggested_tags: [],
-        analysis_version: 0,
-      })),
-    );
+        updateAssetAnalysis(currentScanResult, assetId, (asset) => ({
+          ...asset,
+          analysis_caption: "",
+          analysis_evidence: [],
+          analysis_error: "",
+          analysis_file_signature: "",
+          analysis_status: "idle",
+          analysis_suggested_tags: [],
+          analysis_version: 0,
+          auto_tags: [],
+        })),
+      );
   }
 
   return {

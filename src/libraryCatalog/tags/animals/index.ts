@@ -1,6 +1,8 @@
 import { rootAnimalTags } from "./animals";
 import { amphibianTags } from "./amphibians";
 import { birdTags } from "./birds";
+import { catTags } from "./cats";
+import { dogTags } from "./dogs";
 import { fishTags } from "./fish";
 import { insectTags } from "./insects";
 import { invertebrateTags } from "./invertebrates";
@@ -11,6 +13,8 @@ export const animalTags = [
   ...rootAnimalTags,
   ...amphibianTags,
   ...birdTags,
+  ...catTags,
+  ...dogTags,
   ...fishTags,
   ...insectTags,
   ...invertebrateTags,
@@ -21,6 +25,8 @@ export const animalTags = [
 export {
   amphibianTags,
   birdTags,
+  catTags,
+  dogTags,
   fishTags,
   insectTags,
   invertebrateTags,

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ScannedAsset, VirtualFolder } from "../../app/appTypes";
 import { getAssetTagSuggestions } from "../../features/libraryTree/libraryTreeModel";
-import { toAsset } from "./index";
+import { inferImageAnalysisTagsFromCaption, toAsset } from "./index";
 
 function createScannedAsset(overrides: Partial<ScannedAsset> = {}): ScannedAsset {
   return {
@@ -295,6 +295,22 @@ describe("tag inference", () => {
     expect(asset.systemTags).not.toContain("paper-document");
   });
 
+  it("keeps automatic image analysis tags separate from deterministic system tags", () => {
+    const asset = toAsset(createScannedAsset({
+      name: "croissant-photo",
+      path: "C:/library/croissant-photo.png",
+      file_type: "Image",
+      extension: "png",
+      auto_tags: ["food"],
+      analysis_suggested_tags: ["food"],
+    }));
+
+    expect(asset.autoTags).toContain("food");
+    expect(asset.tags).toContain("food");
+    expect(asset.systemTags).toContain("image");
+    expect(asset.systemTags).not.toContain("food");
+  });
+
   it("uses text document content clues to rescue vague internal notes", () => {
     const asset = toAsset(createScannedAsset({
       name: "notes",
@@ -445,5 +461,23 @@ describe("asset tag suggestions", () => {
     expect(suggestions).not.toContain("location");
     expect(suggestions).not.toContain("paper");
     expect(suggestions).not.toContain("paper-document");
+  });
+});
+
+describe("image analysis caption inference", () => {
+  it("prefers concrete fruit tags over ambiguous orange color tags in captions", () => {
+    const tags = inferImageAnalysisTagsFromCaption("a pile of lemons on a table");
+
+    expect(tags).toContain("lemon");
+    expect(tags).toContain("fruit");
+    expect(tags).not.toContain("orange-color");
+    expect(tags).not.toContain("orange");
+  });
+
+  it("suppresses color-only tags when a concrete object match is present", () => {
+    const tags = inferImageAnalysisTagsFromCaption("a red hammer sitting on a wooden bench");
+
+    expect(tags).toContain("hammer");
+    expect(tags).not.toContain("red");
   });
 });

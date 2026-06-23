@@ -939,6 +939,7 @@ export function App() {
         activeView,
         activeNvdOutline: getNvdOutline(activeNvdDocument?.document ?? null),
         autoSeedLibraryStructureEnabled,
+        canOpenFolder: Boolean(activeInventory),
         canRegenerateStarterLibraryStructure,
         canCreateFolder: Boolean(activeInventory),
         canShowNvdNavigation: Boolean(activeInventory) && sceneMode === "nvd-document",
@@ -950,6 +951,7 @@ export function App() {
         onCreateFolder: createFolder,
         onNavigateNvdBlock: navigateToNvdBlock,
         onOpenNodeContextMenu: openLibraryNodeContextMenu,
+        onOpenFolder: handleOpenFolder,
         onRegenerateStarterLibraryStructure: regenerateStarterLibraryStructure,
         onRenameAssetStart: (assetId) => {
           setEditingLibraryFolderId(null);
@@ -980,6 +982,7 @@ export function App() {
         onPaneViewChange: changeLeftPaneView,
         onResetWidth: () => setLeftPaneWidth(DEFAULT_LEFT_PANE_WIDTH),
         onResizeStart: startLeftPaneResize,
+        onRemoveSourceFolder: removeSourceFolder,
         onSelectAsset: selectAsset,
         onSelectFolder: selectFolder,
         onSelectView: selectView,
