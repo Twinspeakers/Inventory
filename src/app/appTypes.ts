@@ -113,6 +113,7 @@ export type PersistedWorkspaceState = {
   sceneMode: SceneMode;
   selectedAssetId: number | null;
   selectedFolderId: string | null;
+  hiddenDefaultLibraryViews?: LibraryView[];
   treeOpenNodeIds: string[];
   assetSortKey: AssetSortKey;
   assetSortDirection: SortDirection;
@@ -173,6 +174,7 @@ export type StructureNode = {
   id: string;
   label: string;
   assetId?: number;
+  builtinView?: LibraryView;
   parentFolderId?: string | null;
   icon?: LucideIcon;
   canAddChild?: boolean;
@@ -212,8 +214,6 @@ export type AddLibraryNodePanelState = {
   initialQuery: string;
   parentFolderId: string | null;
   parentLabel: string;
-  preferredSuggestion?: AssetPlacementSuggestion | null;
-  preferredSuggestions?: AssetPlacementSuggestion[];
 };
 
 export type AddLibraryNodeDraft = {

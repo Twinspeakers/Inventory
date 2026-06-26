@@ -34,7 +34,6 @@ import {
   filterAssetsByEnabledSources,
   filterAssetsBySearchQuery,
   findFolder,
-  getAssetPlacementSuggestions,
   getScannedAssetModelKey,
   getSourceSummary,
   sortAssets,
@@ -62,6 +61,7 @@ export function useAppDerivedState({
   recentUserTagIds,
   scanResult,
   sceneMode,
+  hiddenDefaultLibraryViews,
   selectedFolderId,
   selectedId,
   sourceFolders,
@@ -85,6 +85,7 @@ export function useAppDerivedState({
   recentUserTagIds: string[];
   scanResult: ScanResult | null;
   sceneMode: SceneMode;
+  hiddenDefaultLibraryViews: LibraryView[];
   selectedFolderId: string | null;
   selectedId: number | null;
   sourceFolders: PersistedLibraryState["sourceFolders"];
@@ -208,10 +209,6 @@ export function useAppDerivedState({
     () => getRecentAssetTagSuggestions(selectedAsset, recentUserTagIds),
     [recentUserTagIds, selectedAsset],
   );
-  const assetPlacementSuggestions = useMemo(
-    () => (selectedAsset ? getAssetPlacementSuggestions(selectedAsset, virtualFolders, masterLibraryAssets).slice(0, 3) : []),
-    [masterLibraryAssets, selectedAsset, virtualFolders],
-  );
   const currentWorkspaceState = useMemo(
     () =>
       ({
@@ -220,6 +217,7 @@ export function useAppDerivedState({
         sceneMode,
         selectedAssetId: selectedAsset?.id ?? selectedId,
         selectedFolderId,
+        hiddenDefaultLibraryViews,
         treeOpenNodeIds: [...treeOpenNodeIds],
         assetSortKey,
         assetSortDirection,
@@ -237,6 +235,7 @@ export function useAppDerivedState({
       assetSortKey,
       assetViewMode,
       detailsColumnWidths,
+      hiddenDefaultLibraryViews,
       leftPaneView,
       modelTransformOverrides,
       sceneMode,
@@ -289,18 +288,18 @@ export function useAppDerivedState({
         activeView,
         assets,
         virtualFolders,
+        hiddenDefaultLibraryViews,
         selectedFolderId,
         selectedAsset?.id ?? null,
         treeOpenNodeIds,
         inventoryDocumentPaths,
       ),
-    [activeView, assets, inventoryDocumentPaths, selectedAsset?.id, selectedFolderId, treeOpenNodeIds, virtualFolders],
+    [activeView, assets, hiddenDefaultLibraryViews, inventoryDocumentPaths, selectedAsset?.id, selectedFolderId, treeOpenNodeIds, virtualFolders],
   );
 
   return {
     activeFolder,
     allAssets,
-    assetPlacementSuggestions,
     assetTagSuggestions,
     assets,
     currentLibraryState,

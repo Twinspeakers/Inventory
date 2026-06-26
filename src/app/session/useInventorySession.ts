@@ -79,6 +79,7 @@ export function useInventorySession({
   setSceneMode,
   setSelectedFolderId,
   setSelectedId,
+  setHiddenDefaultLibraryViews,
   setSourceFolderContextMenu,
   setSourceFolders,
   setStatusMessage,
@@ -112,6 +113,7 @@ export function useInventorySession({
   setSceneMode: Dispatch<SetStateAction<PersistedWorkspaceState["sceneMode"]>>;
   setSelectedFolderId: Dispatch<SetStateAction<string | null>>;
   setSelectedId: Dispatch<SetStateAction<number | null>>;
+  setHiddenDefaultLibraryViews: Dispatch<SetStateAction<LibraryView[]>>;
   setSourceFolderContextMenu: Dispatch<SetStateAction<SourceFolderContextMenuState | null>>;
   setSourceFolders: Dispatch<SetStateAction<SourceFolder[]>>;
   setStatusMessage: (message: string) => void;
@@ -139,6 +141,16 @@ export function useInventorySession({
     const nextVirtualFolders = pruneStarterLibraryNodes(state.virtualFolders);
     const nextSelectedFolderId =
       workspaceState?.selectedFolderId && findFolder(nextVirtualFolders, workspaceState.selectedFolderId) ? workspaceState.selectedFolderId : null;
+    const nextHiddenDefaultLibraryViews =
+      Array.isArray(workspaceState?.hiddenDefaultLibraryViews)
+        ? workspaceState.hiddenDefaultLibraryViews.filter(isLibraryView)
+        : [];
+    const nextActiveView =
+      workspaceState?.activeView &&
+      isLibraryView(workspaceState.activeView) &&
+      !nextHiddenDefaultLibraryViews.includes(workspaceState.activeView)
+        ? workspaceState.activeView
+        : "all";
     const nextSelectedAssetId = workspaceState
       ? workspaceState.selectedAssetId !== null && state.assets.some((asset) => asset.id === workspaceState.selectedAssetId)
         ? workspaceState.selectedAssetId
@@ -156,9 +168,10 @@ export function useInventorySession({
     setVirtualFolders(nextVirtualFolders);
     setSelectedId(nextSelectedAssetId);
     setSelectedFolderId(nextSelectedFolderId);
-    setActiveView(isLibraryView(workspaceState?.activeView) ? workspaceState.activeView : "all");
+    setActiveView(nextActiveView);
     const nextSceneMode = isSceneMode(workspaceState?.sceneMode) ? workspaceState.sceneMode : "preview";
     setSceneMode(nextSceneMode);
+    setHiddenDefaultLibraryViews(nextHiddenDefaultLibraryViews);
     setLeftPaneView(
       nextSceneMode === "nvd-document"
         ? isLeftPaneView(workspaceState?.leftPaneView)

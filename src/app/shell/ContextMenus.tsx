@@ -29,8 +29,8 @@ export function LibraryNodeContextMenu({
   onAddChild,
   onAcceptPlacementSuggestion,
   onDelete,
-  onRemoveFromNode,
   onOpenNewNode,
+  onRemoveFromNode,
   onRename,
   onClose,
 }: {
@@ -38,18 +38,19 @@ export function LibraryNodeContextMenu({
   onAddChild: () => void;
   onAcceptPlacementSuggestion: (suggestion: AssetPlacementSuggestion) => void;
   onDelete: () => void;
-  onRemoveFromNode: () => void;
   onOpenNewNode: () => void;
+  onRemoveFromNode: () => void;
   onRename: () => void;
   onClose: () => void;
 }) {
   const left = typeof window === "undefined" ? menu.x : Math.min(menu.x, window.innerWidth - 220);
   const canAddToLibrary = menu.target === "asset" && !menu.isInventoryDocument;
   const canRemoveFromNode = menu.target === "asset" && Boolean(menu.canRemoveFromNode);
-  const menuHeight = menu.target === "folder" && menu.folderId ? 160 : canAddToLibrary || canRemoveFromNode ? 164 : menu.isInventoryDocument ? 136 : 96;
+  const assetPlacementSuggestions = menu.assetPlacementSuggestions ?? [];
+  const existingPlacementSuggestions = assetPlacementSuggestions.filter((suggestion) => suggestion.target === "existing").slice(0, 3);
+  const menuHeight = menu.target === "folder" && menu.folderId ? 160 : canAddToLibrary || canRemoveFromNode ? 196 : menu.isInventoryDocument ? 136 : 96;
   const top = typeof window === "undefined" ? menu.y : Math.min(menu.y, window.innerHeight - menuHeight);
   const shouldOpenSubmenuUpward = typeof window === "undefined" ? false : top > window.innerHeight - 240;
-  const assetPlacementSuggestions = menu.assetPlacementSuggestions ?? [];
   const parentPathLabels = stripRootLabel(menu.assetParentPathLabels ?? []);
 
   function stripRootLabel(path: string[]) {
@@ -163,8 +164,8 @@ export function LibraryNodeContextMenu({
               <div
                 className={`library-context-submenu ${shouldOpenSubmenuUpward ? "library-context-submenu-upward" : "library-context-submenu-downward"}`}
               >
-                {assetPlacementSuggestions.length > 0 ? (
-                  assetPlacementSuggestions.map((suggestion) => (
+                {existingPlacementSuggestions.length > 0 ? (
+                  existingPlacementSuggestions.map((suggestion) => (
                     <button
                       key={`${suggestion.target}:${suggestion.folderId ?? suggestion.parentFolderId ?? "root"}:${suggestion.path.join("/")}`}
                       className="library-context-menu-item"
@@ -187,10 +188,15 @@ export function LibraryNodeContextMenu({
                 ) : (
                   <div className="library-context-menu-empty">No suggested nodes</div>
                 )}
-                <div className="library-context-menu-divider" />
-                <button className="library-context-menu-item" type="button" onClick={onOpenNewNode}>
-                  <Plus size={14} aria-hidden="true" />
-                  <span>New Node</span>
+                <button
+                  className="library-context-menu-item"
+                  type="button"
+                  onClick={onOpenNewNode}
+                >
+                  <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                    <span className="truncate">Add New Node...</span>
+                    <Plus size={13} aria-hidden="true" />
+                  </span>
                 </button>
               </div>
             </div>

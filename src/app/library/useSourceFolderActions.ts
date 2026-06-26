@@ -5,7 +5,6 @@ import { getBaseName } from "../../libraryCatalog/tag-inference";
 import type { LibraryView } from "../../features/assetShelf";
 import type { ActiveInventory, InventoryDocumentsState } from "../../features/inventoryProject";
 import {
-  createDefaultTopLevelLibraryNodesForAssets,
   getSourceFolderId,
   mergeScannedAssets,
 } from "../../features/libraryTree/libraryTreeModel";
@@ -19,7 +18,6 @@ import { normalizePath } from "../workspace/workspaceState";
 
 export function useSourceFolderActions({
   activeInventory,
-  autoSeedLibraryStructureEnabled,
   inventoryDocuments,
   scanResult,
   selectedId,
@@ -36,7 +34,6 @@ export function useSourceFolderActions({
   setVirtualFolders,
 }: {
   activeInventory: ActiveInventory | null;
-  autoSeedLibraryStructureEnabled: boolean;
   inventoryDocuments: InventoryDocumentsState;
   scanResult: ScanResult | null;
   selectedId: number | null;
@@ -287,10 +284,6 @@ export function useSourceFolderActions({
         enabled: true,
       }));
       const nextSourceFolders = [...sourceFolders, ...newSourceFolders];
-      const defaultLibraryNodes =
-        autoSeedLibraryStructureEnabled && sourceFolders.length === 0 && virtualFolders.length === 0
-          ? createDefaultTopLevelLibraryNodesForAssets(newlyScannedAssets)
-          : [];
 
       setScanResult({
         root_path: nextSourceFolders[0]?.path ?? "",
@@ -298,9 +291,6 @@ export function useSourceFolderActions({
         skipped_entries: nextSourceFolders.reduce((total, folder) => total + folder.skippedEntries, 0),
       });
       setSourceFolders(nextSourceFolders);
-      if (defaultLibraryNodes.length > 0) {
-        setVirtualFolders((folders) => (folders.length === 0 ? defaultLibraryNodes : folders));
-      }
       selectView("all");
       setSelectedId((currentId) => currentId ?? results[0]?.assets[0]?.id ?? null);
       setStatusMessage(
@@ -310,7 +300,7 @@ export function useSourceFolderActions({
           newSourceFolders.reduce((total, folder) => total + folder.skippedEntries, 0) > 0
             ? `${newSourceFolders.reduce((total, folder) => total + folder.skippedEntries, 0)} unreadable entries skipped.`
             : ""
-        }${defaultLibraryNodes.length > 0 ? ` Created ${defaultLibraryNodes.length} top-level library folder${defaultLibraryNodes.length === 1 ? "" : "s"}.` : ""}`,
+        }`,
       );
     } catch (error) {
       setStatusMessage(`Could not scan folder: ${String(error)}`);

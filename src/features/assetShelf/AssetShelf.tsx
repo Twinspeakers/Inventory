@@ -25,7 +25,18 @@ import { AssetThumbnail } from "../sceneViewer";
 
 type AssetShelfAssetType = "Image" | "3D" | "Audio" | "Document" | "Archive";
 
-export type LibraryView = "all" | "inbox" | "inventory-files" | "inventory-documents" | "inventory-vectors";
+export type LibraryView =
+  | "all"
+  | "inbox"
+  | "library-images"
+  | "library-vector"
+  | "library-audio"
+  | "library-models"
+  | "library-documents"
+  | "library-archives"
+  | "inventory-files"
+  | "inventory-documents"
+  | "inventory-vectors";
 export type AssetSortKey = "name" | "type" | "modified" | "size";
 export type SortDirection = "asc" | "desc";
 export type AssetViewMode = "extra-large" | "large" | "medium" | "details";

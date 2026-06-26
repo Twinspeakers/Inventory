@@ -144,37 +144,6 @@ textarea {
     @apply relative z-30 flex h-9 shrink-0 items-center justify-between border-b border-line bg-command-bar px-2;
   }
 
-  .library-auto-pill {
-    @apply inline-flex h-6 items-center gap-1 rounded-full border border-line bg-surface px-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted transition hover:border-steel hover:text-ink;
-  }
-
-  .library-auto-pill-on {
-    @apply border-steel bg-surface-raised text-ink;
-  }
-
-  .library-auto-pill-label {
-    @apply pl-1;
-  }
-
-  .library-auto-pill-toggle {
-    @apply relative inline-flex h-4 w-7 shrink-0 items-center rounded-full border border-line bg-canvas transition;
-  }
-
-  .library-auto-pill-toggle-on {
-    border-color: rgb(var(--color-steel));
-    background: rgb(var(--color-surface-raised));
-  }
-
-  .library-auto-pill-toggle-thumb {
-    @apply block h-2.5 w-2.5 rounded-full bg-muted transition;
-    margin-left: 2px;
-  }
-
-  .library-auto-pill-toggle-on .library-auto-pill-toggle-thumb {
-    background: rgb(var(--color-brand-lime));
-    transform: translateX(11px);
-  }
-
   .scene-toolbar-button {
     @apply -ml-1 inline-flex h-9 w-9 items-center justify-center rounded-sm border-0 bg-transparent text-muted transition hover:bg-surface-raised hover:text-ink;
   }

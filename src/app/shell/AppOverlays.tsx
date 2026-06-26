@@ -19,7 +19,6 @@ import type {
 } from "../appTypes";
 import type { NvdStyleRole } from "../../features/nvdEditor";
 import { AddLibraryNodePanel } from "../library/AddLibraryNodePanel";
-import { getNewAssetPlacementSuggestions, getPreferredNewAssetPlacementSuggestion } from "../../features/libraryTree/libraryTreeModel";
 import {
   SettingsPanel,
   type ThemeColors,
@@ -27,10 +26,8 @@ import {
   type ThemeEditorLayout,
 } from "../../features/settings";
 import { TagLibraryBrowser } from "../../features/tagLibrary/TagLibraryBrowser";
-
 export function AppOverlays({
   addLibraryNodePanel,
-  autoSeedLibraryStructureEnabled,
   availableThemes,
   customThemes,
   isNvdCloseConfirmationOpen,
@@ -54,7 +51,6 @@ export function AppOverlays({
   virtualFolders,
   hideFutureNvdStyleResetConfirmations,
   onAddLibraryNodePanelClose,
-  onAutoSeedLibraryStructureEnabledChange,
   onCloseActiveNvdDocument,
   onCloseNvdCloseConfirmation,
   onConfirmNvdStyleReset,
@@ -91,7 +87,6 @@ export function AppOverlays({
   onRenameSelectedAsset,
 }: {
   addLibraryNodePanel: AddLibraryNodePanelState | null;
-  autoSeedLibraryStructureEnabled: boolean;
   availableThemes: ThemeDefinition[];
   customThemes: ThemeDefinition[];
   isNvdCloseConfirmationOpen: boolean;
@@ -115,7 +110,6 @@ export function AppOverlays({
   virtualFolders: VirtualFolder[];
   hideFutureNvdStyleResetConfirmations: boolean;
   onAddLibraryNodePanelClose: () => void;
-  onAutoSeedLibraryStructureEnabledChange: (enabled: boolean) => void;
   onCloseActiveNvdDocument: () => void;
   onCloseNvdCloseConfirmation: () => void;
   onConfirmNvdStyleReset: () => void;
@@ -131,8 +125,6 @@ export function AppOverlays({
     parentFolderId: string | null,
     parentLabel: string,
     initialQuery?: string,
-    preferredSuggestion?: AssetPlacementSuggestion | null,
-    preferredSuggestions?: AssetPlacementSuggestion[],
   ) => void;
   onRefreshSourceFolder: (sourceId: string) => void;
   onRemoveSourceFolder: (sourceId: string) => void;
@@ -161,12 +153,10 @@ export function AppOverlays({
     <>
       {isSettingsOpen ? (
         <SettingsPanel
-          autoSeedLibraryStructureEnabled={autoSeedLibraryStructureEnabled}
           availableThemes={availableThemes}
           canDeleteSelectedTheme={customThemes.some((theme) => theme.id === selectedThemeId)}
           nvdSaveReminderEnabled={nvdSaveReminderEnabled}
           nvdStyleResetConfirmationEnabled={nvdStyleResetConfirmationEnabled}
-          onAutoSeedLibraryStructureEnabledChange={onAutoSeedLibraryStructureEnabledChange}
           onClose={onSettingsClose}
           onDeleteTheme={onDeleteTheme}
           onNvdSaveReminderEnabledChange={onNvdSaveReminderEnabledChange}
@@ -296,19 +286,12 @@ export function AppOverlays({
           }}
           onOpenNewNode={() => {
             const menu = libraryNodeContextMenu;
-            const preferredSuggestions = getNewAssetPlacementSuggestions(menu.assetPlacementSuggestions ?? []);
-            const preferredSuggestion = getPreferredNewAssetPlacementSuggestion(menu.assetPlacementSuggestions ?? []);
             onLibraryNodeContextMenuClose();
             onOpenAddLibraryNodePanel(
-              preferredSuggestion?.parentFolderId ?? (menu.target === "asset" ? menu.assetParentFolderId ?? null : null),
-              preferredSuggestion
-                ? preferredSuggestion.path[preferredSuggestion.path.length - 2] ?? "Master"
-                : menu.target === "asset"
-                  ? menu.assetParentPathLabels?.[menu.assetParentPathLabels.length - 1] ?? "Master"
+              menu.target === "asset" ? menu.assetParentFolderId ?? null : null,
+              menu.target === "asset"
+                ? menu.assetParentPathLabels?.[menu.assetParentPathLabels.length - 1] ?? "Master"
                 : "Master",
-              preferredSuggestion?.draft?.name ?? "",
-              preferredSuggestion,
-              preferredSuggestions,
             );
           }}
           onRemoveFromNode={() => {

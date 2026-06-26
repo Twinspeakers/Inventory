@@ -12,7 +12,6 @@ import type {
   AddLibraryNodeDraft,
   AddLibraryNodePanelState,
   Asset,
-  AssetPlacementSuggestion,
   VirtualFolder,
 } from "../appTypes";
 import { clamp, isPrimaryPointer } from "../workspace/appLayout";
@@ -20,7 +19,6 @@ import {
   createLibraryNodeDraft,
   createVirtualFolderFromDraft,
   findFolder,
-  findLibraryNodeTemplateById,
   getAddFolderSuggestions,
   getAssetsForLibraryNode,
   getInheritedSuggestionFileTypes,
@@ -48,20 +46,11 @@ export function AddLibraryNodePanel({
   onClose: () => void;
   onCreate: (draft: AddLibraryNodeDraft, parentFolderId: string | null) => void;
 }) {
-  const preferredSuggestions = (panel.preferredSuggestions ?? []).filter(
-    (suggestion): suggestion is AssetPlacementSuggestion & { draft: AddLibraryNodeDraft } => suggestion.target === "new" && Boolean(suggestion.draft),
-  );
-  const preferredSuggestion =
-    preferredSuggestions[0] ?? (panel.preferredSuggestion?.target === "new" && panel.preferredSuggestion.draft ? panel.preferredSuggestion : null);
-  const initialParentFolderId = preferredSuggestion?.parentFolderId ?? panel.parentFolderId;
+  const initialParentFolderId = panel.parentFolderId;
   const initialParentFolder = initialParentFolderId ? findFolder(folders, initialParentFolderId) : null;
   const initialParentTemplate = getLibraryNodeTemplateForSuggestionParent(initialParentFolder, templates);
-  const initialSuggestedTemplate = preferredSuggestion?.draft?.templateId
-    ? findLibraryNodeTemplateById(templates, preferredSuggestion.draft.templateId) ?? null
-    : null;
-  const initialFileTypes = preferredSuggestion?.draft?.fileTypes
-    ? normalizeLibraryNodeFileTypes(preferredSuggestion.draft.fileTypes)
-    : getInheritedSuggestionFileTypes(initialParentTemplate);
+  const initialSuggestedTemplate = null;
+  const initialFileTypes = getInheritedSuggestionFileTypes(initialParentTemplate);
   const [selectedParentFolderId, setSelectedParentFolderId] = useState<string | null>(initialParentFolderId);
   const [isDraggingPreviewNode, setIsDraggingPreviewNode] = useState(false);
   const [previewDropTargetId, setPreviewDropTargetId] = useState<string | null>(null);
@@ -71,12 +60,10 @@ export function AddLibraryNodePanel({
   const selectedParentLabel = previewParentFolder?.name ?? "Master";
   const parentTemplate = useMemo(() => getLibraryNodeTemplateForSuggestionParent(selectedParentFolder, templates), [selectedParentFolder, templates]);
   const inheritedFileTypes = useMemo(() => getInheritedSuggestionFileTypes(parentTemplate), [parentTemplate]);
-  const initialPreferredSuggestionKey = preferredSuggestion ? getPreferredSuggestionKey(preferredSuggestion) : null;
-  const [folderName, setFolderName] = useState(preferredSuggestion?.draft?.name ?? panel.initialQuery);
+  const [folderName, setFolderName] = useState(panel.initialQuery);
   const [selectedTemplate, setSelectedTemplate] = useState<LibraryNodeTemplate | null>(initialSuggestedTemplate);
   const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
   const [selectedFileTypes, setSelectedFileTypes] = useState<LibraryNodeFileType[]>(initialFileTypes);
-  const [selectedPreferredSuggestionKey, setSelectedPreferredSuggestionKey] = useState<string | null>(initialPreferredSuggestionKey);
   const previewNodeDragPointerIdRef = useRef<number | null>(null);
   const [previewDragCursor, setPreviewDragCursor] = useState<{ x: number; y: number } | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
@@ -93,28 +80,15 @@ export function AddLibraryNodePanel({
     [folderName, folders, selectedParentFolder, templates],
   );
   const selectedSuggestion = selectedSuggestionId ? suggestions.find((suggestion) => suggestion.id === selectedSuggestionId) ?? null : null;
-  const selectedPreferredSuggestion = selectedPreferredSuggestionKey
-    ? preferredSuggestions.find((suggestion) => getPreferredSuggestionKey(suggestion) === selectedPreferredSuggestionKey) ?? null
-    : null;
   const draftName = folderName.trim() || selectedTemplate?.name || "New Node";
   const draftTags = useMemo(
-    () => selectedSuggestion?.tags ?? selectedPreferredSuggestion?.draft.tags ?? getDefaultLibraryNodeTagsForName(draftName),
-    [draftName, selectedPreferredSuggestion, selectedSuggestion],
+    () => selectedSuggestion?.tags ?? getDefaultLibraryNodeTagsForName(draftName),
+    [draftName, selectedSuggestion],
   );
   const draft = useMemo(
     () => createLibraryNodeDraft(selectedTemplate ?? customLibraryNodeTemplate, draftName, draftTags, selectedFileTypes),
     [draftName, draftTags, selectedFileTypes, selectedTemplate],
   );
-  const activePreferredSuggestionKey = getPreferredSuggestionKey({
-    draft: {
-      fileTypes: selectedFileTypes,
-      name: draft.name,
-      rules: draft.rules,
-      tags: draft.tags,
-      templateId: draft.templateId,
-    },
-    parentFolderId: selectedParentFolderId,
-  });
   const previewAssets = useMemo(() => getAssetsForLibraryNode(createVirtualFolderFromDraft(draft), assets), [assets, draft]);
   const previewExamples = previewAssets.slice(0, 5);
   const panelStyle = panelPosition
@@ -136,7 +110,6 @@ export function AddLibraryNodePanel({
     if (selectedParentFolderId && !findFolder(folders, selectedParentFolderId)) {
       setSelectedParentFolderId(null);
       setSelectedSuggestionId(null);
-      setSelectedPreferredSuggestionKey(null);
       setSelectedTemplate(null);
       setSelectedFileTypes(getInheritedSuggestionFileTypes(getLibraryNodeTemplateForSuggestionParent(null, templates)));
     }
@@ -180,7 +153,6 @@ export function AddLibraryNodePanel({
 
     setFolderName(value);
     setSelectedSuggestionId(null);
-    setSelectedPreferredSuggestionKey(null);
 
     if (hadSuggestion || (selectedTemplate && value !== selectedTemplate.name)) {
       setSelectedTemplate(null);
@@ -194,43 +166,22 @@ export function AddLibraryNodePanel({
 
     setSelectedParentFolderId(parentFolderId);
     setSelectedSuggestionId(null);
-    setSelectedPreferredSuggestionKey(null);
     setSelectedTemplate(null);
     setSelectedFileTypes(getInheritedSuggestionFileTypes(nextParentTemplate));
   }
 
   function applySuggestion(suggestion: AddFolderSuggestion) {
     setSelectedSuggestionId(suggestion.id);
-    setSelectedPreferredSuggestionKey(null);
     setSelectedTemplate(suggestion.template);
     setFolderName(suggestion.name);
     setSelectedFileTypes(normalizeLibraryNodeFileTypes(suggestion.fileTypes));
   }
 
-  function applyPreferredSuggestion(suggestion: AssetPlacementSuggestion & { draft: AddLibraryNodeDraft }) {
-    const nextParentFolderId = suggestion.parentFolderId ?? null;
-    const nextParentFolder = nextParentFolderId ? findFolder(folders, nextParentFolderId) : null;
-    const nextParentTemplate = getLibraryNodeTemplateForSuggestionParent(nextParentFolder, templates);
-    const nextTemplate = suggestion.draft.templateId ? findLibraryNodeTemplateById(templates, suggestion.draft.templateId) ?? null : null;
-
-    setSelectedParentFolderId(nextParentFolderId);
-    setSelectedSuggestionId(null);
-    setSelectedPreferredSuggestionKey(getPreferredSuggestionKey(suggestion));
-    setSelectedTemplate(nextTemplate);
-    setFolderName(suggestion.draft.name);
-    setSelectedFileTypes(
-      suggestion.draft.fileTypes.length > 0
-        ? normalizeLibraryNodeFileTypes(suggestion.draft.fileTypes)
-        : getInheritedSuggestionFileTypes(nextParentTemplate),
-    );
-  }
-
   function returnToSuggestions() {
     setSelectedParentFolderId(initialParentFolderId);
     setSelectedSuggestionId(null);
-    setSelectedPreferredSuggestionKey(initialPreferredSuggestionKey);
     setSelectedTemplate(initialSuggestedTemplate);
-    setFolderName(preferredSuggestion?.draft?.name ?? panel.initialQuery);
+    setFolderName(panel.initialQuery);
     setSelectedFileTypes(initialFileTypes);
   }
 
@@ -366,39 +317,6 @@ export function AddLibraryNodePanel({
         <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_310px]">
           <div className="min-h-0 overflow-auto p-4">
             <div className="grid gap-4">
-              {preferredSuggestions.length > 0 ? (
-                <div className="grid gap-2 rounded-sm border border-line bg-canvas p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs font-semibold uppercase text-muted">Asset Picks</span>
-                    <span className="text-[11px] text-muted">Smart starting points from this file</span>
-                  </div>
-                  <div className="grid gap-2">
-                    {preferredSuggestions.map((suggestion) => {
-                      const suggestionKey = getPreferredSuggestionKey(suggestion);
-                      const isActive = suggestionKey === activePreferredSuggestionKey;
-                      const parentLabel = suggestion.path.slice(0, -1).join(" / ") || "Master";
-
-                      return (
-                        <button
-                          key={suggestionKey}
-                          className={`rounded-sm border px-3 py-2 text-left transition ${
-                            isActive ? "border-steel bg-surface text-ink" : "border-line bg-surface/60 text-ink hover:border-steel/60"
-                          }`}
-                          type="button"
-                          onClick={() => applyPreferredSuggestion(suggestion)}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="truncate text-sm font-semibold">{suggestion.draft.name}</span>
-                            <span className="text-[10px] uppercase tracking-[0.08em] text-muted">{suggestion.confidence}</span>
-                          </div>
-                          <div className="mt-1 text-xs text-muted">Parent: {parentLabel}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-
               <label className="grid gap-1.5 text-sm">
                 <span className="text-xs font-semibold uppercase text-muted">Name</span>
                 <input
@@ -491,10 +409,6 @@ export function AddLibraryNodePanel({
       </section>
     </div>
   );
-}
-
-function getPreferredSuggestionKey(suggestion: Pick<AssetPlacementSuggestion, "draft" | "parentFolderId">) {
-  return `${suggestion.parentFolderId ?? "root"}:${suggestion.draft?.templateId ?? "custom"}:${suggestion.draft?.name ?? ""}`;
 }
 
 function PreviewLibraryTree({

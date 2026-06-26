@@ -135,6 +135,13 @@ export function setFolderAssetExclusion(
 
 export function getTreeNodePathForView(view: LibraryView) {
   switch (view) {
+    case "library-images":
+    case "library-vector":
+    case "library-audio":
+    case "library-models":
+    case "library-documents":
+    case "library-archives":
+      return ["library", view];
     case "inventory-files":
       return ["inventory-files"];
     case "inventory-documents":

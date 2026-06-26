@@ -78,6 +78,63 @@ export {
   groupLibraryNodeTemplates,
 } from "./libraryTreeTemplateUtils";
 export const initialVirtualFolders: VirtualFolder[] = [];
+const defaultLibrarySectionViews = new Set<LibraryView>([
+  "library-images",
+  "library-vector",
+  "library-audio",
+  "library-models",
+  "library-documents",
+  "library-archives",
+]);
+const defaultLibrarySections: Array<{
+  icon: LucideIcon;
+  id: LibraryView;
+  label: string;
+  matches: (asset: Asset) => boolean;
+}> = [
+  {
+    icon: Box,
+    id: "library-models",
+    label: "3D Models",
+    matches: (asset) => asset.type === "3D",
+  },
+  {
+    icon: Archive,
+    id: "library-archives",
+    label: "Archives",
+    matches: (asset) => asset.type === "Archive",
+  },
+  {
+    icon: FileAudio,
+    id: "library-audio",
+    label: "Audio",
+    matches: (asset) => asset.type === "Audio",
+  },
+  {
+    icon: FileText,
+    id: "library-documents",
+    label: "Documents",
+    matches: (asset) => {
+      const extension = asset.extension.toLowerCase();
+      return asset.type === "Document" && extension !== "nvv";
+    },
+  },
+  {
+    icon: FileImage,
+    id: "library-images",
+    label: "Images",
+    matches: (asset) => asset.type === "Image" && asset.extension.toLowerCase() !== "svg",
+  },
+  {
+    icon: FileImage,
+    id: "library-vector",
+    label: "Vector",
+    matches: (asset) => {
+      const extension = asset.extension.toLowerCase();
+      return extension === "svg" || extension === "nvv";
+    },
+  },
+];
 const defaultLibraryRootTemplateId = "library";
 const autoStructureMaxDepth = 2;
 const autoStructureRootLimit = 6;
@@ -188,6 +245,7 @@ export function buildStructure(
   activeView: LibraryView,
   assets: Asset[],
   virtualFolders: VirtualFolder[],
+  hiddenDefaultLibraryViews: LibraryView[],
   selectedFolderId: string | null,
   selectedAssetId: number | null,
   openNodeIds: Set<string>,
@@ -211,7 +269,23 @@ export function buildStructure(
           .flatMap((scopedAssets) => scopedAssets)
           .map((asset) => asset.id),
       );
-  const rootAssetNodes = legacyRootWrapper
+  const hiddenDefaultViewSet = new Set(hiddenDefaultLibraryViews.filter((view) => defaultLibrarySectionViews.has(view)));
+  const visibleDefaultSections = defaultLibrarySections
+    .filter((section) => !hiddenDefaultViewSet.has(section.id))
+    .map((section) => {
+      const sectionAssets = sortAssets(masterLibraryAssets.filter((asset) => section.matches(asset)), "name", "asc");
+      return {
+        id: section.id,
+        label: section.label,
+        builtinView: section.id,
+        icon: section.icon,
+        view: section.id,
+        meta: String(sectionAssets.length),
+        open: openNodeIds.has(section.id),
+        children: sectionAssets.map((asset) => assetToStructureNode(asset)),
+      } satisfies StructureNode;
+    });
+  const rootAssetNodes = legacyRootWrapper || visibleDefaultSections.length > 0
     ? []
     : sortAssets(
         masterLibraryAssets.filter((asset) => !assignedAssetIds.has(asset.id)),
@@ -221,6 +295,7 @@ export function buildStructure(
   const visibleLibraryChildren = legacyRootWrapper
     ? virtualFolderToNode(legacyRootWrapper, masterLibraryAssets, openNodeIds).children ?? []
     : [
+        ...visibleDefaultSections,
         ...sortedFolders.map((folder) => virtualFolderToNode(folder, topLevelAssetScopes?.get(folder.id) ?? [], openNodeIds)),
         ...rootAssetNodes,
       ];
@@ -309,6 +384,21 @@ export function filterAssets(
       const assignedIds = getAssignedAssetIds(virtualFolders, masterLibraryAssets);
       return masterLibraryAssets.filter((asset) => !assignedIds.has(asset.id));
     }
+    case "library-images":
+      return masterLibraryAssets.filter((asset) => asset.type === "Image" && asset.extension.toLowerCase() !== "svg");
+    case "library-vector":
+      return masterLibraryAssets.filter((asset) => {
+        const extension = asset.extension.toLowerCase();
+        return extension === "svg" || extension === "nvv";
+      });
+    case "library-audio":
+      return masterLibraryAssets.filter((asset) => asset.type === "Audio");
+    case "library-models":
+      return masterLibraryAssets.filter((asset) => asset.type === "3D");
+    case "library-documents":
+      return masterLibraryAssets.filter((asset) => asset.type === "Document" && asset.extension.toLowerCase() !== "nvv");
+    case "library-archives":
+      return masterLibraryAssets.filter((asset) => asset.type === "Archive");
     case "all":
     default:
       return masterLibraryAssets;

@@ -17,7 +17,19 @@ import type {
 } from "../appTypes";
 
 export function isLibraryView(value: string | null | undefined): value is LibraryView {
-  return value === "all" || value === "inbox" || value === "inventory-files" || value === "inventory-documents" || value === "inventory-vectors";
+  return (
+    value === "all" ||
+    value === "inbox" ||
+    value === "library-images" ||
+    value === "library-vector" ||
+    value === "library-audio" ||
+    value === "library-models" ||
+    value === "library-documents" ||
+    value === "library-archives" ||
+    value === "inventory-files" ||
+    value === "inventory-documents" ||
+    value === "inventory-vectors"
+  );
 }
 
 export function isNativeHubView(value: LibraryView): value is "inventory-files" | "inventory-documents" | "inventory-vectors" {
@@ -50,6 +62,7 @@ export function createDefaultWorkspaceState(): PersistedWorkspaceState {
     sceneMode: "preview",
     selectedAssetId: null,
     selectedFolderId: null,
+    hiddenDefaultLibraryViews: [],
     treeOpenNodeIds: [...defaultTreeOpenNodeIds],
     assetSortKey: "name",
     assetSortDirection: "asc",

@@ -5,7 +5,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from "react";
 import { useEffect, useRef, useState } from "react";
-import { Backpack, ChevronDown, ChevronLeft, ChevronRight, ListTree, Plus, RefreshCcw, X } from "lucide-react";
+import { Backpack, ChevronDown, ChevronLeft, ChevronRight, Eye, ListTree, Plus, X } from "lucide-react";
 import type { LibraryView } from "../../features/assetShelf";
 import type { NvdDocument } from "../../features/inventoryProject";
 import { getNvdStyleRole, type NvdStyleRole } from "../../features/nvdEditor";
@@ -14,20 +14,19 @@ import type { LeftPaneView, NvdOutlineEntry, SourceFolder, StructureNode } from 
 export function LibraryStructure({
   activeView,
   activeNvdOutline,
-  autoSeedLibraryStructureEnabled,
   canOpenFolder,
-  canRegenerateStarterLibraryStructure,
   canCreateFolder,
   canShowNvdNavigation,
   collapsed,
   editingAssetId,
   editingFolderId,
+  hiddenDefaultSections,
   nodes,
-  onAutoSeedLibraryStructureEnabledChange,
   onCreateFolder,
+  onHideDefaultSection,
   onNavigateNvdBlock,
   onOpenFolder,
-  onRegenerateStarterLibraryStructure,
+  onRestoreDefaultSection,
   onRenameAssetStart,
   onRenameAssetCancel,
   onRenameAssetSubmit,
@@ -56,20 +55,19 @@ export function LibraryStructure({
 }: {
   activeView: LibraryView;
   activeNvdOutline: NvdOutlineEntry[];
-  autoSeedLibraryStructureEnabled: boolean;
   canOpenFolder: boolean;
-  canRegenerateStarterLibraryStructure: boolean;
   canCreateFolder: boolean;
   canShowNvdNavigation: boolean;
   collapsed: boolean;
   editingAssetId: number | null;
   editingFolderId: string | null;
+  hiddenDefaultSections: Array<{ label: string; view: LibraryView }>;
   nodes: StructureNode[];
-  onAutoSeedLibraryStructureEnabledChange: (enabled: boolean) => void;
   onCreateFolder: () => void;
+  onHideDefaultSection: (view: LibraryView) => void;
   onNavigateNvdBlock: (blockIndex: number) => void;
   onOpenFolder: () => void;
-  onRegenerateStarterLibraryStructure: () => void;
+  onRestoreDefaultSection: (view: LibraryView) => void;
   onRenameAssetStart: (assetId: number) => void;
   onRenameAssetCancel: () => void;
   onRenameAssetSubmit: (assetId: number, name: string) => void;
@@ -98,6 +96,20 @@ export function LibraryStructure({
 }) {
   const isLibraryPane = paneView === "library";
   const paneLabel = isLibraryPane ? "Library Structure" : "NVD Navigation";
+  const [isHiddenSectionMenuOpen, setIsHiddenSectionMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isHiddenSectionMenuOpen) {
+      return;
+    }
+
+    function handleClose() {
+      setIsHiddenSectionMenuOpen(false);
+    }
+
+    window.addEventListener("click", handleClose);
+    return () => window.removeEventListener("click", handleClose);
+  }, [isHiddenSectionMenuOpen]);
 
   if (collapsed) {
     return (
@@ -166,35 +178,40 @@ export function LibraryStructure({
             </div>
           </div>
           <div className="flex items-center gap-1">
-            {isLibraryPane ? (
-              <button
-                aria-pressed={autoSeedLibraryStructureEnabled}
-                className={`library-auto-pill ${autoSeedLibraryStructureEnabled ? "library-auto-pill-on" : ""}`}
-                title="Toggle automatic starter library structure"
-                type="button"
-                onClick={() => onAutoSeedLibraryStructureEnabledChange(!autoSeedLibraryStructureEnabled)}
-              >
-                <span className="library-auto-pill-label">AUTO</span>
-                <span className={`library-auto-pill-toggle ${autoSeedLibraryStructureEnabled ? "library-auto-pill-toggle-on" : ""}`}>
-                  <span className="library-auto-pill-toggle-thumb" />
-                </span>
-              </button>
-            ) : null}
-            {isLibraryPane ? (
-              <button
-                className="dark-icon-button"
-                aria-label="Regenerate starter library structure"
-                disabled={!canRegenerateStarterLibraryStructure}
-                title={
-                  canRegenerateStarterLibraryStructure
-                    ? "Regenerate starter library structure"
-                    : "Add source folders to regenerate starter library structure"
-                }
-                type="button"
-                onClick={onRegenerateStarterLibraryStructure}
-              >
-                <RefreshCcw size={14} aria-hidden="true" />
-              </button>
+            {isLibraryPane && hiddenDefaultSections.length > 0 ? (
+              <div className="relative">
+                <button
+                  className="dark-icon-button mt-[2px]"
+                  aria-label="Restore default section"
+                  title="Restore default section"
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setIsHiddenSectionMenuOpen((open) => !open);
+                  }}
+                >
+                  <Eye size={14} aria-hidden="true" />
+                </button>
+                {isHiddenSectionMenuOpen ? (
+                  <div className="absolute right-0 top-8 z-20 min-w-32 rounded-sm border border-line bg-surface">
+                    {hiddenDefaultSections.map((section) => (
+                      <button
+                        key={section.view}
+                        className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-xs text-ink transition hover:bg-surface-raised"
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setIsHiddenSectionMenuOpen(false);
+                          onRestoreDefaultSection(section.view);
+                        }}
+                      >
+                        <span>{section.label}</span>
+                        <Plus size={12} aria-hidden="true" />
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             ) : null}
             <button className="dark-icon-button" aria-label={`Minimize ${paneLabel.toLowerCase()}`} title={`Minimize ${paneLabel.toLowerCase()}`} type="button" onClick={onToggleCollapsed}>
               <ChevronLeft size={14} aria-hidden="true" />
@@ -231,6 +248,7 @@ export function LibraryStructure({
                   onRenameFolderSubmit={onRenameFolderSubmit}
                   onToggleNode={onToggleTreeNode}
                   onOpenContextMenu={onOpenNodeContextMenu}
+                  onHideBuiltinSection={onHideDefaultSection}
                   selectedAssetId={selectedAssetId}
                 />
               ))}
@@ -449,6 +467,7 @@ function StructureRow({
   onRenameFolderStart,
   onRenameFolderCancel,
   onRenameFolderSubmit,
+  onHideBuiltinSection,
   onToggleNode,
   onOpenContextMenu,
   selectedAssetId,
@@ -467,6 +486,7 @@ function StructureRow({
   onRenameFolderStart: (folderId: string) => void;
   onRenameFolderCancel: () => void;
   onRenameFolderSubmit: (folderId: string, name: string) => void;
+  onHideBuiltinSection: (view: LibraryView) => void;
   onToggleNode: (nodeId: string) => void;
   onOpenContextMenu: (node: StructureNode, event: ReactMouseEvent<HTMLElement>) => void;
   selectedAssetId: number | null;
@@ -625,6 +645,20 @@ function StructureRow({
           )}
         </button>
         {!isAssetNode && node.meta ? <span className="tree-meta">{node.meta}</span> : null}
+        {node.builtinView ? (
+          <button
+            aria-label={`Hide ${node.label}`}
+            className="dark-icon-button h-5 w-5 border-transparent bg-transparent"
+            title={`Hide ${node.label}`}
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onHideBuiltinSection(node.builtinView!);
+            }}
+          >
+            <X size={11} aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
 
       {node.open &&
@@ -645,6 +679,7 @@ function StructureRow({
             onRenameFolderStart={onRenameFolderStart}
             onRenameFolderCancel={onRenameFolderCancel}
             onRenameFolderSubmit={onRenameFolderSubmit}
+            onHideBuiltinSection={onHideBuiltinSection}
             onToggleNode={onToggleNode}
             onOpenContextMenu={onOpenContextMenu}
             selectedAssetId={selectedAssetId}

@@ -61,7 +61,6 @@ import {
   type SessionHistory,
 } from "./features/editors";
 import {
-  createDefaultTopLevelLibraryNodesForAssets,
   findFolder,
   initialVirtualFolders,
 } from "./features/libraryTree/libraryTreeModel";
@@ -88,6 +87,19 @@ import {
   type TagLibraryWindowRenameAssetPayload,
 } from "./features/tagLibrary/tagLibraryWindowBridge";
 import { createProjectTagGroupId, createProjectTagId, projectTagGroupLabelExists } from "./features/tagLibrary/projectTags";
+
+const defaultLibrarySectionLabels: Record<
+  "library-images" | "library-vector" | "library-audio" | "library-models" | "library-documents" | "library-archives",
+  string
+> = {
+  "library-images": "Images",
+  "library-vector": "Vector",
+  "library-audio": "Audio",
+  "library-models": "3D Models",
+  "library-documents": "Documents",
+  "library-archives": "Archives",
+};
+
 export function App() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [sourceFolders, setSourceFolders] = useState<SourceFolder[]>([]);
@@ -103,6 +115,7 @@ export function App() {
   const [projectTagGroups, setProjectTagGroups] = useState<ProjectTagGroup[]>([]);
   const [recentUserTagIds, setRecentUserTagIds] = useState<string[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [hiddenDefaultLibraryViews, setHiddenDefaultLibraryViews] = useState<LibraryView[]>([]);
   const [editingLibraryAssetId, setEditingLibraryAssetId] = useState<number | null>(null);
   const [editingLibraryFolderId, setEditingLibraryFolderId] = useState<string | null>(null);
   const [virtualFolders, setVirtualFolders] = useState<VirtualFolder[]>(initialVirtualFolders);
@@ -160,7 +173,6 @@ export function App() {
   } = useModelInspection();
   const {
     availableThemes,
-    autoSeedLibraryStructureEnabled,
     customThemes,
     isSettingsOpen,
     nvdSaveReminderEnabled,
@@ -178,7 +190,6 @@ export function App() {
     setIsSettingsOpen,
     setThemeEditorLayout,
     setThemeName,
-    updateAutoSeedLibraryStructureEnabled,
     updateNvdSaveReminderEnabled,
     updateNvdStyleResetConfirmationEnabled,
     updateThemeColor,
@@ -224,7 +235,6 @@ export function App() {
   });
   const {
     activeFolder,
-    assetPlacementSuggestions,
     assetTagSuggestions,
     assets,
     currentLibraryState,
@@ -255,6 +265,7 @@ export function App() {
     recentUserTagIds,
     scanResult,
     sceneMode,
+    hiddenDefaultLibraryViews,
     selectedFolderId,
     selectedId,
     sourceFolders,
@@ -297,7 +308,6 @@ export function App() {
     toggleSourceFolder,
   } = useSourceFolderActions({
     activeInventory,
-    autoSeedLibraryStructureEnabled,
     inventoryDocuments,
     scanResult,
     selectedId,
@@ -313,9 +323,6 @@ export function App() {
     setStatusMessage,
     setVirtualFolders,
   });
-  const sourceAssetIdSet = new Set(sourceFolders.flatMap((folder) => folder.assetIds));
-  const sourceScannedAssets = (scanResult?.assets ?? []).filter((asset) => sourceAssetIdSet.has(asset.id));
-  const canRegenerateStarterLibraryStructure = Boolean(activeInventory) && sourceScannedAssets.length > 0;
   useEffect(() => {
     syncSourceFoldersRef.current = () => syncSourceFolders({ silentNoChanges: true, background: true });
   }, [syncSourceFolders]);
@@ -414,6 +421,7 @@ export function App() {
     setSceneMode,
     setSelectedFolderId,
     setSelectedId,
+    setHiddenDefaultLibraryViews,
     setSourceFolderContextMenu,
     setSourceFolders,
     setStatusMessage,
@@ -699,27 +707,6 @@ export function App() {
     }
   }
 
-  function regenerateStarterLibraryStructure() {
-    if (!activeInventory) {
-      setStatusMessage("Create or open an Inventory before regenerating library structure.");
-      return;
-    }
-
-    if (sourceScannedAssets.length === 0) {
-      setStatusMessage("Add source folders before regenerating starter library structure.");
-      return;
-    }
-
-    const nextVirtualFolders = createDefaultTopLevelLibraryNodesForAssets(sourceScannedAssets);
-    setVirtualFolders(nextVirtualFolders);
-    setSelectedFolderId(null);
-    setActiveView("all");
-    openTreeNodePath(["library"]);
-    setStatusMessage(
-      `Regenerated starter library structure from ${sourceFolders.length} source folder${sourceFolders.length === 1 ? "" : "s"}.`,
-    );
-  }
-
   function playAudioAsset(asset: Asset) {
     if (!isPlayableAudioAsset(asset)) {
       setStatusMessage("That audio format cannot be played here yet.");
@@ -769,6 +756,28 @@ export function App() {
   function removeRecentUserTag(tag: string) {
     const normalizedTag = createProjectTagId(tag) || tag;
     setRecentUserTagIds((currentTags) => currentTags.filter((currentTag) => (createProjectTagId(currentTag) || currentTag) !== normalizedTag));
+  }
+
+  function hideDefaultLibrarySection(view: LibraryView) {
+    if (!(view in defaultLibrarySectionLabels)) {
+      return;
+    }
+
+    setHiddenDefaultLibraryViews((currentViews) => (currentViews.includes(view) ? currentViews : [...currentViews, view]));
+    if (activeView === view) {
+      selectView("all");
+    }
+    setStatusMessage(`Hid ${defaultLibrarySectionLabels[view as keyof typeof defaultLibrarySectionLabels]}.`);
+  }
+
+  function restoreDefaultLibrarySection(view: LibraryView) {
+    if (!(view in defaultLibrarySectionLabels)) {
+      return;
+    }
+
+    setHiddenDefaultLibraryViews((currentViews) => currentViews.filter((currentView) => currentView !== view));
+    selectView(view);
+    setStatusMessage(`Restored ${defaultLibrarySectionLabels[view as keyof typeof defaultLibrarySectionLabels]}.`);
   }
 
   function createProjectTagGroup(label: string) {
@@ -938,21 +947,21 @@ export function App() {
       libraryStructure={{
         activeView,
         activeNvdOutline: getNvdOutline(activeNvdDocument?.document ?? null),
-        autoSeedLibraryStructureEnabled,
         canOpenFolder: Boolean(activeInventory),
-        canRegenerateStarterLibraryStructure,
         canCreateFolder: Boolean(activeInventory),
         canShowNvdNavigation: Boolean(activeInventory) && sceneMode === "nvd-document",
         collapsed: leftPaneCollapsed,
         editingAssetId: editingLibraryAssetId,
         editingFolderId: editingLibraryFolderId,
+        hiddenDefaultSections: hiddenDefaultLibraryViews
+          .filter((view): view is keyof typeof defaultLibrarySectionLabels => view in defaultLibrarySectionLabels)
+          .map((view) => ({ label: defaultLibrarySectionLabels[view], view })),
         nodes: structure,
-        onAutoSeedLibraryStructureEnabledChange: updateAutoSeedLibraryStructureEnabled,
         onCreateFolder: createFolder,
+        onHideDefaultSection: hideDefaultLibrarySection,
         onNavigateNvdBlock: navigateToNvdBlock,
         onOpenNodeContextMenu: openLibraryNodeContextMenu,
         onOpenFolder: handleOpenFolder,
-        onRegenerateStarterLibraryStructure: regenerateStarterLibraryStructure,
         onRenameAssetStart: (assetId) => {
           setEditingLibraryFolderId(null);
           setEditingLibraryAssetId(assetId);
@@ -978,6 +987,7 @@ export function App() {
           renameLibraryNodeTo(folderId, name);
           setEditingLibraryFolderId(null);
         },
+        onRestoreDefaultSection: restoreDefaultLibrarySection,
         onOpenSourceFolderContextMenu: openSourceFolderContextMenu,
         onPaneViewChange: changeLeftPaneView,
         onResetWidth: () => setLeftPaneWidth(DEFAULT_LEFT_PANE_WIDTH),
@@ -1098,7 +1108,6 @@ export function App() {
       }}
       overlays={{
         addLibraryNodePanel,
-        autoSeedLibraryStructureEnabled,
         availableThemes,
         customThemes,
         hideFutureNvdStyleResetConfirmations,
@@ -1122,7 +1131,6 @@ export function App() {
         themeName,
         virtualFolders,
         onAddLibraryNodePanelClose: () => setAddLibraryNodePanel(null),
-        onAutoSeedLibraryStructureEnabledChange: updateAutoSeedLibraryStructureEnabled,
         onClearPendingNvdStyleResetRole: () => setPendingNvdStyleResetRole(null),
         onCloseActiveNvdDocument: () => void closeActiveNvdDocument(),
         onCloseNvdCloseConfirmation: () => setIsNvdCloseConfirmationOpen(false),

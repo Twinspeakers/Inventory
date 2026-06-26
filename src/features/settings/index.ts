@@ -1,9 +1,7 @@
 export { SettingsPanel } from "./SettingsPanel";
 export {
-  readAutoSeedLibraryStructureEnabled,
   readNvdSaveReminderEnabled,
   readNvdStyleResetConfirmationEnabled,
-  storeAutoSeedLibraryStructureEnabled,
   storeNvdSaveReminderEnabled,
   storeNvdStyleResetConfirmationEnabled,
 } from "./general/generalSettingsStorage";

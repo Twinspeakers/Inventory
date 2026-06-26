@@ -145,8 +145,14 @@ export function useLibraryActions({
   function openLibraryNodeContextMenu(node: StructureNode, event: ReactMouseEvent<HTMLElement>) {
     const assetNodeId = typeof node.assetId === "number" ? node.assetId : null;
     const isAssetNode = assetNodeId !== null;
+    const canOpenFolderMenu =
+      Boolean(node.canAddChild) ||
+      Boolean(node.folderId) ||
+      Boolean(node.builtinView) ||
+      node.id === "library" ||
+      node.id === "inventory-files";
 
-    if (!node.canAddChild && !isAssetNode) {
+    if (!canOpenFolderMenu && !isAssetNode) {
       return;
     }
 
@@ -166,7 +172,7 @@ export function useLibraryActions({
         assetId: assetNodeId,
         assetParentFolderId: node.parentFolderId ?? null,
         assetParentPathLabels: parentPathLabels,
-        assetPlacementSuggestions: asset ? getAssetPlacementSuggestions(asset, virtualFolders, masterLibraryAssets).slice(0, 3) : [],
+        assetPlacementSuggestions: asset ? getAssetPlacementSuggestions(asset, virtualFolders, masterLibraryAssets) : [],
         canRemoveFromNode: Boolean(parentFolder && asset && libraryNodeIncludesAsset(parentFolder, asset)),
         isInventoryDocument: Boolean(asset && findInventoryNvdDocumentForAsset(asset, inventoryDocuments)),
         label: node.label,
@@ -195,7 +201,7 @@ export function useLibraryActions({
       assetId: asset.id,
       assetParentFolderId: null,
       assetParentPathLabels: [],
-      assetPlacementSuggestions: getAssetPlacementSuggestions(asset, virtualFolders, masterLibraryAssets).slice(0, 3),
+      assetPlacementSuggestions: getAssetPlacementSuggestions(asset, virtualFolders, masterLibraryAssets),
       canRemoveFromNode: false,
       isInventoryDocument: Boolean(findInventoryNvdDocumentForAsset(asset, inventoryDocuments)),
       label: asset.name,
@@ -222,8 +228,6 @@ export function useLibraryActions({
     parentFolderId: string | null,
     parentLabel: string,
     initialQuery = "",
-    preferredSuggestion: AssetPlacementSuggestion | null = null,
-    preferredSuggestions: AssetPlacementSuggestion[] = [],
   ) {
     if (!canAddLibraryNodes()) {
       setLibraryNodeContextMenu(null);
@@ -236,8 +240,6 @@ export function useLibraryActions({
       initialQuery,
       parentFolderId,
       parentLabel,
-      preferredSuggestion,
-      preferredSuggestions,
     });
   }
 
