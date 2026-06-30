@@ -200,6 +200,7 @@ export type VirtualFolder = {
   suggestedTags?: string[];
   tags?: string[];
   templateId?: string | null;
+  builtinView?: LibraryView;
 };
 
 export type LibraryNodeRuleOperator = "contains" | "equals";

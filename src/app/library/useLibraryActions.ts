@@ -184,6 +184,7 @@ export function useLibraryActions({
     }
 
     setLibraryNodeContextMenu({
+      builtinView: node.builtinView,
       folderId: node.folderId ?? null,
       label: node.label,
       target: "folder",
@@ -291,6 +292,11 @@ export function useLibraryActions({
       return;
     }
 
+    if (folder.builtinView) {
+      setStatusMessage("Built-in sections cannot be renamed.");
+      return;
+    }
+
     const name = window.prompt("Rename library node", folder.name);
 
     const trimmedName = name?.trim();
@@ -307,6 +313,11 @@ export function useLibraryActions({
 
     if (!folder) {
       setStatusMessage("That library node could not be found.");
+      return;
+    }
+
+    if (folder.builtinView) {
+      setStatusMessage("Built-in sections cannot be renamed.");
       return;
     }
 
@@ -394,6 +405,11 @@ export function useLibraryActions({
 
     if (!folder) {
       setStatusMessage("That library node could not be found.");
+      return;
+    }
+
+    if (folder.builtinView) {
+      setStatusMessage("Built-in sections can be hidden, but not deleted.");
       return;
     }
 

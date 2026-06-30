@@ -9,6 +9,7 @@ export type LibraryNodeContextMenuState = {
   assetId?: number;
   assetParentFolderId?: string | null;
   assetParentPathLabels?: string[];
+  builtinView?: string;
   canRemoveFromNode?: boolean;
   folderId?: string | null;
   isInventoryDocument?: boolean;
@@ -137,7 +138,7 @@ export function LibraryNodeContextMenu({
             <Plus size={14} aria-hidden="true" />
             <span>Add Child Node</span>
           </button>
-          {menu.folderId ? (
+          {menu.folderId && !menu.builtinView ? (
             <>
               <button className="library-context-menu-item" type="button" onClick={onRename}>
                 <Pencil size={14} aria-hidden="true" />

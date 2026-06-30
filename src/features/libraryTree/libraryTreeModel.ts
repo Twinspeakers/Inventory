@@ -78,7 +78,7 @@ export {
   groupLibraryNodeTemplates,
 } from "./libraryTreeTemplateUtils";
 export const initialVirtualFolders: VirtualFolder[] = [];
-const defaultLibrarySectionViews = new Set<LibraryView>([
+export const defaultLibrarySectionViews = new Set<LibraryView>([
   "library-images",
   "library-vector",
   "library-audio",
@@ -86,29 +86,34 @@ const defaultLibrarySectionViews = new Set<LibraryView>([
   "library-documents",
   "library-archives",
 ]);
-const defaultLibrarySections: Array<{
+type BuiltinLibrarySection = {
   icon: LucideIcon;
   id: LibraryView;
   label: string;
   matches: (asset: Asset) => boolean;
-}> = [
+  rules: LibraryNodeRule[];
+};
+export const defaultLibrarySections: BuiltinLibrarySection[] = [
   {
     icon: Box,
     id: "library-models",
     label: "3D Models",
     matches: (asset) => asset.type === "3D",
+    rules: [{ field: "type", operator: "equals", value: "3d" }],
   },
   {
     icon: Archive,
     id: "library-archives",
     label: "Archives",
     matches: (asset) => asset.type === "Archive",
+    rules: [{ field: "type", operator: "equals", value: "archive" }],
   },
   {
     icon: FileAudio,
     id: "library-audio",
     label: "Audio",
     matches: (asset) => asset.type === "Audio",
+    rules: [{ field: "type", operator: "equals", value: "audio" }],
   },
   {
     icon: FileText,
@@ -118,12 +123,14 @@ const defaultLibrarySections: Array<{
       const extension = asset.extension.toLowerCase();
       return asset.type === "Document" && extension !== "nvv";
     },
+    rules: [{ field: "type", operator: "equals", value: "document" }],
   },
   {
     icon: FileImage,
     id: "library-images",
     label: "Images",
     matches: (asset) => asset.type === "Image" && asset.extension.toLowerCase() !== "svg",
+    rules: [{ field: "type", operator: "equals", value: "image" }],
   },
   {
     icon: FileImage,
@@ -133,6 +140,10 @@ const defaultLibrarySections: Array<{
       const extension = asset.extension.toLowerCase();
       return extension === "svg" || extension === "nvv";
     },
+    rules: [
+      { field: "extension", operator: "equals", value: "svg" },
+      { field: "extension", operator: "equals", value: "nvv" },
+    ],
   },
 ];
 const defaultLibraryRootTemplateId = "library";
@@ -259,7 +270,7 @@ export function buildStructure(
   const inventoryWriteAssets = inventoryDocumentAssets.filter((asset) => asset.extension.toLowerCase() === "nvd");
   const inventoryDrawAssets = inventoryDocumentAssets.filter((asset) => asset.extension.toLowerCase() === "nvv");
   const masterLibraryAssets = assets.filter((asset) => !inventoryDocumentPaths.has(normalizePath(asset.path)));
-  const sortedFolders = sortVirtualFoldersByName(virtualFolders);
+  const sortedFolders = sortTopLevelLibraryFolders(virtualFolders);
   const legacyRootWrapper = sortedFolders.length === 1 && isLegacyVisualRootWrapper(sortedFolders[0]) ? sortedFolders[0] : null;
   const topLevelAssetScopes = legacyRootWrapper ? null : getChildAssetScopes(sortedFolders, masterLibraryAssets);
   const assignedAssetIds = legacyRootWrapper
@@ -270,22 +281,8 @@ export function buildStructure(
           .map((asset) => asset.id),
       );
   const hiddenDefaultViewSet = new Set(hiddenDefaultLibraryViews.filter((view) => defaultLibrarySectionViews.has(view)));
-  const visibleDefaultSections = defaultLibrarySections
-    .filter((section) => !hiddenDefaultViewSet.has(section.id))
-    .map((section) => {
-      const sectionAssets = sortAssets(masterLibraryAssets.filter((asset) => section.matches(asset)), "name", "asc");
-      return {
-        id: section.id,
-        label: section.label,
-        builtinView: section.id,
-        icon: section.icon,
-        view: section.id,
-        meta: String(sectionAssets.length),
-        open: openNodeIds.has(section.id),
-        children: sectionAssets.map((asset) => assetToStructureNode(asset)),
-      } satisfies StructureNode;
-    });
-  const rootAssetNodes = legacyRootWrapper || visibleDefaultSections.length > 0
+  const visibleTopLevelFolders = sortedFolders.filter((folder) => !folder.builtinView || !hiddenDefaultViewSet.has(folder.builtinView));
+  const rootAssetNodes = legacyRootWrapper || sortedFolders.some((folder) => Boolean(folder.builtinView))
     ? []
     : sortAssets(
         masterLibraryAssets.filter((asset) => !assignedAssetIds.has(asset.id)),
@@ -295,8 +292,7 @@ export function buildStructure(
   const visibleLibraryChildren = legacyRootWrapper
     ? virtualFolderToNode(legacyRootWrapper, masterLibraryAssets, openNodeIds).children ?? []
     : [
-        ...visibleDefaultSections,
-        ...sortedFolders.map((folder) => virtualFolderToNode(folder, topLevelAssetScopes?.get(folder.id) ?? [], openNodeIds)),
+        ...visibleTopLevelFolders.map((folder) => virtualFolderToNode(folder, topLevelAssetScopes?.get(folder.id) ?? [], openNodeIds)),
         ...rootAssetNodes,
       ];
   const inventoryWriteNodes = inventoryWriteAssets.map((asset) => assetToStructureNode(asset));
@@ -349,7 +345,11 @@ export function buildStructure(
 
 export function markActive(node: StructureNode, activeView: LibraryView, selectedFolderId: string | null, selectedAssetId: number | null): StructureNode {
   const children = node.children?.map((child) => markActive(child, activeView, selectedFolderId, selectedAssetId));
-  const active = typeof node.assetId === "number" ? node.assetId === selectedAssetId : node.folderId ? node.folderId === selectedFolderId : !selectedFolderId && node.view === activeView;
+  const active = typeof node.assetId === "number"
+    ? node.assetId === selectedAssetId
+    : node.folderId
+      ? node.folderId === selectedFolderId || (!selectedFolderId && node.builtinView === activeView)
+      : !selectedFolderId && node.view === activeView;
 
   return {
     ...node,
@@ -541,13 +541,16 @@ export function virtualFolderToNode(folder: VirtualFolder, assets: Asset[], open
   const childAssetScopes = getChildAssetScopes(sortedChildren, scopedAssets);
   const childFolderNodes = sortedChildren.map((child) => virtualFolderToNode(child, childAssetScopes.get(child.id) ?? [], openNodeIds));
   const assetNodes = matchingAssets.map((asset) => assetToStructureNode(asset, folder.id));
+  const builtinSection = folder.builtinView ? defaultLibrarySections.find((section) => section.id === folder.builtinView) : null;
 
   return {
     id: folder.id,
     label: folder.name,
-    icon: childFolderNodes.length > 0 || assetNodes.length > 0 ? FolderOpen : Folder,
+    icon: builtinSection?.icon ?? (childFolderNodes.length > 0 || assetNodes.length > 0 ? FolderOpen : Folder),
+    builtinView: folder.builtinView,
     canAddChild: true,
     folderId: folder.id,
+    view: folder.builtinView,
     meta: String(countFolderAssets(folder, assets)),
     open: openNodeIds.has(folder.id),
     children: [...childFolderNodes, ...assetNodes],
@@ -558,8 +561,78 @@ export function sortVirtualFoldersByName(folders: VirtualFolder[]) {
   return [...folders].sort((first, second) => compareText(first.name, second.name));
 }
 
+export function ensureBuiltInLibrarySections(folders: VirtualFolder[]) {
+  const normalizedFolders = folders.map((folder) => ({
+    ...folder,
+    children: [...folder.children],
+  }));
+  const foldersByBuiltinView = new Map(
+    normalizedFolders
+      .filter((folder): folder is VirtualFolder & { builtinView: LibraryView } => Boolean(folder.builtinView))
+      .map((folder) => [folder.builtinView, folder]),
+  );
+  const consumedFolderIds = new Set<string>();
+  const nextFolders: VirtualFolder[] = [];
+
+  for (const section of defaultLibrarySections) {
+    const existingFolder = foldersByBuiltinView.get(section.id) ?? normalizedFolders.find((folder) => folder.id === section.id) ?? null;
+    const builtinFolder = existingFolder
+      ? {
+          ...existingFolder,
+          id: section.id,
+          name: section.label,
+          rules: section.rules,
+          suggestedTags: [],
+          tags: [],
+          templateId: defaultLibraryRootTemplateId,
+          builtinView: section.id,
+        }
+      : createBuiltinLibrarySectionFolder(section);
+
+    consumedFolderIds.add(existingFolder?.id ?? section.id);
+    nextFolders.push(builtinFolder);
+  }
+
+  for (const folder of normalizedFolders) {
+    if (consumedFolderIds.has(folder.id) || (folder.builtinView && defaultLibrarySectionViews.has(folder.builtinView))) {
+      continue;
+    }
+
+    nextFolders.push(folder);
+  }
+
+  return nextFolders;
+}
+
+function createBuiltinLibrarySectionFolder(section: BuiltinLibrarySection): VirtualFolder {
+  return {
+    id: section.id,
+    name: section.label,
+    assetIds: [],
+    excludedAssetIds: [],
+    children: [],
+    rules: section.rules,
+    suggestedTags: [],
+    tags: [],
+    templateId: defaultLibraryRootTemplateId,
+    builtinView: section.id,
+  };
+}
+
+function sortTopLevelLibraryFolders(folders: VirtualFolder[]) {
+  const builtinOrder = new Map(defaultLibrarySections.map((section, index) => [section.id, index]));
+  const builtinFolders = folders
+    .filter((folder) => folder.builtinView && builtinOrder.has(folder.builtinView))
+    .sort((first, second) => (builtinOrder.get(first.builtinView!) ?? 0) - (builtinOrder.get(second.builtinView!) ?? 0));
+  const customFolders = sortVirtualFoldersByName(
+    folders.filter((folder) => !folder.builtinView || !builtinOrder.has(folder.builtinView)),
+  );
+
+  return [...builtinFolders, ...customFolders];
+}
+
 function isLegacyVisualRootWrapper(folder: VirtualFolder) {
-  return folder.templateId === defaultLibraryRootTemplateId;
+  return folder.templateId === defaultLibraryRootTemplateId && !folder.builtinView;
 }
 
 export function assetToStructureNode(asset: Asset, parentFolderId: string | null = null): StructureNode {

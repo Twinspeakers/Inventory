@@ -4,6 +4,7 @@ import { libraryNodeTemplates, type LibraryNodeTemplate } from "../../libraryCat
 import type { Asset, ScannedAsset, VirtualFolder } from "../../app/appTypes";
 import {
   createDefaultTopLevelLibraryNodesForAssets,
+  ensureBuiltInLibrarySections,
   getAssetPlacementConfidence,
   getAssetPlacementSuggestions,
   getAddFolderSuggestions,
@@ -100,6 +101,38 @@ describe("library tree add-folder suggestions", () => {
     const libraryFolder = createFolder("library");
 
     expect(libraryNodeIncludesAsset(libraryFolder, createAsset())).toBe(true);
+  });
+
+  it("hydrates built-in top-level sections for older inventories", () => {
+    const customFolder = createFolder("tag:people");
+    const folders = ensureBuiltInLibrarySections([customFolder]);
+
+    expect(folders.map((folder) => folder.id)).toEqual(
+      expect.arrayContaining([
+        "library-images",
+        "library-vector",
+        "library-audio",
+        "library-models",
+        "library-documents",
+        "library-archives",
+        customFolder.id,
+      ]),
+    );
+    expect(folders.find((folder) => folder.id === "library-images")?.builtinView).toBe("library-images");
+  });
+
+  it("keeps built-in image and vector sections mutually exclusive", () => {
+    const [imagesFolder, vectorFolder] = ensureBuiltInLibrarySections([]).filter(
+      (folder) => folder.id === "library-images" || folder.id === "library-vector",
+    );
+    const pngAsset = createAsset({ type: "Image", extension: "png" });
+    const svgAsset = createAsset({ type: "Image", extension: "svg" });
+
+    expect(imagesFolder).toBeTruthy();
+    expect(vectorFolder).toBeTruthy();
+    expect(libraryNodeIncludesAsset(imagesFolder!, pngAsset)).toBe(true);
+    expect(libraryNodeIncludesAsset(imagesFolder!, svgAsset)).toBe(false);
+    expect(libraryNodeIncludesAsset(vectorFolder!, svgAsset)).toBe(true);
   });
 
   it("does not seed a legacy Library wrapper for new inventories", () => {

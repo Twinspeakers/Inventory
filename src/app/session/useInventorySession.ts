@@ -50,7 +50,7 @@ import {
   isLibraryView,
   isSceneMode,
 } from "../workspace/workspaceState";
-import { findFolder, getSourceFolderId, pruneStarterLibraryNodes } from "../../features/libraryTree/libraryTreeModel";
+import { ensureBuiltInLibrarySections, findFolder, getSourceFolderId, pruneStarterLibraryNodes } from "../../features/libraryTree/libraryTreeModel";
 import type { EditorSaveState } from "../../features/editors";
 
 export function useInventorySession({
@@ -138,17 +138,29 @@ export function useInventorySession({
               },
             ]
           : [];
-    const nextVirtualFolders = pruneStarterLibraryNodes(state.virtualFolders);
-    const nextSelectedFolderId =
-      workspaceState?.selectedFolderId && findFolder(nextVirtualFolders, workspaceState.selectedFolderId) ? workspaceState.selectedFolderId : null;
+    const nextVirtualFolders = ensureBuiltInLibrarySections(pruneStarterLibraryNodes(state.virtualFolders));
     const nextHiddenDefaultLibraryViews =
       Array.isArray(workspaceState?.hiddenDefaultLibraryViews)
         ? workspaceState.hiddenDefaultLibraryViews.filter(isLibraryView)
         : [];
+    const persistedSelectedFolder =
+      workspaceState?.selectedFolderId ? findFolder(nextVirtualFolders, workspaceState.selectedFolderId) : null;
+    const defaultSectionSelectedFolderId =
+      workspaceState?.activeView &&
+      isLibraryView(workspaceState.activeView) &&
+      findFolder(nextVirtualFolders, workspaceState.activeView) &&
+      !nextHiddenDefaultLibraryViews.includes(workspaceState.activeView)
+        ? workspaceState.activeView
+        : null;
+    const nextSelectedFolderId =
+      persistedSelectedFolder && (!persistedSelectedFolder.builtinView || !nextHiddenDefaultLibraryViews.includes(persistedSelectedFolder.builtinView))
+        ? persistedSelectedFolder.id
+        : defaultSectionSelectedFolderId;
     const nextActiveView =
       workspaceState?.activeView &&
       isLibraryView(workspaceState.activeView) &&
-      !nextHiddenDefaultLibraryViews.includes(workspaceState.activeView)
+      !nextHiddenDefaultLibraryViews.includes(workspaceState.activeView) &&
+      !nextSelectedFolderId
         ? workspaceState.activeView
         : "all";
     const nextSelectedAssetId = workspaceState

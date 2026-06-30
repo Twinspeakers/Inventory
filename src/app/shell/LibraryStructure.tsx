@@ -550,7 +550,7 @@ function StructureRow({
       return;
     }
 
-    if (node.folderId) {
+    if (node.folderId && !node.builtinView) {
       onRenameFolderStart(node.folderId);
     }
   }

@@ -764,7 +764,7 @@ export function App() {
     }
 
     setHiddenDefaultLibraryViews((currentViews) => (currentViews.includes(view) ? currentViews : [...currentViews, view]));
-    if (activeView === view) {
+    if (activeView === view || selectedFolderId === view) {
       selectView("all");
     }
     setStatusMessage(`Hid ${defaultLibrarySectionLabels[view as keyof typeof defaultLibrarySectionLabels]}.`);
@@ -776,7 +776,11 @@ export function App() {
     }
 
     setHiddenDefaultLibraryViews((currentViews) => currentViews.filter((currentView) => currentView !== view));
-    selectView(view);
+    if (findFolder(virtualFolders, view)) {
+      selectFolder(view);
+    } else {
+      selectView(view);
+    }
     setStatusMessage(`Restored ${defaultLibrarySectionLabels[view as keyof typeof defaultLibrarySectionLabels]}.`);
   }
 

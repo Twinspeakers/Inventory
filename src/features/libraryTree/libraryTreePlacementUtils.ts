@@ -308,6 +308,10 @@ export function dedupeAssetPlacementSuggestions(suggestions: AssetPlacementSugge
 }
 
 export function libraryNodeFileRulesAllowAsset(folder: VirtualFolder, asset: Asset) {
+  if (folder.builtinView) {
+    return libraryNodeRulesMatchAsset(folder, asset);
+  }
+
   const fileRules = getLibraryNodeRules(folder).filter((rule) => rule.field === "type" || rule.field === "extension");
 
   if (fileRules.length > 0) {
@@ -598,7 +602,11 @@ export function libraryNodeIncludesAsset(folder: VirtualFolder, asset: Asset) {
 export function libraryNodeRulesMatchAsset(folder: VirtualFolder, asset: Asset) {
   const template = getLibraryNodeTemplateForFolder(folder);
 
-  if (template.id === "library") {
+  if (folder.builtinView) {
+    return getBuiltinSectionMatcher(folder.builtinView)(asset);
+  }
+
+  if (template.id === "library" && (!folder.rules || folder.rules.length === 0)) {
     return true;
   }
 
@@ -619,6 +627,28 @@ export function libraryNodeRulesMatchAsset(folder: VirtualFolder, asset: Asset) 
 
   const assetSearchText = getNormalizedAssetSearchText(asset);
   return getLibraryNodeImpliedMatchTerms(template, folder).some((term) => normalizedTextIncludesTerm(assetSearchText, term));
+}
+
+function getBuiltinSectionMatcher(view: NonNullable<VirtualFolder["builtinView"]>) {
+  switch (view) {
+    case "library-images":
+      return (asset: Asset) => asset.type === "Image" && asset.extension.toLowerCase() !== "svg";
+    case "library-vector":
+      return (asset: Asset) => {
+        const extension = asset.extension.toLowerCase();
+        return extension === "svg" || extension === "nvv";
+      };
+    case "library-audio":
+      return (asset: Asset) => asset.type === "Audio";
+    case "library-models":
+      return (asset: Asset) => asset.type === "3D";
+    case "library-documents":
+      return (asset: Asset) => asset.type === "Document" && asset.extension.toLowerCase() !== "nvv";
+    case "library-archives":
+      return (asset: Asset) => asset.type === "Archive";
+    default:
+      return () => false;
+  }
 }
 
 export function libraryNodeFileTypeMatches(template: LibraryNodeTemplate, asset: Asset) {
