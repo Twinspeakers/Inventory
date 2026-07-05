@@ -23,6 +23,25 @@ export { NvdFontSizeSelector } from "./NvdFontSizeSelector";
 export { NvdZoomSelector } from "./NvdZoomSelector";
 export { NvdThumbnail } from "./NvdThumbnail";
 export {
+  DEFAULT_NVD_PAGE_LAYOUT,
+  NVD_A4_PAGE_HEIGHT_PT,
+  NVD_A4_PAGE_WIDTH_PT,
+  NVD_DEFAULT_PAGE_MARGIN_PT,
+  NVD_MM_PER_INCH,
+  NVD_MIN_PAGE_CONTENT_SIZE_PT,
+  NVD_PT_PER_INCH,
+  NVD_PT_TO_MM,
+  NVD_PT_TO_PX,
+  clampNvdPageLayout,
+  getNvdPageContentBoxPt,
+  getNvdPageLayout,
+  getNvdPageLengthMm,
+  getNvdPageLayoutPx,
+  getNvdPageLengthPx,
+  getNvdPageSizePreset,
+  type NvdPageLayoutPx,
+} from "./nvdPageLayout";
+export {
   DEFAULT_NVD_FONT_SIZE_PT,
   MAX_NVD_FONT_SIZE_PT,
   MIN_NVD_FONT_SIZE_PT,

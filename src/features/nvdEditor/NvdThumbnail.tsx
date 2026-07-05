@@ -5,8 +5,9 @@ import type { NvdDocument, NvdTextRun, OpenedNvdDocument } from "../inventoryPro
 import { getNvdFontCssStack, getNvdFontFamily, useNvdFontsReady } from "./fonts";
 import { getNvdFontSizePt, getNvdFontSizePx } from "./nvdFontSize";
 import { DEFAULT_NVD_LINE_HEIGHT } from "./nvdLineHeight";
+import { getNvdPageLayout, getNvdPageLayoutPx } from "./nvdPageLayout";
 import { DEFAULT_NVD_PARAGRAPH_SPACING_PT } from "./nvdParagraphSpacing";
-import { getNvdLayoutMode, NVD_A4_PAGE_WIDTH_PX, paginateNvdTextRuns } from "./nvdLayout";
+import { getNvdLayoutMode, paginateNvdTextRuns } from "./nvdLayout";
 import { getNvdDocumentStyleDefinitions } from "./nvdStyles";
 import {
   getNvdDocumentFontFamilies,
@@ -45,16 +46,18 @@ export function NvdThumbnail({
   const paragraphStyle = getNvdDocumentStyleDefinitions(document?.styles).p;
   const fontFamily = document ? paragraphStyle.fontFamily : getNvdFontFamily(null);
   const fontSizePt = document ? paragraphStyle.fontSizePt : getNvdFontSizePt(null);
+  const layoutMode = getNvdLayoutMode(document?.layoutMode);
+  const pageLayout = getNvdPageLayout(document?.pageLayout);
+  const pageLayoutPx = getNvdPageLayoutPx(pageLayout);
   const fontFamilies = useMemo(() => getNvdDocumentFontFamilies(document), [document]);
   const fontsReady = useNvdFontsReady(fontFamilies);
   const fontStyle = useMemo(
     () => ({
       fontFamily: getNvdFontCssStack(fontFamily),
-      fontSize: getNvdThumbnailFontSizeCssValue(fontSizePt),
+      fontSize: getNvdThumbnailFontSizeCssValue(fontSizePt, pageLayoutPx.widthPx),
     }),
-    [fontFamily, fontSizePt],
+    [fontFamily, fontSizePt, pageLayoutPx.widthPx],
   );
-  const layoutMode = getNvdLayoutMode(document?.layoutMode);
   const runs = useMemo(() => (document ? getNvdDocumentRuns(document) : []), [document]);
   const blockLayouts = useMemo(
     () => (document ? getNvdDocumentBlockLayouts(document) : []),
@@ -76,7 +79,7 @@ export function NvdThumbnail({
         };
       }
 
-      const firstPage = paginateNvdTextRuns(runs, fontFamily, fontSizePt, blockLayouts)[0];
+      const firstPage = paginateNvdTextRuns(runs, fontFamily, fontSizePt, blockLayouts, pageLayout)[0];
 
       return {
         blockLayouts:
@@ -93,7 +96,7 @@ export function NvdThumbnail({
         runs: firstPage?.runs ?? [],
       };
     },
-    [blockLayouts, fontFamily, fontSizePt, fontsReady, layoutMode, runs],
+    [blockLayouts, fontFamily, fontSizePt, fontsReady, layoutMode, pageLayout, runs],
   );
 
   useEffect(() => {
@@ -138,8 +141,20 @@ export function NvdThumbnail({
   }
 
   return (
-    <div className={`nvd-thumbnail nvd-thumbnail-${layoutMode}`}>
-      <div className={`nvd-thumbnail-page nvd-thumbnail-page-${layoutMode}`} style={fontStyle}>
+    <div
+      className={`nvd-thumbnail nvd-thumbnail-${layoutMode}`}
+      style={{ aspectRatio: `${pageLayoutPx.widthPx} / ${pageLayoutPx.heightPx}` }}
+    >
+      <div
+        className={`nvd-thumbnail-page nvd-thumbnail-page-${layoutMode}`}
+        style={{
+          ...fontStyle,
+          paddingBottom: `${(pageLayoutPx.marginBottomPx / pageLayoutPx.widthPx) * 100}%`,
+          paddingLeft: `${(pageLayoutPx.marginLeftPx / pageLayoutPx.widthPx) * 100}%`,
+          paddingRight: `${(pageLayoutPx.marginRightPx / pageLayoutPx.widthPx) * 100}%`,
+          paddingTop: `${(pageLayoutPx.marginTopPx / pageLayoutPx.widthPx) * 100}%`,
+        }}
+      >
         {isLoading || !fontsReady ? (
           <div className="space-y-1">
             <span className="block h-1 w-4/5 rounded-sm bg-surface-raised" />
@@ -151,6 +166,7 @@ export function NvdThumbnail({
           <NvdStyledTextPreview
             defaultFontFamily={fontFamily}
             defaultFontSizePt={fontSizePt}
+            pageWidthPx={pageLayoutPx.widthPx}
             blockLayouts={previewContent.blockLayouts}
             runs={previewContent.runs}
           />
@@ -163,11 +179,13 @@ export function NvdThumbnail({
 function NvdStyledTextPreview({
   defaultFontFamily,
   defaultFontSizePt,
+  pageWidthPx,
   blockLayouts,
   runs,
 }: {
   defaultFontFamily: string;
   defaultFontSizePt: number;
+  pageWidthPx: number;
   blockLayouts: NvdBlockLayout[];
   runs: NvdTextRun[];
 }) {
@@ -198,6 +216,7 @@ function NvdStyledTextPreview({
             <NvdStyledRuns
               defaultFontFamily={defaultFontFamily}
               defaultFontSizePt={defaultFontSizePt}
+              pageWidthPx={pageWidthPx}
               runs={paragraphRuns}
             />
           </p>
@@ -210,10 +229,12 @@ function NvdStyledTextPreview({
 function NvdStyledRuns({
   defaultFontFamily,
   defaultFontSizePt,
+  pageWidthPx,
   runs,
 }: {
   defaultFontFamily: string;
   defaultFontSizePt: number;
+  pageWidthPx: number;
   runs: NvdTextRun[];
 }) {
   return (
@@ -223,10 +244,10 @@ function NvdStyledRuns({
           key={`${runIndex}-${run.text.length}`}
           style={{
             fontFamily: getNvdFontCssStack(getNvdTextRunFontFamily(run, defaultFontFamily)),
-            fontSize: getNvdThumbnailFontSizeCssValue(getNvdTextRunFontSizePt(run, defaultFontSizePt)),
+            fontSize: getNvdThumbnailFontSizeCssValue(getNvdTextRunFontSizePt(run, defaultFontSizePt), pageWidthPx),
             fontStyle: isNvdTextRunItalic(run) ? "italic" : "normal",
             fontWeight: isNvdTextRunBold(run) ? 700 : 400,
-            letterSpacing: getNvdThumbnailFontSizeCssValue(getNvdTextRunCharacterSpacingPt(run)),
+            letterSpacing: getNvdThumbnailFontSizeCssValue(getNvdTextRunCharacterSpacingPt(run), pageWidthPx),
           }}
         >
           {run.text}
@@ -236,8 +257,8 @@ function NvdStyledRuns({
   );
 }
 
-function getNvdThumbnailFontSizeCssValue(fontSizePt: number) {
-  return `${(getNvdFontSizePx(fontSizePt) / NVD_A4_PAGE_WIDTH_PX) * 100}cqi`;
+function getNvdThumbnailFontSizeCssValue(fontSizePt: number, pageWidthPx: number) {
+  return `${(getNvdFontSizePx(fontSizePt) / pageWidthPx) * 100}cqi`;
 }
 
 function pathsMatch(left: string, right: string) {

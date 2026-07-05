@@ -10,6 +10,8 @@ export {
   type NvdDocument,
   type NvdDocumentStyleDefinition,
   type NvdLayoutMode,
+  type NvdPageLayout,
+  type NvdPageSizePreset,
   type NvdTextAlignment,
   type NvdTextRun,
   type NvdTextStyle,

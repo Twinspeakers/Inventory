@@ -23,7 +23,7 @@ An `.nvd` file stores:
 
 Defaults for old or new documents:
 
-- `layoutMode`: `pageless`
+- `layoutMode`: `a4`
 - `fontFamily`: `Inter`
 - `fontSize`: `12pt`
 
@@ -101,6 +101,8 @@ A4 pagination is derived presentation state. It waits for referenced fonts, meas
 Page spacers, page counts, and pagination caches are not saved into `.nvd` or `Invent.nvi`.
 
 Pageless and A4 share one persistent editor instance so switching modes preserves selection and Undo/Redo history.
+
+Pageless mode should not render a paper sheet or page background. It is a flow view, not a disguised page.
 
 ## Inventory Integration
 

@@ -6,7 +6,7 @@ import { closeHistory, isHistoryTransaction, redoDepth, undoDepth } from "@tipta
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import type { NvdTextAlignment, NvdTextRun } from "../inventoryProject";
+import type { NvdPageLayout, NvdTextAlignment, NvdTextRun } from "../inventoryProject";
 import { getNvdFontCssFamilyName, getNvdFontCssStack, getNvdFontFamily } from "./fonts";
 import { getNvdFontSizeCssValue, getNvdFontSizePt } from "./nvdFontSize";
 import {
@@ -30,6 +30,7 @@ import {
   type NvdTextSelection,
 } from "./nvdRichText";
 import type { NvdPageBreak } from "./nvdLayout";
+import { getNvdPageLayoutPx } from "./nvdPageLayout";
 import { getProseMirrorPositionsForTextOffsets } from "./nvdProseMirror";
 import { createNvdStyleHistoryAnchorTransaction } from "./nvdStyleHistory";
 
@@ -79,6 +80,7 @@ export function NvdRichTextEditor({
   defaultFontSizePt,
   documentKey,
   pageBreaks = [],
+  pageLayout,
   onActivate,
   onControllerChange,
   onRunsChange,
@@ -93,6 +95,7 @@ export function NvdRichTextEditor({
   defaultFontSizePt: number;
   documentKey: string;
   pageBreaks?: NvdPageBreak[];
+  pageLayout?: Partial<NvdPageLayout> | null;
   onActivate: () => void;
   onControllerChange: (controller: NvdEditorController) => void;
   onRunsChange: (
@@ -118,6 +121,7 @@ export function NvdRichTextEditor({
   const defaultFontFamilyRef = useRef(normalizedDefaultFontFamily);
   const defaultFontSizePtRef = useRef(normalizedDefaultFontSizePt);
   const pageBreaksRef = useRef(pageBreaks);
+  const pageLayoutRef = useRef(pageLayout);
   const pageBreaksSignatureRef = useRef("");
   const decorationCacheRef = useRef<{
     decorations: DecorationSet;
@@ -139,6 +143,7 @@ export function NvdRichTextEditor({
   defaultFontFamilyRef.current = normalizedDefaultFontFamily;
   defaultFontSizePtRef.current = normalizedDefaultFontSizePt;
   pageBreaksRef.current = pageBreaks;
+  pageLayoutRef.current = pageLayout;
   pageBreaksSignatureRef.current = serializePageBreaks(pageBreaks);
 
   const editor: Editor | null = useEditor(
@@ -176,7 +181,10 @@ export function NvdRichTextEditor({
                   pageBreak.className = "nvd-a4-page-break";
                   pageBreak.dataset.nextPage = String(index + 2);
                   pageBreak.contentEditable = "false";
+                  const pageLayoutPx = getNvdPageLayoutPx(pageLayoutRef.current);
                   pageBreak.style.height = `${pageBreakDefinition.heightPx}px`;
+                  pageBreak.style.marginLeft = `${-pageLayoutPx.marginLeftPx}px`;
+                  pageBreak.style.width = `${pageLayoutPx.widthPx}px`;
                   return pageBreak;
                 },
                 {

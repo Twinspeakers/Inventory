@@ -462,8 +462,8 @@ textarea {
     box-shadow: none;
   }
 
-  .nvd-editor-page-pageless {
-    width: 794px;
+  .nvd-editor-pageless-document {
+    @apply mx-auto w-full;
     min-height: calc(100vh + 4rem);
   }
 
@@ -500,6 +500,177 @@ textarea {
     height: 1123px;
     width: 794px;
     @apply absolute left-0 rounded-sm border border-line bg-surface text-ink;
+  }
+
+  .nvd-page-ruler-overlays {
+    @apply absolute inset-0 z-20;
+    pointer-events: none;
+  }
+
+  .nvd-page-ruler-overlay {
+    @apply absolute left-0;
+    pointer-events: none;
+  }
+
+  .nvd-page-content-frame {
+    @apply absolute border border-line/35;
+    box-shadow: none;
+  }
+
+  .nvd-page-ruler {
+    @apply absolute overflow-hidden text-muted;
+    background: rgb(30 32 36 / 0.98);
+  }
+
+  .nvd-page-ruler-horizontal {
+    height: 24px;
+    border-bottom: 1px solid rgb(72 74 79);
+  }
+
+  .nvd-page-ruler-vertical {
+    width: 24px;
+    border-right: 1px solid rgb(72 74 79);
+  }
+
+  .nvd-page-ruler-top {
+    @apply left-0 top-0 rounded-t-sm;
+  }
+
+  .nvd-page-ruler-bottom {
+    @apply bottom-0 left-0;
+  }
+
+  .nvd-page-ruler-left {
+    @apply left-0 top-0 rounded-t-sm;
+  }
+
+  .nvd-page-ruler-right {
+    @apply right-0 top-0;
+  }
+
+  .nvd-page-ruler-tick {
+    @apply absolute;
+  }
+
+  .nvd-page-ruler-horizontal .nvd-page-ruler-tick {
+    bottom: 0;
+    width: 1px;
+    background: rgb(118 121 126);
+  }
+
+  .nvd-page-ruler-vertical .nvd-page-ruler-tick {
+    right: 0;
+    height: 1px;
+    background: rgb(118 121 126);
+  }
+
+  .nvd-page-ruler-horizontal .nvd-page-ruler-tick-major {
+    height: 10px;
+  }
+
+  .nvd-page-ruler-horizontal .nvd-page-ruler-tick-minor {
+    height: 7px;
+  }
+
+  .nvd-page-ruler-horizontal .nvd-page-ruler-tick-micro {
+    height: 4px;
+  }
+
+  .nvd-page-ruler-vertical .nvd-page-ruler-tick-major {
+    width: 10px;
+  }
+
+  .nvd-page-ruler-vertical .nvd-page-ruler-tick-minor {
+    width: 7px;
+  }
+
+  .nvd-page-ruler-vertical .nvd-page-ruler-tick-micro {
+    width: 4px;
+  }
+
+  .nvd-page-ruler-label {
+    @apply absolute text-[10px] font-medium;
+    color: rgb(231 224 213);
+    letter-spacing: 0.01em;
+  }
+
+  .nvd-page-ruler-horizontal .nvd-page-ruler-label {
+    top: 2px;
+    transform: translateX(-50%);
+  }
+
+  .nvd-page-ruler-vertical .nvd-page-ruler-label {
+    left: 3px;
+    transform: translateY(-50%);
+    writing-mode: vertical-rl;
+  }
+
+  .nvd-ruler-handle {
+    @apply absolute border-0 bg-transparent outline-none transition;
+    height: 14px;
+    pointer-events: auto;
+    touch-action: none;
+    width: 14px;
+  }
+
+  .nvd-ruler-handle:hover,
+  .nvd-ruler-handle:focus-visible,
+  .nvd-ruler-handle-active {
+    filter: brightness(1.08);
+  }
+
+  .nvd-ruler-handle:focus-visible {
+    box-shadow: none;
+  }
+
+  .nvd-ruler-handle-x {
+    cursor: ew-resize;
+  }
+
+  .nvd-ruler-handle-y {
+    cursor: ns-resize;
+  }
+
+  .nvd-ruler-handle-glyph {
+    @apply absolute block;
+    height: 0;
+    width: 0;
+  }
+
+  .nvd-ruler-handle-x .nvd-ruler-handle-glyph {
+    left: 50%;
+    top: 1px;
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-top: 8px solid rgb(166 166 166);
+    transform: translateX(-50%);
+  }
+
+  .nvd-ruler-handle-side-bottom .nvd-ruler-handle-glyph {
+    border-bottom: 8px solid rgb(166 166 166);
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-top: 0;
+    top: auto;
+    bottom: 1px;
+  }
+
+  .nvd-ruler-handle-y .nvd-ruler-handle-glyph {
+    left: 1px;
+    top: 50%;
+    border-bottom: 7px solid transparent;
+    border-left: 8px solid rgb(166 166 166);
+    border-top: 7px solid transparent;
+    transform: translateY(-50%);
+  }
+
+  .nvd-ruler-handle-side-right .nvd-ruler-handle-glyph {
+    border-bottom: 7px solid transparent;
+    border-left: 0;
+    border-right: 8px solid rgb(166 166 166);
+    border-top: 7px solid transparent;
+    left: auto;
+    right: 1px;
   }
 
   .nvd-document-page-input {
@@ -543,7 +714,8 @@ textarea {
 
   .nvd-rich-text-content-pageless {
     min-height: calc(100vh + 4rem);
-    @apply p-24;
+    max-width: 38rem;
+    @apply mx-auto px-4 pb-24 pt-8;
   }
 
   .nvd-rich-text-content-a4-continuous {
@@ -562,17 +734,16 @@ textarea {
     box-shadow: none;
   }
 
-  .nvd-layout-toolbar-toggle-light {
-    @apply h-1.5 w-1.5 rounded-full bg-muted transition;
+  .nvd-layout-toolbar-toggle-arrow {
+    @apply text-[10px] text-muted;
+  }
+
+  .nvd-layout-toolbar-toggle-target {
+    @apply text-ink/80;
   }
 
   .nvd-layout-toolbar-toggle-on {
     @apply text-ink;
-  }
-
-  .nvd-layout-toolbar-toggle-on .nvd-layout-toolbar-toggle-light {
-    background: rgb(var(--color-brand-lime));
-    box-shadow: none;
   }
 
   .nvd-thumbnail {
@@ -1941,6 +2112,18 @@ body.is-resizing-pane * {
 body.is-resizing-row,
 body.is-resizing-row * {
   cursor: row-resize !important;
+  user-select: none !important;
+}
+
+body.is-resizing-nvd-ruler-ew,
+body.is-resizing-nvd-ruler-ew * {
+  cursor: ew-resize !important;
+  user-select: none !important;
+}
+
+body.is-resizing-nvd-ruler-ns,
+body.is-resizing-nvd-ruler-ns * {
+  cursor: ns-resize !important;
   user-select: none !important;
 }
 

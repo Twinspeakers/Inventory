@@ -1,7 +1,8 @@
-import type { NvdDocument, NvdLayoutMode, NvdTextRun } from "../inventoryProject";
+import type { NvdDocument, NvdLayoutMode, NvdPageLayout, NvdTextRun } from "../inventoryProject";
 import { getNvdFontCssStack } from "./fonts";
 import { getNvdFontSizePt, getNvdFontSizePx } from "./nvdFontSize";
 import { DEFAULT_NVD_LINE_HEIGHT, getNvdLineHeight } from "./nvdLineHeight";
+import { DEFAULT_NVD_PAGE_LAYOUT, getNvdPageLayout, getNvdPageLayoutPx } from "./nvdPageLayout";
 import { getNvdParagraphSpacingPt } from "./nvdParagraphSpacing";
 import { getNvdDocumentStyleDefinitions } from "./nvdStyles";
 import {
@@ -19,21 +20,18 @@ import {
   type NvdBlockLayout,
 } from "./nvdRichText";
 
-export const DEFAULT_NVD_LAYOUT_MODE: NvdLayoutMode = "pageless";
-export const NVD_A4_PAGE_WIDTH_PX = 794;
-export const NVD_A4_PAGE_HEIGHT_PX = 1123;
-export const NVD_A4_PAGE_MARGIN_X_PX = 96;
-export const NVD_A4_PAGE_MARGIN_Y_PX = 96;
+export const DEFAULT_NVD_LAYOUT_MODE: NvdLayoutMode = "a4";
 export const NVD_A4_PAGE_GAP_PX = 20;
 export const NVD_TEXT_LINE_HEIGHT = DEFAULT_NVD_LINE_HEIGHT;
-
-const nvdA4PageBorderPx = 1;
-const nvdA4ContentWidthPx = NVD_A4_PAGE_WIDTH_PX - NVD_A4_PAGE_MARGIN_X_PX * 2 - nvdA4PageBorderPx * 2;
-export const NVD_A4_CONTENT_HEIGHT_PX =
-  NVD_A4_PAGE_HEIGHT_PX - NVD_A4_PAGE_MARGIN_Y_PX * 2 - nvdA4PageBorderPx * 2;
 let textMeasurementContext: CanvasRenderingContext2D | null | undefined;
 const nvdPaginationCache = new Map<string, NvdTextPage[]>();
 const NVD_PAGINATION_CACHE_SIZE = 8;
+
+export const NVD_A4_PAGE_WIDTH_PX = getNvdPageLayoutPx(DEFAULT_NVD_PAGE_LAYOUT).widthPx;
+export const NVD_A4_PAGE_HEIGHT_PX = getNvdPageLayoutPx(DEFAULT_NVD_PAGE_LAYOUT).heightPx;
+export const NVD_A4_PAGE_MARGIN_X_PX = getNvdPageLayoutPx(DEFAULT_NVD_PAGE_LAYOUT).marginLeftPx;
+export const NVD_A4_PAGE_MARGIN_Y_PX = getNvdPageLayoutPx(DEFAULT_NVD_PAGE_LAYOUT).marginTopPx;
+export const NVD_A4_CONTENT_HEIGHT_PX = getNvdPageLayoutPx(DEFAULT_NVD_PAGE_LAYOUT).contentHeightPx;
 
 type PositionedNvdTextRun = {
   bold: boolean;
@@ -70,11 +68,11 @@ export type NvdPageBreak = {
 export { getNvdDocumentText };
 
 export function getNvdLayoutMode(layoutMode: NvdLayoutMode | string | null | undefined): NvdLayoutMode {
-  return layoutMode === "a4" ? "a4" : DEFAULT_NVD_LAYOUT_MODE;
+  return layoutMode === "pageless" || layoutMode === "a4" ? layoutMode : DEFAULT_NVD_LAYOUT_MODE;
 }
 
 export function paginateNvdDocument(
-  document: Pick<NvdDocument, "blocks" | "fontFamily" | "fontSize" | "styles">,
+  document: Pick<NvdDocument, "blocks" | "fontFamily" | "fontSize" | "styles" | "pageLayout">,
 ) {
   const paragraphStyle = getNvdDocumentStyleDefinitions(document.styles).p;
 
@@ -83,6 +81,7 @@ export function paginateNvdDocument(
     paragraphStyle.fontFamily,
     paragraphStyle.fontSizePt,
     getNvdDocumentBlockLayouts(document),
+    document.pageLayout,
   );
 }
 
@@ -99,14 +98,17 @@ export function paginateNvdTextRuns(
   defaultFontFamily?: string | null,
   defaultFontSize?: string | number | null,
   blockLayouts: readonly NvdBlockLayout[] = [],
+  pageLayout?: Partial<NvdPageLayout> | null,
 ): NvdTextPage[] {
   const normalizedRuns = normalizeNvdTextRuns(runs);
   const normalizedDefaultFontSizePt = getNvdFontSizePt(defaultFontSize);
+  const normalizedPageLayout = getNvdPageLayout(pageLayout);
   const cacheKey = JSON.stringify([
     defaultFontFamily ?? "",
     normalizedDefaultFontSizePt,
     normalizedRuns,
     blockLayouts,
+    normalizedPageLayout,
   ]);
   const cachedPages = nvdPaginationCache.get(cacheKey);
 
@@ -127,9 +129,10 @@ export function paginateNvdTextRuns(
     positionedRuns,
     normalizedDefaultFontSizePt,
     blockLayouts,
+    normalizedPageLayout,
   );
 
-  const pages = createNvdTextPages(normalizedRuns, text, visualLines);
+  const pages = createNvdTextPages(normalizedRuns, text, visualLines, normalizedPageLayout);
   nvdPaginationCache.set(cacheKey, pages);
 
   if (nvdPaginationCache.size > NVD_PAGINATION_CACHE_SIZE) {
@@ -139,12 +142,18 @@ export function paginateNvdTextRuns(
   return pages;
 }
 
-export function getNvdA4PageBreaks(pages: readonly NvdTextPage[]) {
+export function getNvdA4PageBreaks(
+  pages: readonly NvdTextPage[],
+  pageLayout?: Partial<NvdPageLayout> | null,
+) {
+  const pageLayoutPx = getNvdPageLayoutPx(pageLayout);
+
   return pages.slice(0, -1).map((page) => ({
     heightPx:
-      NVD_A4_CONTENT_HEIGHT_PX -
+      pageLayoutPx.contentHeightPx -
       page.contentHeightPx +
-      NVD_A4_PAGE_MARGIN_Y_PX * 2 +
+      pageLayoutPx.marginTopPx +
+      pageLayoutPx.marginBottomPx +
       NVD_A4_PAGE_GAP_PX,
     offset: page.end,
   })) satisfies NvdPageBreak[];
@@ -197,7 +206,10 @@ function getVisualLines(
   positionedRuns: PositionedNvdTextRun[],
   defaultFontSizePt: number,
   blockLayouts: readonly NvdBlockLayout[],
+  pageLayout: NvdPageLayout,
 ) {
+  const pageLayoutPx = getNvdPageLayoutPx(pageLayout);
+
   if (!text) {
     return [
       {
@@ -216,7 +228,7 @@ function getVisualLines(
   let paragraphIndex = 0;
 
   while (position < text.length) {
-    const nextPosition = findVisualLineEnd(text, position, positionedRuns);
+    const nextPosition = findVisualLineEnd(text, position, positionedRuns, pageLayoutPx.contentWidthPx);
     const end = Math.max(nextPosition, position + 1);
     const isFirstParagraphLine = position === 0 || text[position - 1] === "\n";
     const isLastParagraphLine = end === text.length || text[end - 1] === "\n";
@@ -254,15 +266,21 @@ function getVisualLines(
   return visualLines;
 }
 
-function createNvdTextPages(normalizedRuns: NvdTextRun[], text: string, visualLines: NvdVisualLine[]) {
+function createNvdTextPages(
+  normalizedRuns: NvdTextRun[],
+  text: string,
+  visualLines: NvdVisualLine[],
+  pageLayout: NvdPageLayout,
+) {
   const pages: NvdTextPage[] = [];
   let pageStartLineIndex = 0;
   let pageHeightPx = 0;
+  const pageLayoutPx = getNvdPageLayoutPx(pageLayout);
 
   for (let lineIndex = 0; lineIndex < visualLines.length; lineIndex += 1) {
     const line = visualLines[lineIndex];
 
-    if (pageHeightPx > 0 && pageHeightPx + line.heightPx > NVD_A4_CONTENT_HEIGHT_PX) {
+    if (pageHeightPx > 0 && pageHeightPx + line.heightPx > pageLayoutPx.contentHeightPx) {
       pages.push(createNvdTextPage(normalizedRuns, text, visualLines, pageStartLineIndex, lineIndex, pages.length));
       pageStartLineIndex = lineIndex;
       pageHeightPx = 0;
@@ -310,7 +328,12 @@ function countLineBreaks(text: string) {
   return text.match(/\n/g)?.length ?? 0;
 }
 
-function findVisualLineEnd(text: string, start: number, positionedRuns: PositionedNvdTextRun[]) {
+function findVisualLineEnd(
+  text: string,
+  start: number,
+  positionedRuns: PositionedNvdTextRun[],
+  contentWidthPx: number,
+) {
   const newlineIndex = text.indexOf("\n", start);
   const logicalLineEnd = newlineIndex === -1 ? text.length : newlineIndex;
 
@@ -318,7 +341,7 @@ function findVisualLineEnd(text: string, start: number, positionedRuns: Position
     return Math.min(text.length, start + 1);
   }
 
-  if (measureTextRangeWidth(start, logicalLineEnd, positionedRuns) <= nvdA4ContentWidthPx) {
+  if (measureTextRangeWidth(start, logicalLineEnd, positionedRuns) <= contentWidthPx) {
     return newlineIndex === -1 ? logicalLineEnd : logicalLineEnd + 1;
   }
 
@@ -330,7 +353,7 @@ function findVisualLineEnd(text: string, start: number, positionedRuns: Position
     const middle = Math.floor((low + high) / 2);
     const width = measureTextRangeWidth(start, middle, positionedRuns);
 
-    if (width <= nvdA4ContentWidthPx) {
+    if (width <= contentWidthPx) {
       fittingEnd = middle;
       low = middle + 1;
     } else {

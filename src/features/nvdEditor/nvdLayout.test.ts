@@ -4,10 +4,19 @@ import {
   NVD_A4_PAGE_GAP_PX,
   NVD_A4_PAGE_MARGIN_Y_PX,
   getNvdA4PageBreaks,
+  getNvdLayoutMode,
   paginateNvdTextRuns,
 } from "./nvdLayout";
+import { DEFAULT_NVD_PAGE_LAYOUT } from "./nvdPageLayout";
 
 describe("NVD A4 pagination", () => {
+  it("preserves both supported layout modes while defaulting invalid values to A4", () => {
+    expect(getNvdLayoutMode("a4")).toBe("a4");
+    expect(getNvdLayoutMode("pageless")).toBe("pageless");
+    expect(getNvdLayoutMode("not-a-mode")).toBe("a4");
+    expect(getNvdLayoutMode(null)).toBe("a4");
+  });
+
   it("keeps a generated 100-page document contiguous and within page bounds", () => {
     const text = Array.from(
       { length: 4_000 },
@@ -107,5 +116,35 @@ describe("NVD A4 pagination", () => {
           NVD_A4_PAGE_GAP_PX,
       );
     });
+  });
+
+  it("uses persisted page geometry instead of fixed A4 content bounds", () => {
+    const text = "Inventory layout model regression line.\n".repeat(400);
+    const defaultPages = paginateNvdTextRuns([{ text }], "Inter", 12);
+    const narrowPages = paginateNvdTextRuns(
+      [{ text }],
+      "Inter",
+      12,
+      [],
+      {
+        ...DEFAULT_NVD_PAGE_LAYOUT,
+        marginLeftPt: 144,
+        marginRightPt: 144,
+      },
+    );
+    const shortPages = paginateNvdTextRuns(
+      [{ text }],
+      "Inter",
+      12,
+      [],
+      {
+        ...DEFAULT_NVD_PAGE_LAYOUT,
+        marginTopPt: 144,
+        marginBottomPt: 144,
+      },
+    );
+
+    expect(narrowPages.length).toBeGreaterThan(defaultPages.length);
+    expect(shortPages.length).toBeGreaterThan(defaultPages.length);
   });
 });

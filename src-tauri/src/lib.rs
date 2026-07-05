@@ -321,6 +321,18 @@ struct NvdTextStyle {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct NvdPageLayout {
+    page_size: String,
+    width_pt: f64,
+    height_pt: f64,
+    margin_top_pt: f64,
+    margin_right_pt: f64,
+    margin_bottom_pt: f64,
+    margin_left_pt: f64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct NvdStyleDefinition {
     bold: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -353,6 +365,8 @@ struct NvdDocument {
     font_size: String,
     #[serde(default = "default_nvd_layout_mode")]
     layout_mode: String,
+    #[serde(default = "default_nvd_page_layout")]
+    page_layout: NvdPageLayout,
     blocks: Vec<NvdBlock>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     styles: BTreeMap<String, NvdStyleDefinition>,
@@ -427,7 +441,7 @@ const MAX_PREVIEW_BYTES: u64 = 200 * 1024 * 1024;
 const INVENTORY_SCHEMA_VERSION: u32 = 2;
 const INVENTORY_MANIFEST_KIND: &str = "inventory.project";
 const INVENTORY_MANIFEST_FILENAME: &str = "Invent.nvi";
-const NVD_SCHEMA_VERSION: u32 = 1;
+const NVD_SCHEMA_VERSION: u32 = 2;
 const NVD_DOCUMENT_KIND: &str = "inventory.document";
 const NVV_SCHEMA_VERSION: u32 = 1;
 const NVV_DOCUMENT_KIND: &str = "inventory.vector";
@@ -435,8 +449,15 @@ const NVD_DEFAULT_FONT_FAMILY: &str = "Inter";
 const NVD_DEFAULT_FONT_SIZE: &str = "12pt";
 const NVD_MIN_FONT_SIZE_PT: f64 = 6.0;
 const NVD_MAX_FONT_SIZE_PT: f64 = 144.0;
-const NVD_LAYOUT_MODE_PAGELESS: &str = "pageless";
 const NVD_LAYOUT_MODE_A4: &str = "a4";
+const NVD_PAGE_SIZE_A4: &str = "a4";
+const NVD_PAGE_SIZE_CUSTOM: &str = "custom";
+const NVD_PT_PER_INCH: f64 = 72.0;
+const NVD_MM_PER_INCH: f64 = 25.4;
+const NVD_A4_PAGE_WIDTH_PT: f64 = (210.0 / NVD_MM_PER_INCH) * NVD_PT_PER_INCH;
+const NVD_A4_PAGE_HEIGHT_PT: f64 = (297.0 / NVD_MM_PER_INCH) * NVD_PT_PER_INCH;
+const NVD_DEFAULT_PAGE_MARGIN_PT: f64 = 72.0;
+const NVD_MIN_PAGE_CONTENT_SIZE_PT: f64 = 36.0;
 const MAX_CONTENT_CLUE_BYTES: usize = 16 * 1024;
 const MAX_CONTENT_CLUES: usize = 48;
 
@@ -814,6 +835,7 @@ fn create_nvd_document(
         font_family: default_nvd_font_family(),
         font_size: default_nvd_font_size(),
         layout_mode: default_nvd_layout_mode(),
+        page_layout: default_nvd_page_layout(),
         blocks: vec![NvdBlock {
             id: format!("block-{}", now),
             kind: "paragraph".to_string(),
@@ -867,6 +889,7 @@ fn save_nvd_document(
     document.font_family = normalize_nvd_font_family(&document.font_family);
     document.font_size = normalize_nvd_font_size(&document.font_size);
     document.layout_mode = normalize_nvd_layout_mode(&document.layout_mode);
+    document.page_layout = normalize_nvd_page_layout(&document.page_layout);
 
     write_nvd_document(&document_path, &document)?;
     let opened_document = open_nvd_document_from_parts(document_path, document)?;
@@ -2364,7 +2387,7 @@ fn read_nvd_document(path: &Path) -> Result<NvdDocument, String> {
     let mut document =
         serde_json::from_str::<NvdDocument>(&contents).map_err(|error| error.to_string())?;
 
-    if document.schema_version != NVD_SCHEMA_VERSION {
+    if document.schema_version == 0 || document.schema_version > NVD_SCHEMA_VERSION {
         return Err(format!(
             "Unsupported NVD schema version {}.",
             document.schema_version
@@ -2378,6 +2401,8 @@ fn read_nvd_document(path: &Path) -> Result<NvdDocument, String> {
     document.font_family = normalize_nvd_font_family(&document.font_family);
     document.font_size = normalize_nvd_font_size(&document.font_size);
     document.layout_mode = normalize_nvd_layout_mode(&document.layout_mode);
+    document.page_layout = normalize_nvd_page_layout(&document.page_layout);
+    document.schema_version = NVD_SCHEMA_VERSION;
 
     Ok(document)
 }
@@ -2544,14 +2569,90 @@ fn normalize_nvd_font_size(font_size: &str) -> String {
 }
 
 fn default_nvd_layout_mode() -> String {
-    NVD_LAYOUT_MODE_PAGELESS.to_string()
+    NVD_LAYOUT_MODE_A4.to_string()
 }
 
 fn normalize_nvd_layout_mode(layout_mode: &str) -> String {
     match layout_mode {
+        "pageless" => "pageless".to_string(),
         NVD_LAYOUT_MODE_A4 => NVD_LAYOUT_MODE_A4.to_string(),
         _ => default_nvd_layout_mode(),
     }
+}
+
+fn default_nvd_page_layout() -> NvdPageLayout {
+    NvdPageLayout {
+        page_size: NVD_PAGE_SIZE_A4.to_string(),
+        width_pt: NVD_A4_PAGE_WIDTH_PT,
+        height_pt: NVD_A4_PAGE_HEIGHT_PT,
+        margin_top_pt: NVD_DEFAULT_PAGE_MARGIN_PT,
+        margin_right_pt: NVD_DEFAULT_PAGE_MARGIN_PT,
+        margin_bottom_pt: NVD_DEFAULT_PAGE_MARGIN_PT,
+        margin_left_pt: NVD_DEFAULT_PAGE_MARGIN_PT,
+    }
+}
+
+fn normalize_nvd_page_layout(page_layout: &NvdPageLayout) -> NvdPageLayout {
+    let page_size = match page_layout.page_size.as_str() {
+        NVD_PAGE_SIZE_CUSTOM => NVD_PAGE_SIZE_CUSTOM.to_string(),
+        _ => NVD_PAGE_SIZE_A4.to_string(),
+    };
+    let fallback = default_nvd_page_layout();
+    let width_pt = normalize_nvd_page_extent_pt(page_layout.width_pt, fallback.width_pt);
+    let height_pt = normalize_nvd_page_extent_pt(page_layout.height_pt, fallback.height_pt);
+    let margin_top_pt =
+        normalize_nvd_page_margin_pt(page_layout.margin_top_pt, fallback.margin_top_pt);
+    let margin_right_pt =
+        normalize_nvd_page_margin_pt(page_layout.margin_right_pt, fallback.margin_right_pt);
+    let margin_bottom_pt =
+        normalize_nvd_page_margin_pt(page_layout.margin_bottom_pt, fallback.margin_bottom_pt);
+    let margin_left_pt =
+        normalize_nvd_page_margin_pt(page_layout.margin_left_pt, fallback.margin_left_pt);
+    let (margin_top_pt, margin_bottom_pt) =
+        clamp_nvd_page_margin_pair(margin_top_pt, margin_bottom_pt, height_pt);
+    let (margin_right_pt, margin_left_pt) =
+        clamp_nvd_page_margin_pair(margin_right_pt, margin_left_pt, width_pt);
+
+    NvdPageLayout {
+        page_size,
+        width_pt,
+        height_pt,
+        margin_top_pt,
+        margin_right_pt,
+        margin_bottom_pt,
+        margin_left_pt,
+    }
+}
+
+fn normalize_nvd_page_extent_pt(value: f64, fallback: f64) -> f64 {
+    if value.is_finite() && value > 0.0 {
+        value
+    } else {
+        fallback
+    }
+}
+
+fn normalize_nvd_page_margin_pt(value: f64, fallback: f64) -> f64 {
+    if value.is_finite() && value >= 0.0 {
+        value
+    } else {
+        fallback
+    }
+}
+
+fn clamp_nvd_page_margin_pair(start: f64, end: f64, extent_pt: f64) -> (f64, f64) {
+    let max_combined_margins = (extent_pt - NVD_MIN_PAGE_CONTENT_SIZE_PT).max(0.0);
+
+    if start + end <= max_combined_margins {
+        return (start, end);
+    }
+
+    if start == 0.0 && end == 0.0 {
+        return (0.0, 0.0);
+    }
+
+    let scale = max_combined_margins / (start + end).max(1.0);
+    (start * scale, end * scale)
 }
 
 fn open_inventory_from_parts(
@@ -2716,7 +2817,7 @@ mod tests {
             std::process::id()
         ));
         let contents = serde_json::json!({
-            "schemaVersion": NVD_SCHEMA_VERSION,
+            "schemaVersion": 1,
             "kind": NVD_DOCUMENT_KIND,
             "title": "Older Document",
             "createdAtUnix": 10,
@@ -2733,8 +2834,68 @@ mod tests {
 
         assert_eq!(document.font_family, NVD_DEFAULT_FONT_FAMILY);
         assert_eq!(document.font_size, NVD_DEFAULT_FONT_SIZE);
-        assert_eq!(document.layout_mode, NVD_LAYOUT_MODE_PAGELESS);
+        assert_eq!(document.layout_mode, NVD_LAYOUT_MODE_A4);
+        assert_eq!(document.schema_version, NVD_SCHEMA_VERSION);
+        assert_eq!(document.page_layout.page_size, NVD_PAGE_SIZE_A4);
+        assert_eq!(document.page_layout.margin_left_pt, NVD_DEFAULT_PAGE_MARGIN_PT);
         assert!(document.styles.is_empty());
+        let _ = fs::remove_file(document_path);
+    }
+
+    #[test]
+    fn preserves_pageless_layout_mode_while_defaulting_invalid_modes_to_a4() {
+        assert_eq!(normalize_nvd_layout_mode("pageless"), "pageless");
+        assert_eq!(normalize_nvd_layout_mode("a4"), "a4");
+        assert_eq!(normalize_nvd_layout_mode("invalid"), "a4");
+    }
+
+    #[test]
+    fn normalizes_invalid_nvd_page_layout_values_on_read() {
+        let unique_suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after the Unix epoch")
+            .as_nanos();
+        let document_path = std::env::temp_dir().join(format!(
+            "inventory-invalid-nvd-page-layout-test-{}-{unique_suffix}.nvd",
+            std::process::id()
+        ));
+        let contents = serde_json::json!({
+            "schemaVersion": NVD_SCHEMA_VERSION,
+            "kind": NVD_DOCUMENT_KIND,
+            "title": "Invalid Layout",
+            "createdAtUnix": 10,
+            "updatedAtUnix": 20,
+            "blocks": [],
+            "pageLayout": {
+                "pageSize": "custom",
+                "widthPt": -50,
+                "heightPt": 0,
+                "marginTopPt": 9999,
+                "marginRightPt": -10,
+                "marginBottomPt": 9999,
+                "marginLeftPt": 9999
+            }
+        });
+        fs::write(
+            &document_path,
+            serde_json::to_string_pretty(&contents).expect("invalid-layout NVD should serialize"),
+        )
+        .expect("invalid-layout NVD should be written");
+
+        let document = read_nvd_document(&document_path).expect("invalid-layout NVD should open");
+
+        assert_eq!(document.page_layout.page_size, NVD_PAGE_SIZE_CUSTOM);
+        assert_eq!(document.page_layout.width_pt, NVD_A4_PAGE_WIDTH_PT);
+        assert_eq!(document.page_layout.height_pt, NVD_A4_PAGE_HEIGHT_PT);
+        assert!(document.page_layout.margin_right_pt >= 0.0);
+        assert!(
+            document.page_layout.margin_left_pt + document.page_layout.margin_right_pt
+                <= document.page_layout.width_pt - NVD_MIN_PAGE_CONTENT_SIZE_PT + 0.0001
+        );
+        assert!(
+            document.page_layout.margin_top_pt + document.page_layout.margin_bottom_pt
+                <= document.page_layout.height_pt - NVD_MIN_PAGE_CONTENT_SIZE_PT + 0.0001
+        );
         let _ = fs::remove_file(document_path);
     }
 
@@ -3082,6 +3243,7 @@ mod tests {
             font_family: "Google Sans".to_string(),
             font_size: "24pt".to_string(),
             layout_mode: default_nvd_layout_mode(),
+            page_layout: default_nvd_page_layout(),
             blocks: vec![
                 NvdBlock {
                     id: "block-1".to_string(),
@@ -3305,6 +3467,7 @@ mod tests {
             font_family: default_nvd_font_family(),
             font_size: default_nvd_font_size(),
             layout_mode: default_nvd_layout_mode(),
+            page_layout: default_nvd_page_layout(),
             blocks: Vec::new(),
             styles: BTreeMap::new(),
         };
@@ -3377,6 +3540,7 @@ mod tests {
             font_family: default_nvd_font_family(),
             font_size: default_nvd_font_size(),
             layout_mode: default_nvd_layout_mode(),
+            page_layout: default_nvd_page_layout(),
             blocks: Vec::new(),
             styles: BTreeMap::new(),
         };

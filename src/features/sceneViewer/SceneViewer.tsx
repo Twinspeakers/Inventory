@@ -496,8 +496,11 @@ function NvdLayoutToolbarToggle({
       type="button"
       onClick={() => onChange(nextLayoutMode)}
     >
-      <span className="nvd-layout-toolbar-toggle-light" aria-hidden="true" />
       <span>{isPageless ? "Pageless" : "A4"}</span>
+      <span className="nvd-layout-toolbar-toggle-arrow" aria-hidden="true">
+        →
+      </span>
+      <span className="nvd-layout-toolbar-toggle-target">{nextLayoutMode === "a4" ? "A4" : "Pageless"}</span>
     </button>
   );
 }

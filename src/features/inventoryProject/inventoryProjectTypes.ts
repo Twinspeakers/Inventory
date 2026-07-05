@@ -83,6 +83,18 @@ export type NvdTextRun = {
 
 export type NvdLayoutMode = "pageless" | "a4";
 
+export type NvdPageSizePreset = "a4" | "custom";
+
+export type NvdPageLayout = {
+  pageSize: NvdPageSizePreset;
+  widthPt: number;
+  heightPt: number;
+  marginTopPt: number;
+  marginRightPt: number;
+  marginBottomPt: number;
+  marginLeftPt: number;
+};
+
 export type NvdDocumentStyleDefinition = {
   bold: boolean;
   characterSpacingPt?: number;
@@ -106,6 +118,7 @@ export type NvdDocument = {
   fontFamily: string;
   fontSize: string;
   layoutMode: NvdLayoutMode;
+  pageLayout?: NvdPageLayout;
   blocks: NvdBlock[];
   styles?: Record<string, NvdDocumentStyleDefinition>;
 };
