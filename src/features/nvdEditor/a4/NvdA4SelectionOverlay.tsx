@@ -6,7 +6,7 @@ import {
   getNvdSelectionGeometry,
   type NvdDocumentLayoutSnapshot,
 } from "../layout/nvdPageLayoutEngine";
-import type { NvdTextSelection } from "../core/nvdRichText";
+import type { NvdTextSelection } from "../document/nvdRichText";
 
 export function NvdA4SelectionOverlay({
   layout,

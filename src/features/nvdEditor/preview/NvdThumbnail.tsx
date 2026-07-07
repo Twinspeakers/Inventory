@@ -8,8 +8,8 @@ import { DEFAULT_NVD_LINE_HEIGHT } from "../primitives/nvdLineHeight";
 import { getNvdPageLayout, getNvdPageLayoutPx } from "../layout/nvdPageLayout";
 import { DEFAULT_NVD_PARAGRAPH_SPACING_PT } from "../primitives/nvdParagraphSpacing";
 import { getNvdLayoutMode, layoutNvdTextRuns } from "../layout/nvdLayout";
-import { NvdPageFragmentView } from "../a4/NvdPageFragmentView";
-import { getNvdDocumentStyleDefinitions } from "../core/nvdStyles";
+import { NvdPageFragmentView } from "../rendering/NvdPageFragmentView";
+import { getNvdDocumentStyleDefinitions } from "../document/nvdStyles";
 import {
   getNvdDocumentFontFamilies,
   getNvdDocumentBlockLayouts,
@@ -21,7 +21,7 @@ import {
   isNvdTextRunItalic,
   splitNvdTextRunsIntoParagraphs,
   type NvdBlockLayout,
-} from "../core/nvdRichText";
+} from "../document/nvdRichText";
 
 type NvdThumbnailAsset = {
   name: string;
@@ -44,7 +44,8 @@ export function NvdThumbnail({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(!usesLiveDocument);
   const document = liveDocument ?? savedDocument;
-  const paragraphStyle = getNvdDocumentStyleDefinitions(document?.styles).p;
+  const styleDefinitions = getNvdDocumentStyleDefinitions(document?.styles);
+  const paragraphStyle = styleDefinitions.p;
   const fontFamily = document ? paragraphStyle.fontFamily : getNvdFontFamily(null);
   const fontSizePt = document ? paragraphStyle.fontSizePt : getNvdFontSizePt(null);
   const layoutMode = getNvdLayoutMode(document?.layoutMode);
@@ -82,7 +83,14 @@ export function NvdThumbnail({
         };
       }
 
-      const firstPage = layoutNvdTextRuns(runs, fontFamily, fontSizePt, blockLayouts, pageLayout).pages[0] ?? null;
+      const firstPage = layoutNvdTextRuns(
+        runs,
+        fontFamily,
+        fontSizePt,
+        blockLayouts,
+        pageLayout,
+        styleDefinitions,
+      ).pages[0] ?? null;
 
       return {
         blockLayouts:
@@ -100,7 +108,7 @@ export function NvdThumbnail({
         runs: firstPage?.runs ?? [],
       };
     },
-    [blockLayouts, fontFamily, fontSizePt, fontsReady, layoutMode, pageLayout, runs],
+    [blockLayouts, fontFamily, fontSizePt, fontsReady, layoutMode, pageLayout, runs, styleDefinitions],
   );
 
   useEffect(() => {

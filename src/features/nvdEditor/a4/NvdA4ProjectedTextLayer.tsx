@@ -2,7 +2,7 @@ import type { NvdPageLayout } from "../../inventoryProject";
 import { NVD_A4_PAGE_GAP_PX } from "../layout/nvdLayout";
 import { getNvdPageLayoutPx } from "../layout/nvdPageLayout";
 import type { NvdPageFragment } from "../layout/nvdPageLayoutEngine";
-import { NvdPageFragmentView } from "./NvdPageFragmentView";
+import { NvdPageFragmentView } from "../rendering/NvdPageFragmentView";
 
 export function NvdA4ProjectedTextLayer({
   defaultFontFamily,

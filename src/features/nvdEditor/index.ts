@@ -22,12 +22,12 @@ export { NvdFontSelector } from "./controls/NvdFontSelector";
 export { NvdFontSizeSelector } from "./controls/NvdFontSizeSelector";
 export { NvdZoomSelector } from "./controls/NvdZoomSelector";
 export { NvdThumbnail } from "./preview/NvdThumbnail";
-export { NvdPageFragmentView } from "./a4/NvdPageFragmentView";
+export { NvdPageFragmentView } from "./rendering/NvdPageFragmentView";
 export { NvdA4PageHostLayer } from "./a4/NvdA4PageHostLayer";
 export { NvdA4ProjectedTextLayer } from "./a4/NvdA4ProjectedTextLayer";
 export { NvdA4SelectionOverlay } from "./a4/NvdA4SelectionOverlay";
 export { NvdA4PageEditorSurface } from "./surfaces/NvdA4PageEditorSurface";
-export { NvdPagelessEditorSurface } from "./surfaces/NvdPagelessEditorSurface";
+export { NvdPagelessEditorSurface } from "./pageless/NvdPagelessEditorSurface";
 export { NvdA4InfrastructureEditor } from "./a4/NvdA4InfrastructureEditor";
 export { NvdInputBridge } from "./a4/NvdInputBridge";
 export { useNvdA4SelectionController } from "./a4/useNvdA4SelectionController";
@@ -121,7 +121,7 @@ export {
   NVD_STYLE_ROLES,
   type NvdStyleDefinition,
   type NvdStyleRole,
-} from "./core/nvdStyles";
+} from "./document/nvdStyles";
 export {
   DEFAULT_NVD_ZOOM_PERCENT,
   normalizeNvdZoomPercent,
@@ -146,5 +146,5 @@ export {
   replaceNvdTextRunRange,
   sliceNvdTextRuns,
   splitNvdTextRunsIntoParagraphs,
-} from "./core/nvdRichText";
-export type { NvdBlockLayout, NvdTextSelection } from "./core/nvdRichText";
+} from "./document/nvdRichText";
+export type { NvdBlockLayout, NvdTextSelection } from "./document/nvdRichText";

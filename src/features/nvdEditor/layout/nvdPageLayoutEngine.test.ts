@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_NVD_PAGE_LAYOUT } from "./nvdPageLayout";
-import type { NvdBlockLayout } from "../core/nvdRichText";
+import type { NvdBlockLayout } from "../document/nvdRichText";
+import { DEFAULT_NVD_STYLE_DEFINITIONS } from "../document/nvdStyles";
 import {
   findNvdLineFragmentForOffset,
   findNvdPageFragmentForOffset,
@@ -75,7 +76,7 @@ describe("NVD page layout engine", () => {
   });
 
   it("responds to content-bounds changes through the shared layout snapshot", () => {
-    const text = "Inventory layout model regression line.\n".repeat(400);
+    const text = "Inventory layout model regression line that should wrap under narrower content bounds. ".repeat(120);
     const defaultLayout = layoutNvdTextRuns([{ text }], "Inter", 12);
     const narrowLayout = layoutNvdTextRuns(
       [{ text }],
@@ -89,7 +90,10 @@ describe("NVD page layout engine", () => {
       },
     );
 
-    expect(narrowLayout.pages.length).toBeGreaterThan(defaultLayout.pages.length);
+    const defaultLineCount = defaultLayout.pages.reduce((count, page) => count + page.lines.length, 0);
+    const narrowLineCount = narrowLayout.pages.reduce((count, page) => count + page.lines.length, 0);
+
+    expect(narrowLineCount).toBeGreaterThan(defaultLineCount);
   });
 
   it("maps document offsets back to page and paragraph fragments", () => {
@@ -167,6 +171,93 @@ describe("NVD page layout engine", () => {
     });
   });
 
+  it("keeps caret and selection overlay geometry to text height instead of paragraph spacing", () => {
+    const blockLayout = createLayout({
+      lineHeight: 1,
+      spaceAfterPt: 18,
+      spaceBeforePt: 18,
+    });
+    const layout = layoutNvdTextRuns(
+      [{ text: "Alpha" }],
+      "Inter",
+      12,
+      [blockLayout],
+    );
+
+    const caret = getNvdCaretGeometry(layout, 0);
+    const rects = getNvdSelectionGeometry(layout, 0, 2);
+
+    expect(caret).not.toBeNull();
+    expect(caret?.topPx).toBeGreaterThan(0);
+    expect(caret?.heightPx).toBeLessThan(layout.pages[0].lines[0].heightPx);
+    expect(rects).toHaveLength(1);
+    expect(rects[0].topPx).toBe(caret?.topPx);
+    expect(rects[0].heightPx).toBe(caret?.heightPx);
+  });
+
+  it("matches caret height to the resolved text style at the caret offset", () => {
+    const layout = layoutNvdTextRuns(
+      [
+        { text: "small " },
+        { text: "BIG", style: { fontSize: "36pt", fontFamily: "Google Sans Flex", bold: true } },
+      ],
+      "Inter",
+      12,
+      [createLayout()],
+    );
+
+    const smallCaret = getNvdCaretGeometry(layout, 1);
+    const bigCaret = getNvdCaretGeometry(layout, "small ".length + 1);
+
+    expect(smallCaret).not.toBeNull();
+    expect(bigCaret).not.toBeNull();
+    expect(bigCaret!.heightPx).toBeGreaterThan(smallCaret!.heightPx);
+    expect(bigCaret!.topPx).toBeLessThan(smallCaret!.topPx);
+  });
+
+  it("uses the paragraph style metrics for an empty styled paragraph caret", () => {
+    const headingStyleDefinitions = {
+      ...DEFAULT_NVD_STYLE_DEFINITIONS,
+      h1: {
+        ...DEFAULT_NVD_STYLE_DEFINITIONS.h1,
+        fontFamily: "Google Sans Flex",
+        fontSizePt: 36,
+      },
+    };
+    const layout = layoutNvdTextRuns(
+      [],
+      "Inter",
+      12,
+      [createLayout({ kind: "h1" })],
+      undefined,
+      headingStyleDefinitions,
+    );
+    const caret = getNvdCaretGeometry(layout, 0);
+
+    expect(caret).not.toBeNull();
+    expect(caret!.heightPx).toBeGreaterThan(24);
+  });
+
+  it("keeps a styled caret height at the end of a paragraph before the newline", () => {
+    const layout = layoutNvdTextRuns(
+      [
+        { text: "Heading", style: { fontSize: "36pt", fontFamily: "Google Sans Flex", bold: true } },
+        { text: "\n" },
+        { text: "Body" },
+      ],
+      "Inter",
+      12,
+      [createLayout({ kind: "h1" }), createLayout()],
+    );
+
+    const headingMidCaret = getNvdCaretGeometry(layout, 2);
+    const headingEndCaret = getNvdCaretGeometry(layout, "Heading".length);
+
+    expect(headingMidCaret).not.toBeNull();
+    expect(headingEndCaret).not.toBeNull();
+    expect(headingEndCaret!.heightPx).toBe(headingMidCaret!.heightPx);
+  });
+
   it("maps a page-local point back to a document offset", () => {
     const layout = layoutNvdTextRuns(
       [{ text: "Alpha beta\ngamma delta" }],
@@ -211,7 +302,7 @@ describe("NVD page layout engine", () => {
     expect(layout.pages[1].text).toBe("Heading\nBody");
   });
 
-  it("keeps a marked paragraph together when it would otherwise split across pages", () => {
+  it("allows a keep-together paragraph to span pages when it no longer fits on a single page", () => {
     const keptParagraph = "This paragraph should stay together and wrap onto multiple visual lines.";
     const layout = layoutNvdTextRuns(
       [{ text: `One\nTwo\nThree\nFour\nFive\n${keptParagraph}` }],
@@ -236,12 +327,13 @@ describe("NVD page layout engine", () => {
       },
     );
 
-    expect(layout.pages).toHaveLength(2);
-    expect(layout.pages[0].text).toBe("One\nTwo\nThree\nFour\nFive\n");
-    expect(layout.pages[1].text).toBe(keptParagraph);
+    expect(layout.pages).toHaveLength(3);
+    expect(layout.pages[0].text).toBe("One\nTwo\nThree\nFour\nFive\nThis ");
+    expect(layout.pages[1].text).toContain("paragraph");
+    expect(layout.pages[2].text).toBe("multiple visual lines.");
   });
 
-  it("moves a splittable paragraph to the next page when widow or orphan rules would be violated", () => {
+  it("spans a constrained paragraph across additional pages when widow or orphan rules cannot be satisfied on one page", () => {
     const constrainedParagraph = "This paragraph wraps onto several lines when the content width is narrow.";
     const layout = layoutNvdTextRuns(
       [{ text: `One\nTwo\nThree\n${constrainedParagraph}` }],
@@ -264,8 +356,9 @@ describe("NVD page layout engine", () => {
       },
     );
 
-    expect(layout.pages).toHaveLength(2);
-    expect(layout.pages[0].text).toBe("One\nTwo\nThree\n");
-    expect(layout.pages[1].text).toBe(constrainedParagraph);
+    expect(layout.pages).toHaveLength(3);
+    expect(layout.pages[0].text).toBe("One\nTwo\nThree\nThis paragraph ");
+    expect(layout.pages[1].text).toBe("wraps onto several lines when the content ");
+    expect(layout.pages[2].text).toBe("width is narrow.");
   });
 });

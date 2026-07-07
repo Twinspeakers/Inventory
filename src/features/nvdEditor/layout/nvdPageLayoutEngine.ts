@@ -4,7 +4,11 @@ import { getNvdFontSizePt, getNvdFontSizePx } from "../primitives/nvdFontSize";
 import { getNvdLineHeight } from "../primitives/nvdLineHeight";
 import { getNvdPageLayout, getNvdPageLayoutPx } from "./nvdPageLayout";
 import { getNvdParagraphSpacingPt } from "../primitives/nvdParagraphSpacing";
-import { getNvdDocumentStyleDefinitions } from "../core/nvdStyles";
+import {
+  getNvdDocumentStyleDefinitions,
+  type NvdStyleDefinition,
+  type NvdStyleRole,
+} from "../document/nvdStyles";
 import {
   getNvdDocumentBlockLayouts,
   getNvdDocumentRuns,
@@ -17,7 +21,7 @@ import {
   normalizeNvdTextRuns,
   sliceNvdTextRuns,
   type NvdBlockLayout,
-} from "../core/nvdRichText";
+} from "../document/nvdRichText";
 
 let textMeasurementContext: CanvasRenderingContext2D | null | undefined;
 const nvdLayoutCache = new Map<string, NvdDocumentLayoutSnapshot>();
@@ -34,6 +38,13 @@ type PositionedNvdTextRun = {
   text: string;
 };
 
+type NvdResolvedTextStyle = {
+  bold: boolean;
+  fontFamily: string;
+  fontSizePt: number;
+  italic: boolean;
+};
+
 export type NvdTextPage = {
   contentHeightPx: number;
   end: number;
@@ -45,6 +56,7 @@ export type NvdTextPage = {
 };
 
 export type NvdLineFragment = {
+  baselineOffsetPx: number;
   end: number;
   heightPx: number;
   index: number;
@@ -53,6 +65,8 @@ export type NvdLineFragment = {
   pageIndex: number;
   paragraphIndex: number;
   start: number;
+  textHeightPx: number;
+  textTopOffsetPx: number;
   topPx: number;
 };
 
@@ -60,6 +74,7 @@ export type NvdParagraphFragment = {
   end: number;
   heightPx: number;
   kind: NvdBlockLayout["kind"];
+  lineHeight: number;
   lineEndIndex: number;
   lineStartIndex: number;
   pageIndex: number;
@@ -89,6 +104,7 @@ export type NvdDocumentLayoutSnapshot = {
   pageLayout: NvdPageLayout;
   pages: NvdPageFragment[];
   runs: NvdTextRun[];
+  styleDefinitions?: Record<NvdStyleRole, NvdStyleDefinition>;
   text: string;
 };
 
@@ -121,6 +137,7 @@ export function layoutNvdDocument(
     paragraphStyle.fontSizePt,
     getNvdDocumentBlockLayouts(document),
     document.pageLayout,
+    getNvdDocumentStyleDefinitions(document.styles),
   );
 }
 
@@ -138,6 +155,7 @@ export function layoutNvdTextRuns(
   defaultFontSize?: string | number | null,
   blockLayouts: readonly NvdBlockLayout[] = [],
   pageLayout?: Partial<NvdPageLayout> | null,
+  styleDefinitions?: Record<NvdStyleRole, NvdStyleDefinition>,
 ) {
   const normalizedRuns = normalizeNvdTextRuns(runs);
   const normalizedDefaultFontSizePt = getNvdFontSizePt(defaultFontSize);
@@ -149,6 +167,7 @@ export function layoutNvdTextRuns(
     normalizedRuns,
     blockLayouts,
     normalizedPageLayout,
+    styleDefinitions,
   ]);
   const cachedLayout = nvdLayoutCache.get(cacheKey);
 
@@ -167,9 +186,11 @@ export function layoutNvdTextRuns(
   const lines = createLineFragments(
     text,
     positionedRuns,
+    normalizedDefaultFontFamily,
     normalizedDefaultFontSizePt,
     blockLayouts,
     normalizedPageLayout,
+    styleDefinitions,
   );
   const pages = createPageFragments(normalizedRuns, text, lines, blockLayouts, normalizedPageLayout);
   const layoutSnapshot = {
@@ -179,6 +200,7 @@ export function layoutNvdTextRuns(
     pageLayout: normalizedPageLayout,
     pages,
     runs: normalizedRuns,
+    styleDefinitions,
     text,
   } satisfies NvdDocumentLayoutSnapshot;
 
@@ -266,31 +288,67 @@ export function getNvdCaretGeometry(
 
   if (!line) {
     const blockLayout = layout.blockLayouts[0] ?? getDefaultBlockLayout();
+    const fallbackStyle = getFallbackParagraphTextStyle(
+      0,
+      layout.blockLayouts,
+      layout.defaultFontFamily,
+      layout.defaultFontSizePt,
+      layout.styleDefinitions,
+    );
+    const metrics = getTextStyleMetrics(
+      fallbackStyle.fontFamily,
+      fallbackStyle.fontSizePt,
+      fallbackStyle.bold,
+      fallbackStyle.italic,
+    );
+    const textHeightPx = metrics.ascentPx + metrics.descentPx;
 
     return {
-      heightPx: getLineHeightPx(layout.defaultFontSizePt, blockLayout.lineHeight),
+      heightPx: textHeightPx,
       leftPx: 0,
       lineIndex: 0,
       pageIndex: page.index,
       paragraphIndex: 0,
-      topPx: 0,
+      topPx: getLineTextTopPx(line, blockLayout, layout.defaultFontSizePt),
     } satisfies NvdCaretGeometry;
   }
 
   const clampedOffset = clampNumber(offset, line.start, line.end);
+  const positionedRuns = positionNvdTextRuns(
+    layout.runs,
+    layout.defaultFontFamily || undefined,
+    layout.defaultFontSizePt,
+  );
   const leftPx = measureTextRangeWidthForRuns(
     line.start,
     Math.min(clampedOffset, line.end),
-    positionNvdTextRuns(layout.runs, layout.defaultFontFamily || undefined, layout.defaultFontSizePt),
+    positionedRuns,
   );
+  const blockLayout = layout.blockLayouts[line.paragraphIndex] ?? getDefaultBlockLayout();
+  const fallbackStyle = getFallbackParagraphTextStyle(
+    line.paragraphIndex,
+    layout.blockLayouts,
+    layout.defaultFontFamily,
+    layout.defaultFontSizePt,
+    layout.styleDefinitions,
+  );
+  const caretStyle = resolveCaretTextStyleAtOffset(clampedOffset, line, positionedRuns, fallbackStyle);
+  const caretMetrics = getTextStyleMetrics(
+    caretStyle.fontFamily,
+    caretStyle.fontSizePt,
+    caretStyle.bold,
+    caretStyle.italic,
+  );
+  const baselinePx = getLineBaselinePx(line, blockLayout, layout.defaultFontSizePt);
+  const topPx = Math.max(getLineTextTopPx(line, blockLayout, layout.defaultFontSizePt), baselinePx - caretMetrics.ascentPx);
 
   return {
-    heightPx: line.heightPx,
+    heightPx: Math.max(1, caretMetrics.ascentPx + caretMetrics.descentPx),
     leftPx,
     lineIndex: line.index,
     pageIndex: page.index,
     paragraphIndex: line.paragraphIndex,
-    topPx: line.topPx,
+    topPx,
   } satisfies NvdCaretGeometry;
 }
 
@@ -323,17 +381,18 @@ export function getNvdSelectionGeometry(
       const lineSelectionEnd = Math.min(selectionEnd, line.end);
       const leftPx = measureTextRangeWidthForRuns(line.start, lineSelectionStart, positionedRuns);
       const rightPx = measureTextRangeWidthForRuns(line.start, lineSelectionEnd, positionedRuns);
+      const blockLayout = layout.blockLayouts[line.paragraphIndex] ?? getDefaultBlockLayout();
 
       if (rightPx <= leftPx) {
         return;
       }
 
       rects.push({
-        heightPx: line.heightPx,
+        heightPx: getLineTextHeightPx(line, blockLayout, layout.defaultFontSizePt),
         leftPx,
         lineIndex: line.index,
         pageIndex: page.index,
-        topPx: line.topPx,
+        topPx: getLineTextTopPx(line, blockLayout, layout.defaultFontSizePt),
         widthPx: rightPx - leftPx,
       });
     });
@@ -440,18 +499,36 @@ function positionNvdTextRuns(
 function createLineFragments(
   text: string,
   positionedRuns: PositionedNvdTextRun[],
+  defaultFontFamily: string,
   defaultFontSizePt: number,
   blockLayouts: readonly NvdBlockLayout[],
   pageLayout: NvdPageLayout,
+  styleDefinitions?: Record<NvdStyleRole, NvdStyleDefinition>,
 ) {
   const pageLayoutPx = getNvdPageLayoutPx(pageLayout);
 
   if (!text) {
+    const fallbackStyle = getFallbackParagraphTextStyle(
+      0,
+      blockLayouts,
+      defaultFontFamily,
+      defaultFontSizePt,
+      styleDefinitions,
+    );
+    const lineMetrics = measureTextRangeLineMetrics(
+      0,
+      0,
+      positionedRuns,
+      fallbackStyle,
+      blockLayouts[0]?.lineHeight,
+    );
     return [
       {
+        baselineOffsetPx:
+          getParagraphSpacingPx(blockLayouts[0]?.spaceBeforePt) + lineMetrics.baselineOffsetPx,
         end: 0,
         heightPx:
-          getLineHeightPx(defaultFontSizePt, blockLayouts[0]?.lineHeight) +
+          lineMetrics.lineHeightPx +
           getParagraphSpacingPx(blockLayouts[0]?.spaceBeforePt) +
           getParagraphSpacingPx(blockLayouts[0]?.spaceAfterPt),
         index: 0,
@@ -460,6 +537,9 @@ function createLineFragments(
         pageIndex: 0,
         paragraphIndex: 0,
         start: 0,
+        textHeightPx: lineMetrics.textHeightPx,
+        textTopOffsetPx:
+          getParagraphSpacingPx(blockLayouts[0]?.spaceBeforePt) + lineMetrics.textTopOffsetPx,
         topPx: 0,
       },
     ] satisfies NvdLineFragment[];
@@ -475,16 +555,32 @@ function createLineFragments(
     const isFirstParagraphLine = position === 0 || text[position - 1] === "\n";
     const isLastParagraphLine = end === text.length || text[end - 1] === "\n";
     const blockLayout = blockLayouts[paragraphIndex];
-    lineSeeds.push({
+    const beforeSpacePx = isFirstParagraphLine ? getParagraphSpacingPx(blockLayout?.spaceBeforePt) : 0;
+    const afterSpacePx = isLastParagraphLine ? getParagraphSpacingPx(blockLayout?.spaceAfterPt) : 0;
+    const fallbackStyle = getFallbackParagraphTextStyle(
+      paragraphIndex,
+      blockLayouts,
+      defaultFontFamily,
+      defaultFontSizePt,
+      styleDefinitions,
+    );
+    const lineMetrics = measureTextRangeLineMetrics(
+      position,
       end,
-      heightPx:
-        measureTextRangeLineHeight(position, end, positionedRuns, defaultFontSizePt, blockLayout?.lineHeight) +
-        (isFirstParagraphLine ? getParagraphSpacingPx(blockLayout?.spaceBeforePt) : 0) +
-        (isLastParagraphLine ? getParagraphSpacingPx(blockLayout?.spaceAfterPt) : 0),
+      positionedRuns,
+      fallbackStyle,
+      blockLayout?.lineHeight,
+    );
+    lineSeeds.push({
+      baselineOffsetPx: beforeSpacePx + lineMetrics.baselineOffsetPx,
+      end,
+      heightPx: lineMetrics.lineHeightPx + beforeSpacePx + afterSpacePx,
       isFirstParagraphLine,
       isLastParagraphLine,
       paragraphIndex,
       start: position,
+      textHeightPx: lineMetrics.textHeightPx,
+      textTopOffsetPx: beforeSpacePx + lineMetrics.textTopOffsetPx,
     });
     if (text.slice(position, end).endsWith("\n")) {
       paragraphIndex += 1;
@@ -493,16 +589,33 @@ function createLineFragments(
   }
 
   if (text.endsWith("\n")) {
+    const blockLayout = blockLayouts[paragraphIndex];
+    const beforeSpacePx = getParagraphSpacingPx(blockLayout?.spaceBeforePt);
+    const afterSpacePx = getParagraphSpacingPx(blockLayout?.spaceAfterPt);
+    const fallbackStyle = getFallbackParagraphTextStyle(
+      paragraphIndex,
+      blockLayouts,
+      defaultFontFamily,
+      defaultFontSizePt,
+      styleDefinitions,
+    );
+    const lineMetrics = measureTextRangeLineMetrics(
+      text.length,
+      text.length,
+      positionedRuns,
+      fallbackStyle,
+      blockLayout?.lineHeight,
+    );
     lineSeeds.push({
+      baselineOffsetPx: beforeSpacePx + lineMetrics.baselineOffsetPx,
       end: text.length,
-      heightPx:
-        getLineHeightPx(defaultFontSizePt, blockLayouts[paragraphIndex]?.lineHeight) +
-        getParagraphSpacingPx(blockLayouts[paragraphIndex]?.spaceBeforePt) +
-        getParagraphSpacingPx(blockLayouts[paragraphIndex]?.spaceAfterPt),
+      heightPx: lineMetrics.lineHeightPx + beforeSpacePx + afterSpacePx,
       isFirstParagraphLine: true,
       isLastParagraphLine: true,
       paragraphIndex,
       start: text.length,
+      textHeightPx: lineMetrics.textHeightPx,
+      textTopOffsetPx: beforeSpacePx + lineMetrics.textTopOffsetPx,
     });
   }
 
@@ -920,6 +1033,7 @@ function createParagraphFragments(
       end,
       heightPx: fragmentLines.reduce((heightPx, line) => heightPx + line.heightPx, 0),
       kind: blockLayout.kind,
+      lineHeight: blockLayout.lineHeight,
       lineEndIndex: pageStartLineIndex + fragmentEnd,
       lineStartIndex: pageStartLineIndex + fragmentStart,
       pageIndex,
@@ -1037,32 +1151,212 @@ function measureTextRangeWidthForRuns(
   return measureTextRangeWidth(start, end, positionedRuns);
 }
 
-function measureTextRangeLineHeight(
+function measureTextRangeLineMetrics(
   start: number,
   end: number,
   positionedRuns: PositionedNvdTextRun[],
-  defaultFontSizePt: number,
+  fallbackStyle: NvdResolvedTextStyle,
   lineHeight: number | undefined,
 ) {
-  let maxFontSizePt = defaultFontSizePt;
+  let maxFontSizePt = fallbackStyle.fontSizePt;
+  let maxAscentPx = 0;
+  let maxDescentPx = 0;
+  let hasRun = false;
 
   for (const run of positionedRuns) {
     if (run.end <= start || run.start >= end) {
       continue;
     }
 
+    hasRun = true;
     maxFontSizePt = Math.max(maxFontSizePt, run.fontSizePt);
+    const metrics = getTextStyleMetrics(run.fontFamily, run.fontSizePt, run.bold, run.italic);
+    maxAscentPx = Math.max(maxAscentPx, metrics.ascentPx);
+    maxDescentPx = Math.max(maxDescentPx, metrics.descentPx);
   }
 
-  return getLineHeightPx(maxFontSizePt, lineHeight);
+  if (!hasRun) {
+    const metrics = getTextStyleMetrics(
+      fallbackStyle.fontFamily,
+      fallbackStyle.fontSizePt,
+      fallbackStyle.bold,
+      fallbackStyle.italic,
+    );
+    maxAscentPx = metrics.ascentPx;
+    maxDescentPx = metrics.descentPx;
+  }
+
+  const lineHeightPx = getLineHeightPx(maxFontSizePt, lineHeight);
+  const textHeightPx = Math.max(1, maxAscentPx + maxDescentPx);
+  const leadingPx = Math.max(0, lineHeightPx - textHeightPx);
+  const leadingTopPx =
+    textHeightPx > 0
+      ? leadingPx * (maxAscentPx / textHeightPx)
+      : leadingPx / 2;
+
+  return {
+    baselineOffsetPx: leadingTopPx + maxAscentPx,
+    lineHeightPx,
+    textHeightPx,
+    textTopOffsetPx: leadingTopPx,
+  };
 }
 
 function getLineHeightPx(fontSizePt: number, lineHeight: number | undefined) {
   return getNvdFontSizePx(fontSizePt) * getNvdLineHeight(lineHeight);
 }
 
+function getLineTextTopPx(
+  line: NvdLineFragment | null | undefined,
+  blockLayout: NvdBlockLayout | undefined,
+  defaultFontSizePt: number,
+) {
+  if (!line) {
+    return 0;
+  }
+
+  return line.topPx + line.textTopOffsetPx;
+}
+
+function getLineTextHeightPx(
+  line: NvdLineFragment,
+  blockLayout: NvdBlockLayout | undefined,
+  defaultFontSizePt: number,
+) {
+  return line.textHeightPx;
+}
+
+function getLineBaselinePx(
+  line: NvdLineFragment,
+  blockLayout: NvdBlockLayout | undefined,
+  defaultFontSizePt: number,
+) {
+  return line.topPx + line.baselineOffsetPx;
+}
+
 function getParagraphSpacingPx(spacingPt: number | undefined) {
   return getNvdParagraphSpacingPt(spacingPt) * (4 / 3);
+}
+
+const nvdTextMetricsCache = new Map<string, { ascentPx: number; descentPx: number }>();
+
+function getTextStyleMetrics(
+  fontFamily: string,
+  fontSizePt: number,
+  bold: boolean,
+  italic: boolean,
+) {
+  const cacheKey = JSON.stringify([fontFamily, fontSizePt, bold, italic]);
+  const cachedMetrics = nvdTextMetricsCache.get(cacheKey);
+
+  if (cachedMetrics) {
+    return cachedMetrics;
+  }
+
+  const fontCssStack = getNvdFontCssStack(fontFamily);
+  const fontSizePx = getNvdFontSizePx(fontSizePt);
+  const context = getTextMeasurementContext();
+
+  if (!context) {
+    const fallbackMetrics = {
+      ascentPx: fontSizePx * 0.8,
+      descentPx: fontSizePx * 0.2,
+    };
+    nvdTextMetricsCache.set(cacheKey, fallbackMetrics);
+    return fallbackMetrics;
+  }
+
+  context.font = `${italic ? "italic " : ""}${bold ? "700 " : ""}${fontSizePx}px ${fontCssStack}`;
+  const metrics = context.measureText("Hg");
+  const ascentPx =
+    Number.isFinite(metrics.actualBoundingBoxAscent) && metrics.actualBoundingBoxAscent > 0
+      ? metrics.actualBoundingBoxAscent
+      : fontSizePx * 0.8;
+  const descentPx =
+    Number.isFinite(metrics.actualBoundingBoxDescent) && metrics.actualBoundingBoxDescent >= 0
+      ? metrics.actualBoundingBoxDescent
+      : fontSizePx * 0.2;
+  const resolvedMetrics = {
+    ascentPx,
+    descentPx,
+  };
+
+  nvdTextMetricsCache.set(cacheKey, resolvedMetrics);
+  return resolvedMetrics;
+}
+
+function getFallbackParagraphTextStyle(
+  paragraphIndex: number,
+  blockLayouts: readonly NvdBlockLayout[],
+  defaultFontFamily: string,
+  defaultFontSizePt: number,
+  styleDefinitions?: Record<NvdStyleRole, NvdStyleDefinition>,
+): NvdResolvedTextStyle {
+  const paragraphRole = blockLayouts[paragraphIndex]?.kind ?? "p";
+  const styleDefinition = styleDefinitions?.[paragraphRole];
+
+  return {
+    bold: styleDefinition?.bold ?? false,
+    fontFamily: styleDefinition?.fontFamily ?? defaultFontFamily,
+    fontSizePt: styleDefinition?.fontSizePt ?? defaultFontSizePt,
+    italic: styleDefinition?.italic ?? false,
+  };
+}
+
+function resolveCaretTextStyleAtOffset(
+  offset: number,
+  line: NvdLineFragment,
+  positionedRuns: PositionedNvdTextRun[],
+  fallbackStyle: NvdResolvedTextStyle,
+): NvdResolvedTextStyle {
+  let previousRun: PositionedNvdTextRun | null = null;
+  let nextRun: PositionedNvdTextRun | null = null;
+
+  for (const run of positionedRuns) {
+    if (run.end <= line.start || run.start >= line.end) {
+      continue;
+    }
+
+    const localOffset = offset - run.start;
+    const currentCharacter = localOffset >= 0 && localOffset < run.text.length ? run.text[localOffset] : null;
+
+    if (
+      run.start <= offset &&
+      offset < run.end &&
+      hasVisibleCaretText(run.text) &&
+      currentCharacter !== "\n"
+    ) {
+      return {
+        bold: run.bold,
+        fontFamily: run.fontFamily,
+        fontSizePt: run.fontSizePt,
+        italic: run.italic,
+      };
+    }
+
+    if (run.end === offset && hasVisibleCaretText(run.text)) {
+      previousRun = run;
+    } else if (!nextRun && run.start === offset && hasVisibleCaretText(run.text)) {
+      nextRun = run;
+    }
+  }
+
+  const candidateRun = previousRun ?? nextRun;
+
+  if (!candidateRun) {
+    return fallbackStyle;
+  }
+
+  return {
+    bold: candidateRun.bold,
+    fontFamily: candidateRun.fontFamily,
+    fontSizePt: candidateRun.fontSizePt,
+    italic: candidateRun.italic,
+  };
+}
+
+function hasVisibleCaretText(text: string) {
+  return text.replace(/\n/g, "").length > 0;
 }
 
 function measureTextWidth(

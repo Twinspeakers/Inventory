@@ -848,6 +848,15 @@ textarea {
     @apply left-0 m-0;
   }
 
+  .nvd-page-fragment-line {
+    font-synthesis: weight style;
+    line-height: 1;
+    position: absolute;
+    white-space: pre;
+    width: 100%;
+    @apply left-0 m-0 text-ink;
+  }
+
   .nvd-thumbnail-fragment-view {
     @apply h-full w-full;
   }
@@ -1226,8 +1235,16 @@ textarea {
     @apply inline-flex w-8 shrink-0 items-center justify-center border-l border-line text-muted transition hover:bg-steel hover:text-white;
   }
 
-  .nvd-style-accept {
-    @apply hover:bg-steel;
+  .nvd-style-edit-toggle {
+    @apply hover:bg-surface-raised hover:text-muted;
+  }
+
+  .nvd-style-edit-toggle-active {
+    color: rgb(var(--color-brand-lime));
+  }
+
+  .nvd-style-edit-toggle-active:hover {
+    color: rgb(var(--color-brand-lime));
   }
 
   .tree-row {

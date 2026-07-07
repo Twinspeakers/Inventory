@@ -87,6 +87,11 @@ export function useNvdStyleControls({
   }
 
   function selectNvdStyle(role: NvdStyleRole) {
+    if (activeNvdStyleRole === role) {
+      clearNvdStyleSelection();
+      return;
+    }
+
     setActiveNvdStyleRole(role);
     setNvdStyleDraft({ ...nvdStyleDefinitions[role] });
   }

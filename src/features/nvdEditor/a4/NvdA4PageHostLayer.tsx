@@ -7,15 +7,17 @@ import {
   type NvdDocumentLayoutSnapshot,
   type NvdPageFragment,
 } from "../layout/nvdPageLayoutEngine";
-import type { NvdTextSelection } from "../core/nvdRichText";
+import type { NvdTextSelection } from "../document/nvdRichText";
 
 export function NvdA4PageHostLayer({
   layout,
+  onPointerInteractionStart,
   onSelectionRequest,
   pageLayout,
   pages,
 }: {
   layout: NvdDocumentLayoutSnapshot;
+  onPointerInteractionStart?: () => void;
   onSelectionRequest: (selection: NvdTextSelection) => void;
   pageLayout: NvdPageLayout;
   pages: readonly NvdPageFragment[];
@@ -51,6 +53,7 @@ export function NvdA4PageHostLayer({
     <div
       className="nvd-a4-page-host-layer"
       onPointerDown={(event) => {
+        onPointerInteractionStart?.();
         const selection = getSelectionFromPointerEvent(
           event.clientX,
           event.clientY,
@@ -59,6 +62,7 @@ export function NvdA4PageHostLayer({
         dragAnchorOffsetRef.current = selection.start;
         onSelectionRequest(selection);
         event.currentTarget.setPointerCapture(event.pointerId);
+        event.preventDefault();
       }}
       onPointerMove={(event) => {
         if (dragAnchorOffsetRef.current === null || !(event.buttons & 1)) {
@@ -72,12 +76,14 @@ export function NvdA4PageHostLayer({
             event.currentTarget,
           ),
         );
+        event.preventDefault();
       }}
       onPointerUp={(event) => {
         dragAnchorOffsetRef.current = null;
         if (event.currentTarget.hasPointerCapture(event.pointerId)) {
           event.currentTarget.releasePointerCapture(event.pointerId);
         }
+        event.preventDefault();
       }}
     >
       {pages.map((page) => (

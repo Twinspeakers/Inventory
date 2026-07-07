@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, ChevronDown, ChevronRight, Pencil, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, RefreshCw } from "lucide-react";
 import {
   getNvdFontCssStack,
   type NvdStyleDefinition,
@@ -8,14 +8,12 @@ import {
 
 export function NvdStylesSection({
   activeStyleRole,
-  onAcceptStyle,
   onApplyStyle,
   onResetStyle,
   onSelectStyle,
   styleDefinitions,
 }: {
   activeStyleRole: NvdStyleRole | null;
-  onAcceptStyle: () => void;
   onApplyStyle: (role: NvdStyleRole) => void;
   onResetStyle: (role: NvdStyleRole) => void;
   onSelectStyle: (role: NvdStyleRole) => void;
@@ -73,13 +71,14 @@ export function NvdStylesSection({
                   <RefreshCw size={12} aria-hidden="true" />
                 </button>
                 <button
-                  aria-label={isActive ? `Accept ${style.label} changes` : `Edit ${style.label}`}
-                  className="nvd-style-action nvd-style-accept"
-                  title={isActive ? `Accept ${style.label} changes` : `Edit ${style.label}`}
+                  aria-label={isActive ? `Stop editing ${style.label}` : `Edit ${style.label}`}
+                  aria-pressed={isActive}
+                  className={`nvd-style-action nvd-style-edit-toggle ${isActive ? "nvd-style-edit-toggle-active" : ""}`}
+                  title={isActive ? `Stop editing ${style.label}` : `Edit ${style.label}`}
                   type="button"
-                  onClick={isActive ? onAcceptStyle : () => onSelectStyle(role)}
+                  onClick={() => onSelectStyle(role)}
                 >
-                  {isActive ? <Check size={13} aria-hidden="true" /> : <Pencil size={12} aria-hidden="true" />}
+                  <Pencil size={12} aria-hidden="true" />
                 </button>
               </div>
             );

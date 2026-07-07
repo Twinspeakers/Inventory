@@ -132,6 +132,11 @@ export function getNvdDocumentFontFamilies(
   }
 
   const fontFamilies = new Set<string>([getNvdFontFamily(document.fontFamily)]);
+  const styleDefinitions = getNvdDocumentStyleDefinitions(document.styles);
+
+  Object.values(styleDefinitions).forEach((style) => {
+    fontFamilies.add(getNvdFontFamily(style.fontFamily));
+  });
 
   for (const run of getNvdDocumentRuns(document)) {
     if (run.style?.fontFamily) {

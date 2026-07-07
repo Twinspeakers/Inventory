@@ -15,7 +15,7 @@ import {
 } from "../primitives/nvdCharacterSpacing";
 import { DEFAULT_NVD_LINE_HEIGHT, getNvdLineHeight } from "../primitives/nvdLineHeight";
 import { getNvdParagraphSpacingPt } from "../primitives/nvdParagraphSpacing";
-import type { NvdStyleDefinition } from "../core/nvdStyles";
+import type { NvdStyleDefinition } from "../document/nvdStyles";
 import {
   DEFAULT_NVD_TEXT_ALIGNMENT,
   NVD_TEXT_ALIGNMENTS,
@@ -28,11 +28,11 @@ import {
   tiptapContentToNvdTextRuns,
   type NvdBlockLayout,
   type NvdTextSelection,
-} from "../core/nvdRichText";
+} from "../document/nvdRichText";
 import type { NvdPageBreak } from "../layout/nvdLayout";
 import { getNvdPageLayoutPx } from "../layout/nvdPageLayout";
 import { getProseMirrorPositionsForTextOffsets } from "./nvdProseMirror";
-import { createNvdStyleHistoryAnchorTransaction } from "../core/nvdStyleHistory";
+import { createNvdStyleHistoryAnchorTransaction } from "../document/nvdStyleHistory";
 
 export type NvdEditorController = {
   canRedo: boolean;

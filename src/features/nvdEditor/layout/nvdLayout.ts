@@ -2,7 +2,7 @@ import type { NvdDocument, NvdLayoutMode, NvdPageLayout, NvdTextRun } from "../.
 import { DEFAULT_NVD_LINE_HEIGHT, getNvdLineHeight } from "../primitives/nvdLineHeight";
 import { DEFAULT_NVD_PAGE_LAYOUT, getNvdPageLayout, getNvdPageLayoutPx } from "./nvdPageLayout";
 import { getNvdParagraphSpacingPt } from "../primitives/nvdParagraphSpacing";
-import { getNvdDocumentText, type NvdBlockLayout } from "../core/nvdRichText";
+import { getNvdDocumentText, type NvdBlockLayout } from "../document/nvdRichText";
 import {
   layoutNvdDocument,
   layoutNvdText,

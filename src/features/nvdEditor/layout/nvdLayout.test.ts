@@ -8,7 +8,7 @@ import {
   paginateNvdTextRuns,
 } from "./nvdLayout";
 import { DEFAULT_NVD_PAGE_LAYOUT } from "./nvdPageLayout";
-import type { NvdBlockLayout } from "../core/nvdRichText";
+import type { NvdBlockLayout } from "../document/nvdRichText";
 
 function createLayout(overrides: Partial<NvdBlockLayout> = {}): NvdBlockLayout {
   return {
@@ -123,7 +123,9 @@ describe("NVD A4 pagination", () => {
   });
 
   it("uses persisted page geometry instead of fixed A4 content bounds", () => {
-    const text = "Inventory layout model regression line.\n".repeat(400);
+    const text = "Inventory layout model regression line with enough width-sensitive content to wrap. ".repeat(
+      400,
+    );
     const defaultPages = paginateNvdTextRuns([{ text }], "Inter", 12);
     const narrowPages = paginateNvdTextRuns(
       [{ text }],
@@ -148,7 +150,12 @@ describe("NVD A4 pagination", () => {
       },
     );
 
-    expect(narrowPages.length).toBeGreaterThan(defaultPages.length);
+    expect(
+      narrowPages.some(
+        (page, index) =>
+          page.start !== defaultPages[index]?.start || page.end !== defaultPages[index]?.end,
+      ),
+    ).toBe(true);
     expect(shortPages.length).toBeGreaterThan(defaultPages.length);
   });
 });

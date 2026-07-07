@@ -11,7 +11,7 @@ import {
   applyNvdTextEdit,
   deleteNvdBackward,
   deleteNvdForward,
-} from "../core/nvdDocumentController";
+} from "../document/nvdDocumentController";
 import { getNvdFontFamily } from "../fonts";
 import { getNvdFontSizePt } from "../primitives/nvdFontSize";
 import { getNvdLineHeight } from "../primitives/nvdLineHeight";
@@ -39,8 +39,8 @@ import {
   sliceNvdTextRuns,
   type NvdBlockLayout,
   type NvdTextSelection,
-} from "../core/nvdRichText";
-import type { NvdStyleDefinition } from "../core/nvdStyles";
+} from "../document/nvdRichText";
+import type { NvdStyleDefinition, NvdStyleRole } from "../document/nvdStyles";
 
 type NvdHistorySnapshot = {
   blockLayouts: NvdBlockLayout[];
@@ -81,6 +81,7 @@ export function useNvdA4DocumentController({
   onSelectionRequest,
   runs,
   selection,
+  styleDefinitions,
 }: {
   blockLayouts: NvdBlockLayout[];
   defaultFontFamily: string;
@@ -92,6 +93,7 @@ export function useNvdA4DocumentController({
   onSelectionRequest: (selection: NvdTextSelection) => void;
   runs: NvdTextRun[];
   selection: NvdTextSelection | null;
+  styleDefinitions: Record<NvdStyleRole, NvdStyleDefinition>;
 }) {
   const effectiveSelection = selection ?? { start: 0, end: 0 };
   const normalizedRuns = useMemo(() => normalizeNvdTextRuns(runs), [runs]);
@@ -235,9 +237,122 @@ export function useNvdA4DocumentController({
     commitContentChange(normalizedRuns, nextBlockLayouts, effectiveSelection);
   }
 
+  function applyStyleToTouchedParagraphs(style: NvdStyleDefinition) {
+    const inlineStyle = getTypingStyleFromDefinition(style);
+    const nextRuns =
+      effectiveSelection.start === effectiveSelection.end
+        ? updateRunsForCollapsedParagraphStyleApplication(
+            normalizedRuns,
+            blockLayouts,
+            touchedParagraphIndexes,
+            text,
+            style,
+            styleDefinitions,
+            defaultFontFamily,
+            defaultFontSizePt,
+          )
+        : replaceNvdTextRunRange(
+            normalizedRuns,
+            effectiveSelection.start,
+            effectiveSelection.end,
+            sliceNvdTextRuns(normalizedRuns, effectiveSelection.start, effectiveSelection.end).map((run) =>
+              applyResolvedTypingStyleToRun(run, inlineStyle),
+            ),
+          );
+    const nextBlockLayouts = blockLayouts.map((layout, index) =>
+      touchedParagraphIndexes.includes(index)
+        ? applyStyleDefinitionToBlockLayout(layout, style)
+        : layout,
+    );
+
+    typingStyleRef.current = inlineStyle;
+    commitContentChange(nextRuns, nextBlockLayouts, effectiveSelection);
+  }
+
+  function updateDocumentStyleDefinition(
+    style: NvdStyleDefinition,
+    previousStyle: NvdStyleDefinition,
+    onHistoryChange: (style: NvdStyleDefinition) => void,
+  ) {
+    const nextRuns = updateRunsMatchingStyle(
+      normalizedRuns,
+      blockLayouts,
+      style,
+      previousStyle,
+      defaultFontFamily,
+      defaultFontSizePt,
+    );
+    const nextBlockLayouts = blockLayouts.map((layout) =>
+      layout.kind === previousStyle.role ? applyStyleDefinitionToBlockLayout(layout, style) : layout,
+    );
+
+    if (typingStyleRef.current && effectiveSelection.start === effectiveSelection.end) {
+      const paragraphIndex = touchedParagraphIndexes[0];
+
+      if (paragraphIndex !== undefined && blockLayouts[paragraphIndex]?.kind === previousStyle.role) {
+        typingStyleRef.current = getTypingStyleFromDefinition(style);
+      }
+    }
+
+    commitContentChange(nextRuns, nextBlockLayouts, effectiveSelection, {
+      onRedo: () => onHistoryChange({ ...style }),
+      onUndo: () => onHistoryChange({ ...previousStyle }),
+    });
+  }
+
   function applyDocumentEdit(result: ReturnType<typeof applyNvdTextEdit>) {
     commitContentChange(result.runs, result.blockLayouts, result.selection);
     typingStyleRef.current = null;
+  }
+
+  function insertParagraphBreak() {
+    const paragraphRanges = getParagraphRanges(text, blockLayouts.length);
+    const currentParagraphIndex = touchedParagraphIndexes[0] ?? 0;
+    const currentParagraphRange = paragraphRanges[currentParagraphIndex];
+    const currentBlockLayout = blockLayouts[currentParagraphIndex];
+    const isCollapsed = effectiveSelection.start === effectiveSelection.end;
+    const currentParagraphContentEnd = currentParagraphRange
+      ? getParagraphContentEnd(text, currentParagraphRange)
+      : effectiveSelection.end;
+    const shouldStartParagraphAfterHeading =
+      isCollapsed &&
+      currentBlockLayout &&
+      currentBlockLayout.kind !== "p" &&
+      effectiveSelection.start === currentParagraphContentEnd;
+    const result = applyNvdTextEdit(normalizedRuns, blockLayouts, effectiveSelection, [{ text: "\n" }]);
+
+    if (shouldStartParagraphAfterHeading) {
+      const nextParagraphIndex = currentParagraphIndex + 1;
+
+      if (result.blockLayouts[nextParagraphIndex]) {
+        result.blockLayouts[nextParagraphIndex] = createBlockLayoutFromStyleDefinition(styleDefinitions.p);
+      }
+
+      commitContentChange(result.runs, result.blockLayouts, result.selection);
+      typingStyleRef.current = getTypingStyleFromDefinition(styleDefinitions.p);
+      refreshController();
+      return;
+    }
+
+    applyDocumentEdit(result);
+  }
+
+  function insertPlainText(insertedText: string) {
+    if (!insertedText) {
+      return;
+    }
+
+    applyDocumentEdit(
+      applyNvdTextEdit(normalizedRuns, blockLayouts, effectiveSelection, [
+        createStyledInsertRun(insertedText, activeTypingStyle),
+      ]),
+    );
+  }
+
+  function clearInputBridgeValue(element: HTMLTextAreaElement) {
+    if (element.value.length > 0) {
+      element.value = "";
+    }
   }
 
   const onBeforeInput = useMemo<FormEventHandler<HTMLTextAreaElement>>(
@@ -252,34 +367,41 @@ export function useNvdA4DocumentController({
         inputType === "deleteCompositionText"
       ) {
         event.preventDefault();
+        clearInputBridgeValue(event.currentTarget);
         return;
       }
 
-      switch (nativeEvent.inputType) {
-        case "insertLineBreak":
-        case "insertParagraph": {
-          event.preventDefault();
-          applyDocumentEdit(
-            applyNvdTextEdit(normalizedRuns, blockLayouts, effectiveSelection, [{ text: "\n" }]),
-          );
-          return;
-        }
-        case "insertText": {
-          if (!nativeEvent.data) {
-            return;
-          }
-
-          event.preventDefault();
-          applyDocumentEdit(
-            applyNvdTextEdit(normalizedRuns, blockLayouts, effectiveSelection, [
-              createStyledInsertRun(nativeEvent.data, activeTypingStyle),
-            ]),
-          );
-          return;
-        }
-        default:
-          return;
+      if (inputType === "insertLineBreak" || inputType === "insertParagraph") {
+        event.preventDefault();
+        insertParagraphBreak();
+        clearInputBridgeValue(event.currentTarget);
       }
+    },
+    [activeTypingStyle, blockLayouts, effectiveSelection, normalizedRuns],
+  );
+
+  const onInput = useMemo<FormEventHandler<HTMLTextAreaElement>>(
+    () => (event) => {
+      const nativeEvent = event.nativeEvent as InputEvent;
+      const inputType = nativeEvent.inputType;
+      const insertedText = event.currentTarget.value;
+
+      if (
+        nativeEvent.isComposing ||
+        inputType === "insertCompositionText" ||
+        inputType === "insertFromComposition" ||
+        inputType === "deleteCompositionText"
+      ) {
+        return;
+      }
+
+      if (!insertedText) {
+        clearInputBridgeValue(event.currentTarget);
+        return;
+      }
+
+      insertPlainText(insertedText);
+      clearInputBridgeValue(event.currentTarget);
     },
     [activeTypingStyle, blockLayouts, effectiveSelection, normalizedRuns],
   );
@@ -320,6 +442,18 @@ export function useNvdA4DocumentController({
       if (event.key === "Delete") {
         event.preventDefault();
         applyDocumentEdit(deleteNvdForward(normalizedRuns, blockLayouts, effectiveSelection));
+        return;
+      }
+
+      if (event.key === "Enter") {
+        event.preventDefault();
+        insertParagraphBreak();
+        return;
+      }
+
+      if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key.length === 1) {
+        event.preventDefault();
+        insertPlainText(event.key);
         return;
       }
 
@@ -509,44 +643,7 @@ export function useNvdA4DocumentController({
     spaceAfterPt: getUniformBlockValue(blockLayouts, touchedParagraphIndexes, "spaceAfterPt"),
     spaceBeforePt: getUniformBlockValue(blockLayouts, touchedParagraphIndexes, "spaceBeforePt"),
     textAlign: getUniformBlockValue(blockLayouts, touchedParagraphIndexes, "textAlign"),
-    applyStyle: (style) => {
-      const inlineStyle = getTypingStyleFromDefinition(style);
-      const nextRuns =
-        effectiveSelection.start === effectiveSelection.end
-          ? normalizedRuns
-          : replaceNvdTextRunRange(
-              normalizedRuns,
-              effectiveSelection.start,
-              effectiveSelection.end,
-              sliceNvdTextRuns(normalizedRuns, effectiveSelection.start, effectiveSelection.end).map((run) =>
-                applyResolvedTypingStyleToRun(run, inlineStyle),
-              ),
-            );
-      const nextBlockLayouts = blockLayouts.map((layout, index) =>
-        touchedParagraphIndexes.includes(index)
-          ? {
-              ...layout,
-              kind: style.role,
-              keepLinesTogether: style.keepLinesTogether,
-              keepWithNext: style.keepWithNext,
-              lineHeight: getNvdLineHeight(style.lineHeight),
-              orphanLineCount: Math.max(2, style.orphanLineCount),
-              spaceAfterPt: getNvdParagraphSpacingPt(style.spaceAfterPt),
-              spaceBeforePt: getNvdParagraphSpacingPt(style.spaceBeforePt),
-              textAlign: style.textAlign,
-              widowLineCount: Math.max(2, style.widowLineCount),
-            }
-          : layout,
-      );
-
-      if (effectiveSelection.start === effectiveSelection.end) {
-        typingStyleRef.current = inlineStyle;
-      } else {
-        typingStyleRef.current = null;
-      }
-
-      commitContentChange(nextRuns, nextBlockLayouts, effectiveSelection);
-    },
+    applyStyle: applyStyleToTouchedParagraphs,
     focusBlock: (blockIndex) => {
       const nextSelection = getBlockSelection(text, blockLayouts, blockIndex);
 
@@ -632,37 +729,7 @@ export function useNvdA4DocumentController({
       typingStyleRef.current = null;
       refreshController();
     },
-    updateStyle: (style, previousStyle, onHistoryChange) => {
-      const nextRuns = updateRunsMatchingStyle(
-        normalizedRuns,
-        blockLayouts,
-        style,
-        previousStyle,
-        defaultFontFamily,
-        defaultFontSizePt,
-      );
-      const nextBlockLayouts = blockLayouts.map((layout) =>
-        blockLayoutMatchesStyle(layout, previousStyle)
-          ? {
-              ...layout,
-              kind: style.role,
-              keepLinesTogether: style.keepLinesTogether,
-              keepWithNext: style.keepWithNext,
-              lineHeight: getNvdLineHeight(style.lineHeight),
-              orphanLineCount: Math.max(2, style.orphanLineCount),
-              spaceAfterPt: getNvdParagraphSpacingPt(style.spaceAfterPt),
-              spaceBeforePt: getNvdParagraphSpacingPt(style.spaceBeforePt),
-              textAlign: style.textAlign,
-              widowLineCount: Math.max(2, style.widowLineCount),
-            }
-          : layout,
-      );
-
-      commitContentChange(nextRuns, nextBlockLayouts, effectiveSelection, {
-        onRedo: () => onHistoryChange({ ...style }),
-        onUndo: () => onHistoryChange({ ...previousStyle }),
-      });
-    },
+    updateStyle: updateDocumentStyleDefinition,
   }), [
     activeTypingStyle,
     blockLayouts,
@@ -671,6 +738,7 @@ export function useNvdA4DocumentController({
     effectiveSelection,
     normalizedRuns,
     onSelectionRequest,
+    styleDefinitions,
     text,
     touchedParagraphIndexes,
   ]);
@@ -684,6 +752,7 @@ export function useNvdA4DocumentController({
     displayRuns: compositionPreview?.runs ?? runs,
     displaySelection: compositionPreview?.selection ?? effectiveSelection,
     onBeforeInput,
+    onInput,
     onCompositionEnd,
     onCompositionStart,
     onCompositionUpdate,
@@ -833,6 +902,13 @@ function getParagraphRanges(text: string, paragraphCount: number) {
   return ranges.length > 0 ? ranges : [{ end: 0, start: 0 }];
 }
 
+function getParagraphContentEnd(
+  text: string,
+  range: { end: number; start: number },
+) {
+  return range.end > range.start && text[range.end - 1] === "\n" ? range.end - 1 : range.end;
+}
+
 function getUniformBlockValue<T extends keyof NvdBlockLayout>(
   blockLayouts: readonly NvdBlockLayout[],
   indexes: readonly number[],
@@ -879,6 +955,38 @@ function blockLayoutMatchesStyle(layout: NvdBlockLayout, style: NvdStyleDefiniti
   );
 }
 
+function applyStyleDefinitionToBlockLayout(
+  layout: NvdBlockLayout,
+  style: NvdStyleDefinition,
+): NvdBlockLayout {
+  return {
+    ...layout,
+    kind: style.role,
+    keepLinesTogether: style.keepLinesTogether,
+    keepWithNext: style.keepWithNext,
+    lineHeight: getNvdLineHeight(style.lineHeight),
+    orphanLineCount: Math.max(2, style.orphanLineCount),
+    spaceAfterPt: getNvdParagraphSpacingPt(style.spaceAfterPt),
+    spaceBeforePt: getNvdParagraphSpacingPt(style.spaceBeforePt),
+    textAlign: style.textAlign,
+    widowLineCount: Math.max(2, style.widowLineCount),
+  };
+}
+
+function createBlockLayoutFromStyleDefinition(style: NvdStyleDefinition): NvdBlockLayout {
+  return {
+    kind: style.role,
+    keepLinesTogether: style.keepLinesTogether,
+    keepWithNext: style.keepWithNext,
+    lineHeight: getNvdLineHeight(style.lineHeight),
+    orphanLineCount: Math.max(2, style.orphanLineCount),
+    spaceAfterPt: getNvdParagraphSpacingPt(style.spaceAfterPt),
+    spaceBeforePt: getNvdParagraphSpacingPt(style.spaceBeforePt),
+    textAlign: style.textAlign,
+    widowLineCount: Math.max(2, style.widowLineCount),
+  };
+}
+
 function updateRunsMatchingStyle(
   runs: readonly NvdTextRun[],
   blockLayouts: readonly NvdBlockLayout[],
@@ -916,6 +1024,70 @@ function updateRunsMatchingStyle(
   });
 
   return nextRuns;
+}
+
+function updateRunsForCollapsedParagraphStyleApplication(
+  runs: readonly NvdTextRun[],
+  blockLayouts: readonly NvdBlockLayout[],
+  touchedParagraphIndexes: readonly number[],
+  text: string,
+  nextStyle: NvdStyleDefinition,
+  styleDefinitions: Record<NvdStyleRole, NvdStyleDefinition>,
+  defaultFontFamily: string,
+  defaultFontSizePt: number,
+) {
+  const paragraphRanges = getParagraphRanges(text, blockLayouts.length);
+  let nextRuns = normalizeNvdTextRuns([...runs]);
+
+  touchedParagraphIndexes.forEach((paragraphIndex) => {
+    const range = paragraphRanges[paragraphIndex];
+    const paragraphRole = blockLayouts[paragraphIndex]?.kind;
+
+    if (!range || !paragraphRole) {
+      return;
+    }
+
+    nextRuns = updateRunsInRangeMatchingStyle(
+      nextRuns,
+      range.start,
+      range.end,
+      nextStyle,
+      styleDefinitions[paragraphRole] ?? styleDefinitions.p,
+      defaultFontFamily,
+      defaultFontSizePt,
+    );
+  });
+
+  return nextRuns;
+}
+
+function updateRunsInRangeMatchingStyle(
+  runs: readonly NvdTextRun[],
+  start: number,
+  end: number,
+  nextStyle: NvdStyleDefinition,
+  previousStyle: NvdStyleDefinition,
+  defaultFontFamily: string,
+  defaultFontSizePt: number,
+) {
+  const normalizedRuns = normalizeNvdTextRuns([...runs]);
+  const replacementRuns = sliceNvdTextRuns(normalizedRuns, start, end).map((run) => {
+    const resolvedStyle = resolveTypingStyleForRun(run, defaultFontFamily, defaultFontSizePt);
+
+    if (
+      resolvedStyle.bold !== previousStyle.bold ||
+      resolvedStyle.italic !== previousStyle.italic ||
+      resolvedStyle.fontFamily !== getNvdFontFamily(previousStyle.fontFamily) ||
+      resolvedStyle.fontSizePt !== getNvdFontSizePt(previousStyle.fontSizePt) ||
+      resolvedStyle.characterSpacingPt !== getNvdCharacterSpacingPt(previousStyle.characterSpacingPt)
+    ) {
+      return run;
+    }
+
+    return applyResolvedTypingStyleToRun(run, getTypingStyleFromDefinition(nextStyle));
+  });
+
+  return replaceNvdTextRunRange(normalizedRuns, start, end, replacementRuns);
 }
 
 function getBlockSelection(

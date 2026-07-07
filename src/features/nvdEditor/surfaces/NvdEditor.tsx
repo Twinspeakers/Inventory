@@ -7,10 +7,10 @@ import type {
 } from "../../inventoryProject";
 import { getNvdFontFamily, useNvdFontsReady } from "../fonts";
 import { getNvdFontSizePt } from "../primitives/nvdFontSize";
-import { getNvdDocumentStyleDefinitions } from "../core/nvdStyles";
+import { getNvdDocumentStyleDefinitions } from "../document/nvdStyles";
 import { getNvdLayoutMode } from "../layout/nvdLayout";
 import { NvdA4PageEditorSurface } from "./NvdA4PageEditorSurface";
-import { NvdPagelessEditorSurface } from "./NvdPagelessEditorSurface";
+import { NvdPagelessEditorSurface } from "../pageless/NvdPagelessEditorSurface";
 import { clampNvdPageLayout, getNvdPageLayout } from "../layout/nvdPageLayout";
 import type { NvdEditorController } from "../adapters/NvdRichTextEditor";
 import {
@@ -20,7 +20,7 @@ import {
   getNvdDocumentRuns,
   type NvdBlockLayout,
   type NvdTextSelection,
-} from "../core/nvdRichText";
+} from "../document/nvdRichText";
 
 export function NvdEditor({
   openedDocument,
@@ -52,7 +52,8 @@ export function NvdEditor({
   const { document } = openedDocument;
   const fontFamily = getNvdFontFamily(document.fontFamily);
   const fontSizePt = getNvdFontSizePt(document.fontSize);
-  const paragraphStyle = getNvdDocumentStyleDefinitions(document.styles).p;
+  const styleDefinitions = getNvdDocumentStyleDefinitions(document.styles);
+  const paragraphStyle = styleDefinitions.p;
   const layoutMode = getNvdLayoutMode(document.layoutMode);
   const runs = getNvdDocumentRuns(document);
   const blockLayouts = getNvdDocumentBlockLayouts(document);
@@ -96,6 +97,7 @@ export function NvdEditor({
           onSelectionChange={onSelectionChange}
           runs={runs}
           blockLayouts={blockLayouts}
+          styleDefinitions={styleDefinitions}
         />
       </div>
     </div>
@@ -116,6 +118,7 @@ function NvdDocumentSurface({
   onSelectionChange,
   runs,
   blockLayouts,
+  styleDefinitions,
 }: {
   defaultFontFamily: string;
   defaultFontSizePt: number;
@@ -130,6 +133,7 @@ function NvdDocumentSurface({
   onSelectionChange: (selection: NvdTextSelection) => void;
   runs: NvdTextRun[];
   blockLayouts: NvdBlockLayout[];
+  styleDefinitions: ReturnType<typeof getNvdDocumentStyleDefinitions>;
 }) {
   const fontsReady = useNvdFontsReady(fontFamilies);
 
@@ -148,6 +152,7 @@ function NvdDocumentSurface({
         onSelectionChange={onSelectionChange}
         runs={runs}
         blockLayouts={blockLayouts}
+        styleDefinitions={styleDefinitions}
       />
     );
   }

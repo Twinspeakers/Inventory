@@ -17,6 +17,7 @@ export type NvdInputBridgeHandle = {
 
 export const NvdInputBridge = forwardRef<NvdInputBridgeHandle, {
   onBeforeInput?: FormEventHandler<HTMLTextAreaElement>;
+  onInput?: FormEventHandler<HTMLTextAreaElement>;
   onCompositionEnd?: CompositionEventHandler<HTMLTextAreaElement>;
   onCompositionStart?: CompositionEventHandler<HTMLTextAreaElement>;
   onCompositionUpdate?: CompositionEventHandler<HTMLTextAreaElement>;
@@ -29,6 +30,7 @@ export const NvdInputBridge = forwardRef<NvdInputBridgeHandle, {
   (
     {
       onBeforeInput,
+      onInput,
       onCompositionEnd,
       onCompositionStart,
       onCompositionUpdate,
@@ -56,8 +58,9 @@ export const NvdInputBridge = forwardRef<NvdInputBridgeHandle, {
       }
 
       element.value = selectionText;
-      if (selectionText.length > 0 && document.activeElement === element) {
-        element.setSelectionRange(0, selectionText.length);
+      if (document.activeElement === element) {
+        const selectionEnd = selectionText.length;
+        element.setSelectionRange(0, selectionEnd);
       }
     }, [selectionText]);
 
@@ -66,6 +69,7 @@ export const NvdInputBridge = forwardRef<NvdInputBridgeHandle, {
         aria-hidden="true"
         className="nvd-input-bridge"
         onBeforeInput={onBeforeInput}
+        onInput={onInput}
         onCompositionEnd={onCompositionEnd}
         onCompositionStart={onCompositionStart}
         onCompositionUpdate={onCompositionUpdate}

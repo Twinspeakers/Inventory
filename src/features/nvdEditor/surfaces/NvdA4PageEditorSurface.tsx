@@ -1,15 +1,19 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import type { NvdPageLayout, NvdTextRun } from "../../inventoryProject";
 import { useNvdFontsReady } from "../fonts";
 import { NVD_A4_PAGE_GAP_PX, layoutNvdTextRuns } from "../layout/nvdLayout";
-import { NvdA4InfrastructureEditor } from "../a4/NvdA4InfrastructureEditor";
+import {
+  NvdA4InfrastructureEditor,
+  type NvdA4InfrastructureEditorHandle,
+} from "../a4/NvdA4InfrastructureEditor";
 import { NvdA4PageHostLayer } from "../a4/NvdA4PageHostLayer";
 import { NvdA4ProjectedTextLayer } from "../a4/NvdA4ProjectedTextLayer";
 import { NvdA4SelectionOverlay } from "../a4/NvdA4SelectionOverlay";
 import { NvdPageRulers } from "../controls/NvdPageRulers";
 import { getNvdPageLayout, getNvdPageLayoutPx } from "../layout/nvdPageLayout";
 import type { NvdEditorController } from "../adapters/NvdRichTextEditor";
-import type { NvdBlockLayout, NvdTextSelection } from "../core/nvdRichText";
+import type { NvdBlockLayout, NvdTextSelection } from "../document/nvdRichText";
+import type { NvdStyleDefinition, NvdStyleRole } from "../document/nvdStyles";
 import { useNvdA4DocumentController } from "../a4/useNvdA4DocumentController";
 import { useNvdA4SelectionController } from "../a4/useNvdA4SelectionController";
 
@@ -26,6 +30,7 @@ export function NvdA4PageEditorSurface({
   onSelectionChange,
   runs,
   blockLayouts,
+  styleDefinitions,
 }: {
   defaultFontFamily: string;
   defaultFontSizePt: number;
@@ -39,8 +44,10 @@ export function NvdA4PageEditorSurface({
   onSelectionChange: (selection: NvdTextSelection) => void;
   runs: NvdTextRun[];
   blockLayouts: NvdBlockLayout[];
+  styleDefinitions: Record<NvdStyleRole, NvdStyleDefinition>;
 }) {
   const fontsReady = useNvdFontsReady(fontFamilies);
+  const infrastructureEditorRef = useRef<NvdA4InfrastructureEditorHandle | null>(null);
   const pageLayoutPx = getNvdPageLayoutPx(pageLayout);
   const {
     activeSelection,
@@ -50,15 +57,23 @@ export function NvdA4PageEditorSurface({
   const baseLayoutSnapshot = useMemo(
     () =>
       fontsReady
-        ? layoutNvdTextRuns(runs, defaultFontFamily, defaultFontSizePt, blockLayouts, pageLayout)
+        ? layoutNvdTextRuns(
+            runs,
+            defaultFontFamily,
+            defaultFontSizePt,
+            blockLayouts,
+            pageLayout,
+            styleDefinitions,
+          )
         : null,
-    [blockLayouts, defaultFontFamily, defaultFontSizePt, fontsReady, pageLayout, runs],
+    [blockLayouts, defaultFontFamily, defaultFontSizePt, fontsReady, pageLayout, runs, styleDefinitions],
   );
   const {
     displayBlockLayouts,
     displayRuns,
     displaySelection,
     onBeforeInput,
+    onInput,
     onCompositionEnd,
     onCompositionStart,
     onCompositionUpdate,
@@ -78,6 +93,7 @@ export function NvdA4PageEditorSurface({
     onSelectionRequest: handleSelectionRequest,
     runs,
     selection: activeSelection,
+    styleDefinitions,
   });
   const layoutSnapshot = useMemo(
     () =>
@@ -88,6 +104,7 @@ export function NvdA4PageEditorSurface({
             defaultFontSizePt,
             displayBlockLayouts,
             pageLayout,
+            styleDefinitions,
           )
         : null,
     [
@@ -97,6 +114,7 @@ export function NvdA4PageEditorSurface({
       displayRuns,
       fontsReady,
       pageLayout,
+      styleDefinitions,
     ],
   );
   const pages = layoutSnapshot?.pages ?? [];
@@ -133,6 +151,9 @@ export function NvdA4PageEditorSurface({
       {layoutSnapshot ? (
         <NvdA4PageHostLayer
           layout={layoutSnapshot}
+          onPointerInteractionStart={() => {
+            infrastructureEditorRef.current?.focusBridge();
+          }}
           onSelectionRequest={handleSelectionRequest}
           pageLayout={pageLayout}
           pages={pages}
@@ -163,6 +184,7 @@ export function NvdA4PageEditorSurface({
       <NvdA4InfrastructureEditor
         focusBridgeRequestKey={bridgeFocusRequestKey}
         onBeforeInput={onBeforeInput}
+        onInput={onInput}
         onCompositionEnd={onCompositionEnd}
         onCompositionStart={onCompositionStart}
         onCompositionUpdate={onCompositionUpdate}
@@ -170,6 +192,7 @@ export function NvdA4PageEditorSurface({
         onCut={onCut}
         onKeyDown={onKeyDown}
         onPaste={onPaste}
+        ref={infrastructureEditorRef}
         selectedText={selectedText}
       />
     </article>

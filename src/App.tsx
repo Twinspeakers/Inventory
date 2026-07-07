@@ -1079,7 +1079,6 @@ export function App() {
         nvdSpaceBeforePt: nvdStyleDraft?.spaceBeforePt ?? activeNvdSpaceBeforePt,
         nvdStyleDefinitions,
         nvvDocument: activeInspectorNvvDocument,
-        onAcceptNvdStyle: acceptNvdStyleDraft,
         onApplyNvdStyle: applyNvdStyle,
         onAssetAddTag: addTagToAsset,
         onAssetKeptTagsChange: updateAssetKeptTags,

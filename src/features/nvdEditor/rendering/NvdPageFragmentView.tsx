@@ -6,7 +6,8 @@ import {
   getNvdTextRunFontSizePt,
   isNvdTextRunBold,
   isNvdTextRunItalic,
-} from "../core/nvdRichText";
+  sliceNvdTextRuns,
+} from "../document/nvdRichText";
 import type { NvdPageFragment } from "../layout/nvdPageLayoutEngine";
 
 export function NvdPageFragmentView({
@@ -20,21 +21,31 @@ export function NvdPageFragmentView({
   defaultFontSizePt: number;
   page: NvdPageFragment;
 }) {
+  const paragraphAlignments = new Map(
+    page.paragraphFragments.map((fragment) => [fragment.paragraphIndex, fragment.textAlign] as const),
+  );
+
   return (
     <div className={className ? `nvd-page-fragment-view ${className}` : "nvd-page-fragment-view"}>
-      {page.paragraphFragments.map((fragment) => (
-        <p
-          className="nvd-page-fragment-paragraph"
-          key={`${fragment.pageIndex}-${fragment.paragraphIndex}-${fragment.start}-${fragment.end}`}
-          style={{
-            minHeight: `${Math.max(1, fragment.heightPx)}px`,
-            textAlign: fragment.textAlign,
-            top: `${fragment.topPx}px`,
-          }}
-        >
-          {fragment.runs.map((run, runIndex) => (
+      {page.lines.map((line) => {
+        const localStart = line.start - page.start;
+        const localEnd = line.end - page.start;
+        const lineEndCharacter = page.text[localEnd - 1];
+        const renderEnd = lineEndCharacter === "\n" ? Math.max(localStart, localEnd - 1) : localEnd;
+        const runs = sliceNvdTextRuns(page.runs, localStart, renderEnd);
+
+        return (
+          <div
+            className="nvd-page-fragment-line"
+            key={`${line.pageIndex}-${line.index}-${line.start}-${line.end}`}
+            style={{
+              textAlign: paragraphAlignments.get(line.paragraphIndex) ?? "left",
+              top: `${line.topPx + line.textTopOffsetPx}px`,
+            }}
+          >
+            {runs.map((run, runIndex) => (
             <span
-              key={`${runIndex}-${run.text.length}-${fragment.start}`}
+              key={`${runIndex}-${run.text.length}-${line.start}`}
               style={{
                 fontFamily: getNvdFontCssStack(getNvdTextRunFontFamily(run, defaultFontFamily)),
                 fontSize: getNvdFontSizeCssValue(getNvdTextRunFontSizePt(run, defaultFontSizePt)),
@@ -45,9 +56,10 @@ export function NvdPageFragmentView({
             >
               {run.text}
             </span>
-          ))}
-        </p>
-      ))}
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }

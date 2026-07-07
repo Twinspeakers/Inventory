@@ -37,7 +37,6 @@ type InspectorProps = {
   nvdSpaceAfterPt: number | null;
   nvdSpaceBeforePt: number | null;
   nvvDocument: NvvDocument | null;
-  onAcceptNvdStyle: () => void;
   onApplyNvdStyle: (role: NvdStyleRole) => void;
   onAssetAddTag: (assetId: number, tag: string) => void;
   onAssetKeptTagsChange: (assetId: number, tags: string[]) => void;
@@ -74,7 +73,6 @@ export function Inspector({
   nvdSpaceAfterPt,
   nvdSpaceBeforePt,
   nvvDocument,
-  onAcceptNvdStyle,
   onApplyNvdStyle,
   onAssetAddTag,
   onAssetKeptTagsChange,
@@ -191,7 +189,6 @@ export function Inspector({
           {showNvdSections ? (
             <NvdStylesSection
               activeStyleRole={activeNvdStyleRole}
-              onAcceptStyle={onAcceptNvdStyle}
               onApplyStyle={onApplyNvdStyle}
               onResetStyle={onResetNvdStyle}
               onSelectStyle={onSelectNvdStyle}

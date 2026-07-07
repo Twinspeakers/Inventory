@@ -1,6 +1,6 @@
 import type { NvdTextRun } from "../../inventoryProject";
 import { NvdRichTextEditor, type NvdEditorController } from "../adapters/NvdRichTextEditor";
-import type { NvdBlockLayout, NvdTextSelection } from "../core/nvdRichText";
+import type { NvdBlockLayout, NvdTextSelection } from "../document/nvdRichText";
 
 export function NvdPagelessEditorSurface({
   defaultFontFamily,

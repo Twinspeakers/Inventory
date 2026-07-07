@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { NvdTextSelection } from "../core/nvdRichText";
+import type { NvdTextSelection } from "../document/nvdRichText";
 
 export function useNvdA4SelectionController({
   onSelectionChange,
