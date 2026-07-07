@@ -1,4 +1,4 @@
-import { NVD_ZOOM_PRESETS_PERCENT, normalizeNvdZoomPercent } from "./nvdZoom";
+import { NVD_ZOOM_PRESETS_PERCENT, normalizeNvdZoomPercent } from "../primitives/nvdZoom";
 
 export function NvdZoomSelector({
   onChange,

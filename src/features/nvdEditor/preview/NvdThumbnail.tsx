@@ -1,14 +1,15 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { NvdDocument, NvdTextRun, OpenedNvdDocument } from "../inventoryProject";
-import { getNvdFontCssStack, getNvdFontFamily, useNvdFontsReady } from "./fonts";
-import { getNvdFontSizePt, getNvdFontSizePx } from "./nvdFontSize";
-import { DEFAULT_NVD_LINE_HEIGHT } from "./nvdLineHeight";
-import { getNvdPageLayout, getNvdPageLayoutPx } from "./nvdPageLayout";
-import { DEFAULT_NVD_PARAGRAPH_SPACING_PT } from "./nvdParagraphSpacing";
-import { getNvdLayoutMode, paginateNvdTextRuns } from "./nvdLayout";
-import { getNvdDocumentStyleDefinitions } from "./nvdStyles";
+import type { NvdDocument, NvdTextRun, OpenedNvdDocument } from "../../inventoryProject";
+import { getNvdFontCssStack, getNvdFontFamily, useNvdFontsReady } from "../fonts";
+import { getNvdFontSizePt, getNvdFontSizePx } from "../primitives/nvdFontSize";
+import { DEFAULT_NVD_LINE_HEIGHT } from "../primitives/nvdLineHeight";
+import { getNvdPageLayout, getNvdPageLayoutPx } from "../layout/nvdPageLayout";
+import { DEFAULT_NVD_PARAGRAPH_SPACING_PT } from "../primitives/nvdParagraphSpacing";
+import { getNvdLayoutMode, layoutNvdTextRuns } from "../layout/nvdLayout";
+import { NvdPageFragmentView } from "../a4/NvdPageFragmentView";
+import { getNvdDocumentStyleDefinitions } from "../core/nvdStyles";
 import {
   getNvdDocumentFontFamilies,
   getNvdDocumentBlockLayouts,
@@ -20,7 +21,7 @@ import {
   isNvdTextRunItalic,
   splitNvdTextRunsIntoParagraphs,
   type NvdBlockLayout,
-} from "./nvdRichText";
+} from "../core/nvdRichText";
 
 type NvdThumbnailAsset = {
   name: string;
@@ -68,6 +69,7 @@ export function NvdThumbnail({
       if (!fontsReady) {
         return {
           blockLayouts: [],
+          firstPage: null,
           runs: [],
         };
       }
@@ -75,11 +77,12 @@ export function NvdThumbnail({
       if (layoutMode !== "a4") {
         return {
           blockLayouts,
+          firstPage: null,
           runs,
         };
       }
 
-      const firstPage = paginateNvdTextRuns(runs, fontFamily, fontSizePt, blockLayouts, pageLayout)[0];
+      const firstPage = layoutNvdTextRuns(runs, fontFamily, fontSizePt, blockLayouts, pageLayout).pages[0] ?? null;
 
       return {
         blockLayouts:
@@ -93,6 +96,7 @@ export function NvdThumbnail({
                 textAlign: "left",
               },
           ) ?? [],
+        firstPage,
         runs: firstPage?.runs ?? [],
       };
     },
@@ -162,6 +166,13 @@ export function NvdThumbnail({
             <span className="block h-1 w-11/12 rounded-sm bg-surface-raised" />
             <span className="block h-1 w-3/4 rounded-sm bg-surface-raised" />
           </div>
+        ) : layoutMode === "a4" && previewContent.firstPage ? (
+          <NvdPageFragmentView
+            className="nvd-thumbnail-fragment-view"
+            defaultFontFamily={fontFamily}
+            defaultFontSizePt={fontSizePt}
+            page={previewContent.firstPage}
+          />
         ) : previewContent.runs.length > 0 ? (
           <NvdStyledTextPreview
             defaultFontFamily={fontFamily}

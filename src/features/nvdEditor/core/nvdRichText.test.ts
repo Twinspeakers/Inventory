@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { NvdBlock, NvdDocument } from "../inventoryProject";
+import type { NvdBlock, NvdDocument } from "../../inventoryProject";
 import {
   createNvdDocumentBlocks,
   getNvdDocumentBlockLayouts,
@@ -7,14 +7,30 @@ import {
   nvdTextRunsToTiptapContent,
   tiptapContentToNvdBlockLayouts,
   tiptapContentToNvdTextRuns,
+  type NvdBlockLayout,
 } from "./nvdRichText";
+
+function createLayout(overrides: Partial<NvdBlockLayout>): NvdBlockLayout {
+  return {
+    kind: "p",
+    keepLinesTogether: false,
+    keepWithNext: false,
+    lineHeight: 1.4,
+    orphanLineCount: 2,
+    spaceAfterPt: 0,
+    spaceBeforePt: 0,
+    textAlign: "left",
+    widowLineCount: 2,
+    ...overrides,
+  };
+}
 
 describe("NVD semantic block roles", () => {
   it("round-trips paragraph and heading roles through Tiptap content", () => {
     const layouts = [
-      { kind: "h1", lineHeight: 1.2, spaceAfterPt: 12, spaceBeforePt: 6, textAlign: "center" },
-      { kind: "p", lineHeight: 1.75, spaceAfterPt: 0, spaceBeforePt: 0, textAlign: "left" },
-      { kind: "h3", lineHeight: 2.25, spaceAfterPt: 4, spaceBeforePt: 8, textAlign: "right" },
+      createLayout({ kind: "h1", keepLinesTogether: true, keepWithNext: true, lineHeight: 1.2, spaceAfterPt: 12, spaceBeforePt: 6, textAlign: "center" }),
+      createLayout({ kind: "p", lineHeight: 1.75, spaceAfterPt: 0, spaceBeforePt: 0, textAlign: "left" }),
+      createLayout({ kind: "h3", keepLinesTogether: true, keepWithNext: true, lineHeight: 2.25, spaceAfterPt: 4, spaceBeforePt: 8, textAlign: "right" }),
     ] as const;
 
     const content = nvdTextRunsToTiptapContent([{ text: "Title\nBody\nDetail" }], layouts);
@@ -34,14 +50,14 @@ describe("NVD semantic block roles", () => {
     ];
 
     expect(getNvdDocumentBlockLayouts({ blocks: existingBlocks })).toEqual([
-      { kind: "h1", lineHeight: 1.15, spaceAfterPt: 12, spaceBeforePt: 24, textAlign: "left" },
-      { kind: "p", lineHeight: 1.4, spaceAfterPt: 8, spaceBeforePt: 0, textAlign: "left" },
+      createLayout({ kind: "h1", keepLinesTogether: true, keepWithNext: true, lineHeight: 1.15, spaceAfterPt: 12, spaceBeforePt: 24, textAlign: "left" }),
+      createLayout({ kind: "p", lineHeight: 1.4, spaceAfterPt: 8, spaceBeforePt: 0, textAlign: "left" }),
     ]);
 
     expect(
       createNvdDocumentBlocks([{ text: "Title\nBody" }], existingBlocks, [
-        { kind: "h2", lineHeight: 1.4, spaceAfterPt: 12, spaceBeforePt: 6, textAlign: "left" },
-        { kind: "p", lineHeight: 1.75, spaceAfterPt: 0, spaceBeforePt: 0, textAlign: "left" },
+        createLayout({ kind: "h2", keepLinesTogether: true, keepWithNext: true, lineHeight: 1.4, spaceAfterPt: 12, spaceBeforePt: 6, textAlign: "left" }),
+        createLayout({ kind: "p", lineHeight: 1.75, spaceAfterPt: 0, spaceBeforePt: 0, textAlign: "left" }),
       ]).map((block) => ({ id: block.id, kind: block.kind })),
     ).toEqual([
       { id: "legacy-heading", kind: "h2" },

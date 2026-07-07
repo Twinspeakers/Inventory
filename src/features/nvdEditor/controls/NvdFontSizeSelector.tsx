@@ -12,7 +12,7 @@ import {
   MIN_NVD_FONT_SIZE_PT,
   NVD_FONT_SIZE_PRESETS_PT,
   normalizeNvdFontSizePt,
-} from "./nvdFontSize";
+} from "../primitives/nvdFontSize";
 
 export function NvdFontSizeSelector({
   disabled = false,

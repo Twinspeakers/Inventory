@@ -1,0 +1,271 @@
+import { describe, expect, it } from "vitest";
+import { DEFAULT_NVD_PAGE_LAYOUT } from "./nvdPageLayout";
+import type { NvdBlockLayout } from "../core/nvdRichText";
+import {
+  findNvdLineFragmentForOffset,
+  findNvdPageFragmentForOffset,
+  findNvdParagraphFragmentForOffset,
+  getNvdCaretGeometry,
+  getNvdOffsetAtPagePoint,
+  getNvdSelectionGeometry,
+  layoutNvdTextRuns,
+} from "./nvdPageLayoutEngine";
+
+function createLayout(overrides: Partial<NvdBlockLayout> = {}): NvdBlockLayout {
+  return {
+    kind: "p",
+    keepLinesTogether: false,
+    keepWithNext: false,
+    lineHeight: 1,
+    orphanLineCount: 2,
+    spaceAfterPt: 0,
+    spaceBeforePt: 0,
+    textAlign: "left",
+    widowLineCount: 2,
+    ...overrides,
+  };
+}
+
+describe("NVD page layout engine", () => {
+  it("reuses identical layout snapshots for equivalent inputs", () => {
+    const runs = [{ text: "A shared layout result.\n".repeat(2_000) }];
+    const firstLayout = layoutNvdTextRuns(runs, "Inter", 12);
+    const secondLayout = layoutNvdTextRuns(runs, "Inter", 12);
+
+    expect(secondLayout).toBe(firstLayout);
+    expect(secondLayout.pages).toBe(firstLayout.pages);
+  });
+
+  it("emits line fragments fully assigned to pages", () => {
+    const layout = layoutNvdTextRuns(
+      [{ text: "Inventory page fragment regression line.\n".repeat(400) }],
+      "Inter",
+      12,
+    );
+
+    expect(layout.pages.length).toBeGreaterThan(1);
+    layout.pages.forEach((page, pageIndex) => {
+      expect(page.lines.length).toBeGreaterThan(0);
+      page.lines.forEach((line, lineIndex) => {
+        expect(line.pageIndex).toBe(pageIndex);
+        expect(line.topPx).toBeGreaterThanOrEqual(0);
+        if (lineIndex > 0) {
+          expect(line.topPx).toBeGreaterThanOrEqual(page.lines[lineIndex - 1].topPx);
+        }
+      });
+    });
+  });
+
+  it("emits paragraph fragments grouped within each page", () => {
+    const layout = layoutNvdTextRuns(
+      [{ text: "First paragraph wraps a bit. ".repeat(30) + "\nSecond paragraph stays separate." }],
+      "Inter",
+      12,
+    );
+
+    layout.pages.forEach((page) => {
+      expect(page.paragraphFragments.length).toBeGreaterThan(0);
+      page.paragraphFragments.forEach((fragment) => {
+        expect(fragment.pageIndex).toBe(page.index);
+        expect(fragment.start).toBeGreaterThanOrEqual(page.start);
+        expect(fragment.end).toBeLessThanOrEqual(page.end);
+        expect(fragment.heightPx).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  it("responds to content-bounds changes through the shared layout snapshot", () => {
+    const text = "Inventory layout model regression line.\n".repeat(400);
+    const defaultLayout = layoutNvdTextRuns([{ text }], "Inter", 12);
+    const narrowLayout = layoutNvdTextRuns(
+      [{ text }],
+      "Inter",
+      12,
+      [],
+      {
+        ...DEFAULT_NVD_PAGE_LAYOUT,
+        marginLeftPt: 144,
+        marginRightPt: 144,
+      },
+    );
+
+    expect(narrowLayout.pages.length).toBeGreaterThan(defaultLayout.pages.length);
+  });
+
+  it("maps document offsets back to page and paragraph fragments", () => {
+    const layout = layoutNvdTextRuns(
+      [{ text: "First paragraph.\nSecond paragraph that is longer and wraps. ".repeat(30) }],
+      "Inter",
+      12,
+    );
+
+    const secondPage = layout.pages[1] ?? layout.pages[0];
+    const page = findNvdPageFragmentForOffset(layout.pages, secondPage.start);
+    const paragraphFragment = findNvdParagraphFragmentForOffset(page, secondPage.start);
+
+    expect(page).toBe(secondPage);
+    expect(paragraphFragment).not.toBeNull();
+    expect(paragraphFragment?.start).toBeLessThanOrEqual(secondPage.start);
+    expect(paragraphFragment?.end).toBeGreaterThanOrEqual(secondPage.start);
+  });
+
+  it("computes caret geometry for a document offset within a page fragment", () => {
+    const layout = layoutNvdTextRuns(
+      [{ text: "Alpha beta gamma\nDelta epsilon" }],
+      "Inter",
+      12,
+    );
+
+    const page = findNvdPageFragmentForOffset(layout.pages, 8);
+    const line = findNvdLineFragmentForOffset(page, 8);
+    const caret = getNvdCaretGeometry(layout, 8);
+
+    expect(page).not.toBeNull();
+    expect(line).not.toBeNull();
+    expect(caret).not.toBeNull();
+    expect(caret?.pageIndex).toBe(page?.index);
+    expect(caret?.lineIndex).toBe(line?.index);
+    expect(caret?.leftPx).toBeGreaterThanOrEqual(0);
+    expect(caret?.heightPx).toBeGreaterThan(0);
+  });
+
+  it("creates a clickable first page and caret geometry for an empty document", () => {
+    const layout = layoutNvdTextRuns([], "Inter", 12, [createLayout()]);
+    const caret = getNvdCaretGeometry(layout, 0);
+    const offset = getNvdOffsetAtPagePoint(layout, 0, 0, 0);
+
+    expect(layout.pages).toHaveLength(1);
+    expect(layout.pages[0].start).toBe(0);
+    expect(layout.pages[0].end).toBe(0);
+    expect(caret).not.toBeNull();
+    expect(caret?.pageIndex).toBe(0);
+    expect(caret?.leftPx).toBe(0);
+    expect(caret?.topPx).toBe(0);
+    expect(caret?.heightPx).toBeGreaterThan(0);
+    expect(offset).toBe(0);
+  });
+
+  it("computes selection rectangles across visual lines", () => {
+    const layout = layoutNvdTextRuns(
+      [{ text: "Alpha beta gamma delta epsilon zeta eta theta" }],
+      "Inter",
+      12,
+      [],
+      {
+        ...DEFAULT_NVD_PAGE_LAYOUT,
+        marginLeftPt: 180,
+        marginRightPt: 180,
+      },
+    );
+
+    const rects = getNvdSelectionGeometry(layout, 2, layout.text.length - 2);
+
+    expect(rects.length).toBeGreaterThan(1);
+    rects.forEach((rect) => {
+      expect(rect.widthPx).toBeGreaterThan(0);
+      expect(rect.heightPx).toBeGreaterThan(0);
+    });
+  });
+
+  it("maps a page-local point back to a document offset", () => {
+    const layout = layoutNvdTextRuns(
+      [{ text: "Alpha beta\ngamma delta" }],
+      "Inter",
+      12,
+    );
+
+    const firstLineOffset = getNvdOffsetAtPagePoint(layout, 0, 0, 0);
+    const secondLineOffset = getNvdOffsetAtPagePoint(layout, 0, 0, 40);
+
+    expect(firstLineOffset).toBe(0);
+    expect(secondLineOffset).toBeGreaterThan("Alpha beta\n".length - 1);
+  });
+
+  it("moves a trailing heading to the next page with its following paragraph", () => {
+    const layout = layoutNvdTextRuns(
+      [{ text: "One\nTwo\nThree\nFour\nFive\nHeading\nBody" }],
+      "Inter",
+      12,
+      [
+        createLayout(),
+        createLayout(),
+        createLayout(),
+        createLayout(),
+        createLayout(),
+        createLayout({ kind: "h1", keepLinesTogether: true, keepWithNext: true }),
+        createLayout(),
+      ],
+      {
+        pageSize: "custom",
+        widthPt: 200,
+        heightPt: 100,
+        marginTopPt: 14,
+        marginRightPt: 20,
+        marginBottomPt: 14,
+        marginLeftPt: 20,
+      },
+    );
+
+    expect(layout.pages).toHaveLength(2);
+    expect(layout.pages[0].text).toBe("One\nTwo\nThree\nFour\nFive\n");
+    expect(layout.pages[1].text).toBe("Heading\nBody");
+  });
+
+  it("keeps a marked paragraph together when it would otherwise split across pages", () => {
+    const keptParagraph = "This paragraph should stay together and wrap onto multiple visual lines.";
+    const layout = layoutNvdTextRuns(
+      [{ text: `One\nTwo\nThree\nFour\nFive\n${keptParagraph}` }],
+      "Inter",
+      12,
+      [
+        createLayout(),
+        createLayout(),
+        createLayout(),
+        createLayout(),
+        createLayout(),
+        createLayout({ keepLinesTogether: true }),
+      ],
+      {
+        pageSize: "custom",
+        widthPt: 90,
+        heightPt: 100,
+        marginTopPt: 14,
+        marginRightPt: 10,
+        marginBottomPt: 14,
+        marginLeftPt: 10,
+      },
+    );
+
+    expect(layout.pages).toHaveLength(2);
+    expect(layout.pages[0].text).toBe("One\nTwo\nThree\nFour\nFive\n");
+    expect(layout.pages[1].text).toBe(keptParagraph);
+  });
+
+  it("moves a splittable paragraph to the next page when widow or orphan rules would be violated", () => {
+    const constrainedParagraph = "This paragraph wraps onto several lines when the content width is narrow.";
+    const layout = layoutNvdTextRuns(
+      [{ text: `One\nTwo\nThree\n${constrainedParagraph}` }],
+      "Inter",
+      12,
+      [
+        createLayout(),
+        createLayout(),
+        createLayout(),
+        createLayout({ orphanLineCount: 2, widowLineCount: 2 }),
+      ],
+      {
+        pageSize: "custom",
+        widthPt: 90,
+        heightPt: 90,
+        marginTopPt: 14,
+        marginRightPt: 10,
+        marginBottomPt: 14,
+        marginLeftPt: 10,
+      },
+    );
+
+    expect(layout.pages).toHaveLength(2);
+    expect(layout.pages[0].text).toBe("One\nTwo\nThree\n");
+    expect(layout.pages[1].text).toBe(constrainedParagraph);
+  });
+});

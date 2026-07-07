@@ -1,4 +1,4 @@
-import type { NvdPageLayout, NvdPageSizePreset } from "../inventoryProject";
+import type { NvdPageLayout, NvdPageSizePreset } from "../../inventoryProject";
 
 export const NVD_PT_TO_PX = 4 / 3;
 export const NVD_PT_PER_INCH = 72;

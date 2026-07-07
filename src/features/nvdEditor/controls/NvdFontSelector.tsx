@@ -7,7 +7,7 @@ import {
   readRecentNvdFontFamilies,
   rememberRecentNvdFontFamily,
   type NvdFontDefinition,
-} from "./fonts";
+} from "../fonts";
 
 export function NvdFontSelector({
   disabled = false,

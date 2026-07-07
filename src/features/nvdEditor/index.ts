@@ -1,27 +1,38 @@
-export { NvdEditor } from "./NvdEditor";
-export type { NvdEditorController } from "./NvdRichTextEditor";
+export { NvdEditor } from "./surfaces/NvdEditor";
+export type { NvdEditorController } from "./adapters/NvdRichTextEditor";
 export {
   DEFAULT_NVD_CHARACTER_SPACING_PT,
   MAX_NVD_CHARACTER_SPACING_PT,
   MIN_NVD_CHARACTER_SPACING_PT,
   getNvdCharacterSpacingPt,
-} from "./nvdCharacterSpacing";
+} from "./primitives/nvdCharacterSpacing";
 export {
   DEFAULT_NVD_LINE_HEIGHT,
   MAX_NVD_LINE_HEIGHT,
   MIN_NVD_LINE_HEIGHT,
   getNvdLineHeight,
-} from "./nvdLineHeight";
+} from "./primitives/nvdLineHeight";
 export {
   DEFAULT_NVD_PARAGRAPH_SPACING_PT,
   MAX_NVD_PARAGRAPH_SPACING_PT,
   MIN_NVD_PARAGRAPH_SPACING_PT,
   getNvdParagraphSpacingPt,
-} from "./nvdParagraphSpacing";
-export { NvdFontSelector } from "./NvdFontSelector";
-export { NvdFontSizeSelector } from "./NvdFontSizeSelector";
-export { NvdZoomSelector } from "./NvdZoomSelector";
-export { NvdThumbnail } from "./NvdThumbnail";
+} from "./primitives/nvdParagraphSpacing";
+export { NvdFontSelector } from "./controls/NvdFontSelector";
+export { NvdFontSizeSelector } from "./controls/NvdFontSizeSelector";
+export { NvdZoomSelector } from "./controls/NvdZoomSelector";
+export { NvdThumbnail } from "./preview/NvdThumbnail";
+export { NvdPageFragmentView } from "./a4/NvdPageFragmentView";
+export { NvdA4PageHostLayer } from "./a4/NvdA4PageHostLayer";
+export { NvdA4ProjectedTextLayer } from "./a4/NvdA4ProjectedTextLayer";
+export { NvdA4SelectionOverlay } from "./a4/NvdA4SelectionOverlay";
+export { NvdA4PageEditorSurface } from "./surfaces/NvdA4PageEditorSurface";
+export { NvdPagelessEditorSurface } from "./surfaces/NvdPagelessEditorSurface";
+export { NvdA4InfrastructureEditor } from "./a4/NvdA4InfrastructureEditor";
+export { NvdInputBridge } from "./a4/NvdInputBridge";
+export { useNvdA4SelectionController } from "./a4/useNvdA4SelectionController";
+export { useNvdA4DocumentController } from "./a4/useNvdA4DocumentController";
+export type { NvdInputBridgeHandle } from "./a4/NvdInputBridge";
 export {
   DEFAULT_NVD_PAGE_LAYOUT,
   NVD_A4_PAGE_HEIGHT_PT,
@@ -40,7 +51,7 @@ export {
   getNvdPageLengthPx,
   getNvdPageSizePreset,
   type NvdPageLayoutPx,
-} from "./nvdPageLayout";
+} from "./layout/nvdPageLayout";
 export {
   DEFAULT_NVD_FONT_SIZE_PT,
   MAX_NVD_FONT_SIZE_PT,
@@ -51,7 +62,7 @@ export {
   getNvdFontSizePx,
   getNvdFontSizePt,
   normalizeNvdFontSizePt,
-} from "./nvdFontSize";
+} from "./primitives/nvdFontSize";
 export {
   BUNDLED_NVD_FONTS,
   DEFAULT_NVD_FONT_FAMILY,
@@ -82,8 +93,27 @@ export {
   paginateNvdDocument,
   paginateNvdText,
   paginateNvdTextRuns,
-} from "./nvdLayout";
-export type { NvdTextPage } from "./nvdLayout";
+} from "./layout/nvdLayout";
+export type { NvdTextPage } from "./layout/nvdLayout";
+export {
+  findNvdLineFragmentForOffset,
+  findNvdPageFragmentForOffset,
+  findNvdParagraphFragmentForOffset,
+  getNvdCaretGeometry,
+  getNvdOffsetAtPagePoint,
+  getNvdSelectionGeometry,
+  layoutNvdDocument,
+  layoutNvdText,
+  layoutNvdTextRuns,
+} from "./layout/nvdPageLayoutEngine";
+export type {
+  NvdCaretGeometry,
+  NvdDocumentLayoutSnapshot,
+  NvdLineFragment,
+  NvdParagraphFragment,
+  NvdPageFragment,
+  NvdSelectionRect,
+} from "./layout/nvdPageLayoutEngine";
 export {
   DEFAULT_NVD_STYLE_DEFINITIONS,
   getNvdDocumentStyleDefinitions,
@@ -91,13 +121,13 @@ export {
   NVD_STYLE_ROLES,
   type NvdStyleDefinition,
   type NvdStyleRole,
-} from "./nvdStyles";
+} from "./core/nvdStyles";
 export {
   DEFAULT_NVD_ZOOM_PERCENT,
   normalizeNvdZoomPercent,
   NVD_ZOOM_PRESETS_PERCENT,
   stepNvdZoomPercent,
-} from "./nvdZoom";
+} from "./primitives/nvdZoom";
 export {
   createNvdDocumentBlocks,
   DEFAULT_NVD_TEXT_ALIGNMENT,
@@ -116,5 +146,5 @@ export {
   replaceNvdTextRunRange,
   sliceNvdTextRuns,
   splitNvdTextRunsIntoParagraphs,
-} from "./nvdRichText";
-export type { NvdBlockLayout, NvdTextSelection } from "./nvdRichText";
+} from "./core/nvdRichText";
+export type { NvdBlockLayout, NvdTextSelection } from "./core/nvdRichText";

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import type { NvdPageLayout } from "../inventoryProject";
+import type { NvdPageLayout } from "../../inventoryProject";
 import {
   NVD_PT_TO_PX,
   clampNvdPageLayout,
   getNvdPageLayoutPx,
-} from "./nvdPageLayout";
+} from "../layout/nvdPageLayout";
 
 const NVD_MM_PER_INCH = 25.4;
 const NVD_PT_PER_INCH = 72;

@@ -5,18 +5,18 @@ import type {
   NvdTextAlignment,
   NvdTextRun,
   NvdTextStyle,
-} from "../inventoryProject";
-import { getNvdFontCssFamilyName, getNvdFontFamily } from "./fonts";
-import { getNvdFontSizeCssValue, getNvdFontSizePt } from "./nvdFontSize";
+} from "../../inventoryProject";
+import { getNvdFontCssFamilyName, getNvdFontFamily } from "../fonts";
+import { getNvdFontSizeCssValue, getNvdFontSizePt } from "../primitives/nvdFontSize";
 import {
   DEFAULT_NVD_CHARACTER_SPACING_PT,
   getNvdCharacterSpacingPt,
-} from "./nvdCharacterSpacing";
-import { DEFAULT_NVD_LINE_HEIGHT, getNvdLineHeight } from "./nvdLineHeight";
+} from "../primitives/nvdCharacterSpacing";
+import { DEFAULT_NVD_LINE_HEIGHT, getNvdLineHeight } from "../primitives/nvdLineHeight";
 import {
   DEFAULT_NVD_PARAGRAPH_SPACING_PT,
   getNvdParagraphSpacingPt,
-} from "./nvdParagraphSpacing";
+} from "../primitives/nvdParagraphSpacing";
 import {
   getNvdDocumentStyleDefinitions,
   getNvdStyleRole,
@@ -29,10 +29,14 @@ export const NVD_TEXT_ALIGNMENTS: NvdTextAlignment[] = ["left", "center", "right
 
 export type NvdBlockLayout = {
   kind: NvdStyleRole;
+  keepLinesTogether: boolean;
+  keepWithNext: boolean;
   lineHeight: number;
+  orphanLineCount: number;
   spaceAfterPt: number;
   spaceBeforePt: number;
   textAlign: NvdTextAlignment;
+  widowLineCount: number;
 };
 
 export type NvdTextSelection = {
@@ -73,26 +77,45 @@ export function createNvdDocumentBlocks(
   return paragraphRuns.map((runs, index) => {
     const existingBlock = matchedBlocks[index];
     const requestedLayout = blockLayouts?.[index];
+    const kind = requestedLayout?.kind ?? getNvdStyleRole(existingBlock?.kind);
     const textAlign = getNvdTextAlignment(
       requestedLayout ? requestedLayout.textAlign : existingBlock?.textAlign,
     );
+    const keepLinesTogether = getNvdKeepLinesTogether(
+      requestedLayout?.keepLinesTogether ?? existingBlock?.keepLinesTogether,
+      kind,
+    );
+    const keepWithNext = getNvdKeepWithNext(
+      requestedLayout?.keepWithNext ?? existingBlock?.keepWithNext,
+      kind,
+    );
     const lineHeight = getNvdLineHeight(requestedLayout?.lineHeight ?? existingBlock?.lineHeight);
+    const orphanLineCount = getNvdParagraphLineConstraint(
+      requestedLayout?.orphanLineCount ?? existingBlock?.orphanLineCount,
+    );
     const spaceAfterPt = getNvdParagraphSpacingPt(
       requestedLayout?.spaceAfterPt ?? existingBlock?.spaceAfterPt,
     );
     const spaceBeforePt = getNvdParagraphSpacingPt(
       requestedLayout?.spaceBeforePt ?? existingBlock?.spaceBeforePt,
     );
+    const widowLineCount = getNvdParagraphLineConstraint(
+      requestedLayout?.widowLineCount ?? existingBlock?.widowLineCount,
+    );
 
     return {
       id: existingBlock?.id ?? createNvdBlockId(),
-      kind: requestedLayout?.kind ?? getNvdStyleRole(existingBlock?.kind),
+      kind,
+      ...(keepLinesTogether ? { keepLinesTogether } : {}),
+      ...(keepWithNext ? { keepWithNext } : {}),
       ...(lineHeight !== DEFAULT_NVD_LINE_HEIGHT ? { lineHeight } : {}),
+      ...(orphanLineCount > 2 ? { orphanLineCount } : {}),
       ...(spaceAfterPt !== DEFAULT_NVD_PARAGRAPH_SPACING_PT ? { spaceAfterPt } : {}),
       ...(spaceBeforePt !== DEFAULT_NVD_PARAGRAPH_SPACING_PT ? { spaceBeforePt } : {}),
       text: paragraphTexts[index],
       runs,
       ...(textAlign !== DEFAULT_NVD_TEXT_ALIGNMENT ? { textAlign } : {}),
+      ...(widowLineCount > 2 ? { widowLineCount } : {}),
     };
   }) satisfies NvdBlock[];
 }
@@ -156,10 +179,21 @@ export function getNvdDocumentBlockLayouts(document: Pick<NvdDocument, "blocks" 
     const kind = getNvdStyleRole(block.kind);
     return {
       kind,
+      keepLinesTogether: getNvdKeepLinesTogether(
+        block.keepLinesTogether ?? styles[kind].keepLinesTogether,
+        kind,
+      ),
+      keepWithNext: getNvdKeepWithNext(block.keepWithNext ?? styles[kind].keepWithNext, kind),
       lineHeight: getNvdLineHeight(block.lineHeight ?? styles[kind].lineHeight),
+      orphanLineCount: getNvdParagraphLineConstraint(
+        block.orphanLineCount ?? styles[kind].orphanLineCount,
+      ),
       spaceAfterPt: getNvdParagraphSpacingPt(block.spaceAfterPt ?? styles[kind].spaceAfterPt),
       spaceBeforePt: getNvdParagraphSpacingPt(block.spaceBeforePt ?? styles[kind].spaceBeforePt),
       textAlign: getNvdTextAlignment(block.textAlign ?? styles[kind].textAlign),
+      widowLineCount: getNvdParagraphLineConstraint(
+        block.widowLineCount ?? styles[kind].widowLineCount,
+      ),
     };
   }) satisfies NvdBlockLayout[];
 }
@@ -265,21 +299,29 @@ export function tiptapContentToNvdBlockLayouts(content: JSONContent): NvdBlockLa
   if (blocks.length === 0) {
     return [{
       kind: "p",
+      keepLinesTogether: false,
+      keepWithNext: false,
       lineHeight: DEFAULT_NVD_LINE_HEIGHT,
+      orphanLineCount: 2,
       spaceAfterPt: DEFAULT_NVD_PARAGRAPH_SPACING_PT,
       spaceBeforePt: DEFAULT_NVD_PARAGRAPH_SPACING_PT,
       textAlign: DEFAULT_NVD_TEXT_ALIGNMENT,
+      widowLineCount: 2,
     }];
   }
 
   return blocks.map((block) => ({
     kind: getTiptapBlockStyleRole(block),
+    keepLinesTogether: getNvdKeepLinesTogether(block.attrs?.keepLinesTogether, getTiptapBlockStyleRole(block)),
+    keepWithNext: getNvdKeepWithNext(block.attrs?.keepWithNext, getTiptapBlockStyleRole(block)),
     lineHeight: getNvdLineHeight(block.attrs?.lineHeight),
+    orphanLineCount: getNvdParagraphLineConstraint(block.attrs?.orphanLineCount),
     spaceAfterPt: getNvdParagraphSpacingPt(block.attrs?.spaceAfterPt),
     spaceBeforePt: getNvdParagraphSpacingPt(block.attrs?.spaceBeforePt),
     textAlign: getNvdTextAlignment(
       typeof block.attrs?.textAlign === "string" ? block.attrs.textAlign : undefined,
     ),
+    widowLineCount: getNvdParagraphLineConstraint(block.attrs?.widowLineCount),
   })) satisfies NvdBlockLayout[];
 }
 
@@ -431,10 +473,14 @@ function createTiptapBlock(paragraphRuns: NvdTextRun[], layout: NvdBlockLayout |
     type: kind === "p" ? "paragraph" : "heading",
     attrs: {
       ...(kind !== "p" ? { level: Number(kind.slice(1)) } : {}),
+      keepLinesTogether: layout?.keepLinesTogether,
+      keepWithNext: layout?.keepWithNext,
       lineHeight: getNvdLineHeight(layout?.lineHeight),
+      orphanLineCount: getNvdParagraphLineConstraint(layout?.orphanLineCount),
       spaceAfterPt: getNvdParagraphSpacingPt(layout?.spaceAfterPt),
       spaceBeforePt: getNvdParagraphSpacingPt(layout?.spaceBeforePt),
       textAlign: getNvdTextAlignment(layout?.textAlign),
+      widowLineCount: getNvdParagraphLineConstraint(layout?.widowLineCount),
     },
     content: content.length > 0 ? content : undefined,
   };
@@ -585,6 +631,24 @@ function getProseMirrorChildTextLength(child: Editor["state"]["doc"]) {
   }
 
   return child.type.name === "hardBreak" ? 1 : child.textContent.length;
+}
+
+function getNvdKeepLinesTogether(
+  value: boolean | null | undefined,
+  kind: NvdStyleRole,
+) {
+  return value === true ? true : kind.startsWith("h") ? true : false;
+}
+
+function getNvdKeepWithNext(
+  value: boolean | null | undefined,
+  kind: NvdStyleRole,
+) {
+  return value === true ? true : kind.startsWith("h") ? true : false;
+}
+
+function getNvdParagraphLineConstraint(value: number | string | null | undefined) {
+  return Math.max(2, Number.isFinite(Number(value)) ? Math.floor(Number(value)) : 2);
 }
 
 function createNvdBlockId() {

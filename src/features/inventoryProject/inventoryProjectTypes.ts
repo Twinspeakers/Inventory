@@ -60,12 +60,16 @@ export type NvdTextAlignment = "left" | "center" | "right" | "justify";
 export type NvdBlock = {
   id: string;
   kind: "paragraph" | "heading" | string;
+  keepLinesTogether?: boolean;
+  keepWithNext?: boolean;
   lineHeight?: number;
+  orphanLineCount?: number;
   spaceAfterPt?: number;
   spaceBeforePt?: number;
   text: string;
   runs?: NvdTextRun[];
   textAlign?: NvdTextAlignment;
+  widowLineCount?: number;
 };
 
 export type NvdTextStyle = {
@@ -101,12 +105,16 @@ export type NvdDocumentStyleDefinition = {
   fontFamily: string;
   fontSizePt: number;
   italic: boolean;
+  keepLinesTogether?: boolean;
+  keepWithNext?: boolean;
   label: string;
   lineHeight?: number;
+  orphanLineCount?: number;
   spaceAfterPt?: number;
   spaceBeforePt?: number;
   role: string;
   textAlign: NvdTextAlignment;
+  widowLineCount?: number;
 };
 
 export type NvdDocument = {

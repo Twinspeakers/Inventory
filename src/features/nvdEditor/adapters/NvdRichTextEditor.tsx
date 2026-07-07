@@ -6,16 +6,16 @@ import { closeHistory, isHistoryTransaction, redoDepth, undoDepth } from "@tipta
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import type { NvdPageLayout, NvdTextAlignment, NvdTextRun } from "../inventoryProject";
-import { getNvdFontCssFamilyName, getNvdFontCssStack, getNvdFontFamily } from "./fonts";
-import { getNvdFontSizeCssValue, getNvdFontSizePt } from "./nvdFontSize";
+import type { NvdPageLayout, NvdTextAlignment, NvdTextRun } from "../../inventoryProject";
+import { getNvdFontCssFamilyName, getNvdFontCssStack, getNvdFontFamily } from "../fonts";
+import { getNvdFontSizeCssValue, getNvdFontSizePt } from "../primitives/nvdFontSize";
 import {
   DEFAULT_NVD_CHARACTER_SPACING_PT,
   getNvdCharacterSpacingPt,
-} from "./nvdCharacterSpacing";
-import { DEFAULT_NVD_LINE_HEIGHT, getNvdLineHeight } from "./nvdLineHeight";
-import { getNvdParagraphSpacingPt } from "./nvdParagraphSpacing";
-import type { NvdStyleDefinition } from "./nvdStyles";
+} from "../primitives/nvdCharacterSpacing";
+import { DEFAULT_NVD_LINE_HEIGHT, getNvdLineHeight } from "../primitives/nvdLineHeight";
+import { getNvdParagraphSpacingPt } from "../primitives/nvdParagraphSpacing";
+import type { NvdStyleDefinition } from "../core/nvdStyles";
 import {
   DEFAULT_NVD_TEXT_ALIGNMENT,
   NVD_TEXT_ALIGNMENTS,
@@ -28,11 +28,11 @@ import {
   tiptapContentToNvdTextRuns,
   type NvdBlockLayout,
   type NvdTextSelection,
-} from "./nvdRichText";
-import type { NvdPageBreak } from "./nvdLayout";
-import { getNvdPageLayoutPx } from "./nvdPageLayout";
+} from "../core/nvdRichText";
+import type { NvdPageBreak } from "../layout/nvdLayout";
+import { getNvdPageLayoutPx } from "../layout/nvdPageLayout";
 import { getProseMirrorPositionsForTextOffsets } from "./nvdProseMirror";
-import { createNvdStyleHistoryAnchorTransaction } from "./nvdStyleHistory";
+import { createNvdStyleHistoryAnchorTransaction } from "../core/nvdStyleHistory";
 
 export type NvdEditorController = {
   canRedo: boolean;
@@ -81,7 +81,10 @@ export function NvdRichTextEditor({
   documentKey,
   pageBreaks = [],
   pageLayout,
+  requestedSelection,
+  surfaceClassName,
   onActivate,
+  onCompositionStateChange,
   onControllerChange,
   onRunsChange,
   onSelectionChange,
@@ -96,7 +99,10 @@ export function NvdRichTextEditor({
   documentKey: string;
   pageBreaks?: NvdPageBreak[];
   pageLayout?: Partial<NvdPageLayout> | null;
+  requestedSelection?: NvdTextSelection | null;
+  surfaceClassName?: string;
   onActivate: () => void;
+  onCompositionStateChange?: (isComposing: boolean) => void;
   onControllerChange: (controller: NvdEditorController) => void;
   onRunsChange: (
     runs: NvdTextRun[],
@@ -115,6 +121,7 @@ export function NvdRichTextEditor({
     [blockLayouts, normalizedRuns],
   );
   const onActivateRef = useRef(onActivate);
+  const onCompositionStateChangeRef = useRef(onCompositionStateChange);
   const onControllerChangeRef = useRef(onControllerChange);
   const onRunsChangeRef = useRef(onRunsChange);
   const onSelectionChangeRef = useRef(onSelectionChange);
@@ -131,12 +138,14 @@ export function NvdRichTextEditor({
   const contentSignatureRef = useRef(contentSignature);
   const focusedDocumentKeyRef = useRef<string | null>(null);
   const editorRef = useRef<Editor | null>(null);
+  const appliedSelectionSignatureRef = useRef<string | null>(null);
   const styleRedoTransitionsRef = useRef(new Map<number, NvdStyleHistoryTransition>());
   const styleUndoTransitionsRef = useRef(new Map<number, NvdStyleHistoryTransition>());
   const undoDepthRef = useRef(0);
   const redoDepthRef = useRef(0);
 
   onActivateRef.current = onActivate;
+  onCompositionStateChangeRef.current = onCompositionStateChange;
   onControllerChangeRef.current = onControllerChange;
   onRunsChangeRef.current = onRunsChange;
   onSelectionChangeRef.current = onSelectionChange;
@@ -203,6 +212,14 @@ export function NvdRichTextEditor({
           return decorations;
         },
         handleDOMEvents: {
+          compositionend: () => {
+            onCompositionStateChangeRef.current?.(false);
+            return false;
+          },
+          compositionstart: () => {
+            onCompositionStateChangeRef.current?.(true);
+            return false;
+          },
           pointerdown: () => {
             onActivateRef.current();
             return false;
@@ -296,6 +313,8 @@ export function NvdRichTextEditor({
   }, [ariaLabel, className, editor]);
 
   const pageBreaksSignature = serializePageBreaks(pageBreaks);
+  const requestedSelectionSignature =
+    requestedSelection ? `${requestedSelection.start}:${requestedSelection.end}` : "";
 
   useEffect(() => {
     if (!editor) {
@@ -318,6 +337,35 @@ export function NvdRichTextEditor({
 
     return () => window.cancelAnimationFrame(frame);
   }, [autoFocus, documentKey, editor]);
+
+  useEffect(() => {
+    if (!editor || !requestedSelection) {
+      return;
+    }
+
+    const signature = `${requestedSelection.start}:${requestedSelection.end}`;
+    const currentSelection = getNvdEditorSelection(editor);
+    const currentSignature = `${currentSelection.start}:${currentSelection.end}`;
+
+    if (signature === currentSignature || signature === appliedSelectionSignatureRef.current) {
+      appliedSelectionSignatureRef.current = signature;
+      return;
+    }
+
+    const [from, to] = getProseMirrorPositionsForTextOffsets(editor.state.doc, [
+      requestedSelection.start,
+      requestedSelection.end,
+    ]);
+    editor.chain().focus().setTextSelection({ from, to }).run();
+    appliedSelectionSignatureRef.current = signature;
+  }, [editor, requestedSelection, requestedSelectionSignature]);
+
+  useEffect(
+    () => () => {
+      onCompositionStateChangeRef.current?.(false);
+    },
+    [],
+  );
 
   function publishController(activeEditor: Editor) {
     const activeTextStyle = activeEditor.getAttributes("textStyle");
@@ -422,13 +470,13 @@ export function NvdRichTextEditor({
     });
   }
 
-  return (
-    <div
-      className="nvd-rich-text-editor"
-      style={{
-        fontFamily: getNvdFontCssStack(normalizedDefaultFontFamily),
-        fontSize: getNvdFontSizeCssValue(normalizedDefaultFontSizePt),
-      }}
+    return (
+      <div
+        className={surfaceClassName ? `nvd-rich-text-editor ${surfaceClassName}` : "nvd-rich-text-editor"}
+        style={{
+          fontFamily: getNvdFontCssStack(normalizedDefaultFontFamily),
+          fontSize: getNvdFontSizeCssValue(normalizedDefaultFontSizePt),
+        }}
     >
       <EditorContent editor={editor} />
     </div>
@@ -506,10 +554,14 @@ function addNvdStyleHistoryAnchor(editor: Editor) {
 
 function blockMatchesNvdStyle(block: Editor["state"]["doc"], style: NvdStyleDefinition) {
   if (
+    Boolean(block.attrs.keepLinesTogether) !== style.keepLinesTogether ||
+    Boolean(block.attrs.keepWithNext) !== style.keepWithNext ||
     getNvdTextAlignment(block.attrs.textAlign) !== style.textAlign ||
     getNvdLineHeight(block.attrs.lineHeight) !== style.lineHeight ||
+    Math.max(2, Number(block.attrs.orphanLineCount ?? 2)) !== style.orphanLineCount ||
     getNvdParagraphSpacingPt(block.attrs.spaceAfterPt) !== style.spaceAfterPt ||
-    getNvdParagraphSpacingPt(block.attrs.spaceBeforePt) !== style.spaceBeforePt
+    getNvdParagraphSpacingPt(block.attrs.spaceBeforePt) !== style.spaceBeforePt ||
+    Math.max(2, Number(block.attrs.widowLineCount ?? 2)) !== style.widowLineCount
   ) {
     return false;
   }
@@ -571,10 +623,14 @@ function applyNvdStyleToBlocks(
       const attrs = {
         ...block.attrs,
         ...(style.role === "p" ? {} : { level: Number(style.role.slice(1)) }),
+        keepLinesTogether: style.keepLinesTogether,
+        keepWithNext: style.keepWithNext,
         lineHeight: style.lineHeight,
+        orphanLineCount: style.orphanLineCount,
         spaceAfterPt: style.spaceAfterPt,
         spaceBeforePt: style.spaceBeforePt,
         textAlign: style.textAlign,
+        widowLineCount: style.widowLineCount,
       };
       const contentStart = blockPosition + 1;
       const contentEnd = blockEnd - 1;
@@ -630,6 +686,26 @@ const NvdLineHeight = Extension.create({
             parseHTML: (element) => getNvdLineHeight(element.style.lineHeight),
             renderHTML: () => ({}),
           },
+          keepLinesTogether: {
+            default: false,
+            parseHTML: (element) => element.getAttribute("data-keep-lines-together") === "true",
+            renderHTML: (attributes) =>
+              attributes.keepLinesTogether ? { "data-keep-lines-together": "true" } : {},
+          },
+          keepWithNext: {
+            default: false,
+            parseHTML: (element) => element.getAttribute("data-keep-with-next") === "true",
+            renderHTML: (attributes) =>
+              attributes.keepWithNext ? { "data-keep-with-next": "true" } : {},
+          },
+          orphanLineCount: {
+            default: 2,
+            parseHTML: (element) => Number(element.getAttribute("data-orphan-line-count") ?? 2),
+            renderHTML: (attributes) =>
+              Number(attributes.orphanLineCount) > 2
+                ? { "data-orphan-line-count": String(Number(attributes.orphanLineCount)) }
+                : {},
+          },
           spaceAfterPt: {
             default: 0,
             parseHTML: (element) => getNvdParagraphSpacingPt(element.style.marginBottom),
@@ -645,6 +721,14 @@ const NvdLineHeight = Extension.create({
                 `margin-bottom: ${getNvdParagraphSpacingPt(attributes.spaceAfterPt)}pt`,
               ].join("; "),
             }),
+          },
+          widowLineCount: {
+            default: 2,
+            parseHTML: (element) => Number(element.getAttribute("data-widow-line-count") ?? 2),
+            renderHTML: (attributes) =>
+              Number(attributes.widowLineCount) > 2
+                ? { "data-widow-line-count": String(Number(attributes.widowLineCount)) }
+                : {},
           },
         },
       },

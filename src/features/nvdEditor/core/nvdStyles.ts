@@ -1,10 +1,10 @@
-import type { NvdTextAlignment } from "../inventoryProject";
-import type { NvdDocumentStyleDefinition } from "../inventoryProject";
-import { getNvdFontFamily } from "./fonts";
-import { getNvdFontSizePt } from "./nvdFontSize";
-import { DEFAULT_NVD_LINE_HEIGHT, getNvdLineHeight } from "./nvdLineHeight";
-import { DEFAULT_NVD_PARAGRAPH_SPACING_PT, getNvdParagraphSpacingPt } from "./nvdParagraphSpacing";
-import { DEFAULT_NVD_CHARACTER_SPACING_PT, getNvdCharacterSpacingPt } from "./nvdCharacterSpacing";
+import type { NvdTextAlignment } from "../../inventoryProject";
+import type { NvdDocumentStyleDefinition } from "../../inventoryProject";
+import { getNvdFontFamily } from "../fonts";
+import { getNvdFontSizePt } from "../primitives/nvdFontSize";
+import { DEFAULT_NVD_LINE_HEIGHT, getNvdLineHeight } from "../primitives/nvdLineHeight";
+import { DEFAULT_NVD_PARAGRAPH_SPACING_PT, getNvdParagraphSpacingPt } from "../primitives/nvdParagraphSpacing";
+import { DEFAULT_NVD_CHARACTER_SPACING_PT, getNvdCharacterSpacingPt } from "../primitives/nvdCharacterSpacing";
 
 export type NvdStyleRole = "p" | "h1" | "h2" | "h3";
 
@@ -14,12 +14,16 @@ export type NvdStyleDefinition = {
   fontFamily: string;
   fontSizePt: number;
   italic: boolean;
+  keepLinesTogether: boolean;
+  keepWithNext: boolean;
   label: string;
   lineHeight: number;
+  orphanLineCount: number;
   spaceAfterPt: number;
   spaceBeforePt: number;
   role: NvdStyleRole;
   textAlign: NvdTextAlignment;
+  widowLineCount: number;
 };
 
 export const NVD_STYLE_ROLES: NvdStyleRole[] = ["p", "h1", "h2", "h3"];
@@ -39,12 +43,16 @@ export const DEFAULT_NVD_STYLE_DEFINITIONS: Record<NvdStyleRole, NvdStyleDefinit
     fontFamily: "Google Sans",
     fontSizePt: 12,
     italic: false,
+    keepLinesTogether: false,
+    keepWithNext: false,
     label: "Paragraph",
     lineHeight: 1.4,
+    orphanLineCount: 2,
     spaceAfterPt: 8,
     spaceBeforePt: 0,
     role: "p",
     textAlign: "left",
+    widowLineCount: 2,
   },
   h1: {
     bold: true,
@@ -52,12 +60,16 @@ export const DEFAULT_NVD_STYLE_DEFINITIONS: Record<NvdStyleRole, NvdStyleDefinit
     fontFamily: "Google Sans Flex",
     fontSizePt: 36,
     italic: false,
+    keepLinesTogether: true,
+    keepWithNext: true,
     label: "Heading 1",
     lineHeight: 1.15,
+    orphanLineCount: 2,
     spaceAfterPt: 12,
     spaceBeforePt: 24,
     role: "h1",
     textAlign: "left",
+    widowLineCount: 2,
   },
   h2: {
     bold: true,
@@ -65,12 +77,16 @@ export const DEFAULT_NVD_STYLE_DEFINITIONS: Record<NvdStyleRole, NvdStyleDefinit
     fontFamily: "Roboto Slab",
     fontSizePt: 24,
     italic: false,
+    keepLinesTogether: true,
+    keepWithNext: true,
     label: "Heading 2",
     lineHeight: 1.2,
+    orphanLineCount: 2,
     spaceAfterPt: 8,
     spaceBeforePt: 18,
     role: "h2",
     textAlign: "left",
+    widowLineCount: 2,
   },
   h3: {
     bold: true,
@@ -78,12 +94,16 @@ export const DEFAULT_NVD_STYLE_DEFINITIONS: Record<NvdStyleRole, NvdStyleDefinit
     fontFamily: "Source Serif 4",
     fontSizePt: 16,
     italic: false,
+    keepLinesTogether: true,
+    keepWithNext: true,
     label: "Heading 3",
     lineHeight: 1.3,
+    orphanLineCount: 2,
     spaceAfterPt: 6,
     spaceBeforePt: 12,
     role: "h3",
     textAlign: "left",
+    widowLineCount: 2,
   },
 };
 
@@ -105,12 +125,26 @@ export function getNvdDocumentStyleDefinitions(
           fontFamily: getNvdFontFamily(style?.fontFamily ?? fallback.fontFamily),
           fontSizePt: getNvdFontSizePt(style?.fontSizePt ?? fallback.fontSizePt),
           italic: style?.italic ?? fallback.italic,
+          keepLinesTogether: style?.keepLinesTogether ?? fallback.keepLinesTogether,
+          keepWithNext: style?.keepWithNext ?? fallback.keepWithNext,
           label: style?.label?.trim() || fallback.label,
           lineHeight: getNvdLineHeight(style?.lineHeight ?? fallback.lineHeight),
+          orphanLineCount: Math.max(
+            2,
+            Number.isFinite(Number(style?.orphanLineCount ?? fallback.orphanLineCount))
+              ? Math.floor(Number(style?.orphanLineCount ?? fallback.orphanLineCount))
+              : 2,
+          ),
           spaceAfterPt: getNvdParagraphSpacingPt(style?.spaceAfterPt ?? fallback.spaceAfterPt),
           spaceBeforePt: getNvdParagraphSpacingPt(style?.spaceBeforePt ?? fallback.spaceBeforePt),
           role,
           textAlign: getPersistedNvdTextAlignment(style?.textAlign, fallback.textAlign),
+          widowLineCount: Math.max(
+            2,
+            Number.isFinite(Number(style?.widowLineCount ?? fallback.widowLineCount))
+              ? Math.floor(Number(style?.widowLineCount ?? fallback.widowLineCount))
+              : 2,
+          ),
         },
       ];
     }),

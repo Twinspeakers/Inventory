@@ -8,6 +8,22 @@ import {
   paginateNvdTextRuns,
 } from "./nvdLayout";
 import { DEFAULT_NVD_PAGE_LAYOUT } from "./nvdPageLayout";
+import type { NvdBlockLayout } from "../core/nvdRichText";
+
+function createLayout(overrides: Partial<NvdBlockLayout> = {}): NvdBlockLayout {
+  return {
+    kind: "p",
+    keepLinesTogether: false,
+    keepWithNext: false,
+    lineHeight: 1,
+    orphanLineCount: 2,
+    spaceAfterPt: 0,
+    spaceBeforePt: 0,
+    textAlign: "left",
+    widowLineCount: 2,
+    ...overrides,
+  };
+}
 
 describe("NVD A4 pagination", () => {
   it("preserves both supported layout modes while defaulting invalid values to A4", () => {
@@ -51,13 +67,7 @@ describe("NVD A4 pagination", () => {
 
   it("uses custom paragraph line spacing when calculating page boundaries", () => {
     const runs = [{ text: "A line of text.\n".repeat(100) }];
-    const compactLayouts = Array.from({ length: 101 }, () => ({
-      kind: "p" as const,
-      lineHeight: 1,
-      spaceAfterPt: 0,
-      spaceBeforePt: 0,
-      textAlign: "left" as const,
-    }));
+    const compactLayouts = Array.from({ length: 101 }, () => createLayout());
     const spaciousLayouts = compactLayouts.map((layout) => ({ ...layout, lineHeight: 3 }));
 
     const compactPages = paginateNvdTextRuns(runs, "Inter", 12, compactLayouts);
@@ -68,13 +78,7 @@ describe("NVD A4 pagination", () => {
 
   it("uses paragraph space before and after when calculating page boundaries", () => {
     const runs = [{ text: "A paragraph.\n".repeat(100) }];
-    const compactLayouts = Array.from({ length: 101 }, () => ({
-      kind: "p" as const,
-      lineHeight: 1,
-      spaceAfterPt: 0,
-      spaceBeforePt: 0,
-      textAlign: "left" as const,
-    }));
+    const compactLayouts = Array.from({ length: 101 }, () => createLayout());
     const spacedLayouts = compactLayouts.map((layout) => ({
       ...layout,
       spaceAfterPt: 24,
