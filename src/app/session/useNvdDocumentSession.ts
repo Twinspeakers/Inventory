@@ -36,7 +36,7 @@ export function useNvdDocumentSession({
   cancelPendingLibrarySave,
   changeSceneMode,
   clearNvdStyleSelection,
-  clearNvdTextSelection,
+  clearNvdSelection,
   handleNvdEditorControllerChange,
   loadNvdStyleDefinitions,
   openTreeNodePath,
@@ -61,7 +61,7 @@ export function useNvdDocumentSession({
   cancelPendingLibrarySave: () => void;
   changeSceneMode: (mode: SceneMode) => void;
   clearNvdStyleSelection: () => void;
-  clearNvdTextSelection: () => void;
+  clearNvdSelection: () => void;
   handleNvdEditorControllerChange: (controller: NvdEditorController | null) => void;
   loadNvdStyleDefinitions: (styles: NvdDocument["styles"]) => void;
   openTreeNodePath: (nodeIds: string[]) => void;
@@ -227,7 +227,7 @@ export function useNvdDocumentSession({
     setActiveNvdDocument(null);
     setActiveNvdDocumentPath(null);
     setSelectedId(null);
-    clearNvdTextSelection();
+    clearNvdSelection();
     clearNvdStyleSelection();
     handleNvdEditorControllerChange(null);
     setNvdSaveState("idle");

@@ -1,19 +1,21 @@
 import type { NvdPageLayout } from "../../inventoryProject";
-import { NVD_A4_PAGE_GAP_PX } from "../layout/nvdLayout";
+import { NVD_PAGE_GAP_PX } from "../layout/nvdLayout";
 import { getNvdPageLayoutPx } from "../layout/nvdPageLayout";
 import {
   getNvdBlockSelectionGeometry,
   getNvdCaretGeometry,
+  getNvdInsertionGeometry,
   getNvdSelectionGeometry,
   type NvdDocumentLayoutSnapshot,
 } from "../layout/nvdPageLayoutEngine";
 import type { NvdDocumentSelection } from "../document/nvdDocumentSelection";
 import {
   isNvdBlockDocumentSelection,
+  isNvdInsertionDocumentSelection,
   isNvdTextDocumentSelection,
 } from "../document/nvdDocumentSelection";
 
-export function NvdA4SelectionOverlay({
+export function NvdPagedSelectionOverlay({
   layout,
   pageLayout,
   selection,
@@ -31,6 +33,9 @@ export function NvdA4SelectionOverlay({
   const blockSelection = isNvdBlockDocumentSelection(selection)
     ? getNvdBlockSelectionGeometry(layout, selection.blockId)
     : null;
+  const insertionSelection = isNvdInsertionDocumentSelection(selection)
+    ? getNvdInsertionGeometry(layout, selection.blockIndex)
+    : null;
   const hasRange = textSelection ? textSelection.end > textSelection.start : false;
   const caret =
     textSelection && !hasRange ? getNvdCaretGeometry(layout, textSelection.start) : null;
@@ -40,37 +45,47 @@ export function NvdA4SelectionOverlay({
       : [];
 
   return (
-    <div className="nvd-a4-selection-overlay" aria-hidden="true">
+    <div className="nvd-paged-selection-overlay" aria-hidden="true">
       {blockSelection ? (
         <div
-          className="nvd-a4-block-selection-rect"
+          className="nvd-paged-block-selection-rect"
           style={{
             height: `${blockSelection.heightPx}px`,
             left: `${pageLayoutPx.marginLeftPx + blockSelection.leftPx}px`,
-            top: `${blockSelection.pageIndex * (pageLayoutPx.heightPx + NVD_A4_PAGE_GAP_PX) + pageLayoutPx.marginTopPx + blockSelection.topPx}px`,
+            top: `${blockSelection.pageIndex * (pageLayoutPx.heightPx + NVD_PAGE_GAP_PX) + pageLayoutPx.marginTopPx + blockSelection.topPx}px`,
             width: `${blockSelection.widthPx}px`,
+          }}
+        />
+      ) : null}
+      {insertionSelection ? (
+        <div
+          className="nvd-paged-insertion-overlay"
+          style={{
+            left: `${pageLayoutPx.marginLeftPx}px`,
+            top: `${insertionSelection.pageIndex * (pageLayoutPx.heightPx + NVD_PAGE_GAP_PX) + pageLayoutPx.marginTopPx + insertionSelection.topPx}px`,
+            width: `${insertionSelection.widthPx}px`,
           }}
         />
       ) : null}
       {rects.map((rect) => (
         <div
-          className="nvd-a4-selection-rect"
+          className="nvd-paged-selection-rect"
           key={`${rect.pageIndex}-${rect.lineIndex}-${rect.leftPx}-${rect.widthPx}`}
           style={{
             height: `${rect.heightPx}px`,
             left: `${pageLayoutPx.marginLeftPx + rect.leftPx}px`,
-            top: `${rect.pageIndex * (pageLayoutPx.heightPx + NVD_A4_PAGE_GAP_PX) + pageLayoutPx.marginTopPx + rect.topPx}px`,
+            top: `${rect.pageIndex * (pageLayoutPx.heightPx + NVD_PAGE_GAP_PX) + pageLayoutPx.marginTopPx + rect.topPx}px`,
             width: `${rect.widthPx}px`,
           }}
         />
       ))}
       {caret ? (
         <div
-          className="nvd-a4-caret-overlay"
+          className="nvd-paged-caret-overlay"
           style={{
             height: `${caret.heightPx}px`,
             left: `${pageLayoutPx.marginLeftPx + caret.leftPx}px`,
-            top: `${caret.pageIndex * (pageLayoutPx.heightPx + NVD_A4_PAGE_GAP_PX) + pageLayoutPx.marginTopPx + caret.topPx}px`,
+            top: `${caret.pageIndex * (pageLayoutPx.heightPx + NVD_PAGE_GAP_PX) + pageLayoutPx.marginTopPx + caret.topPx}px`,
           }}
         />
       ) : null}

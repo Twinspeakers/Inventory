@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { FileText } from "lucide-react";
 import type {
   NvdBlock,
@@ -6,20 +5,14 @@ import type {
   NvdTextRun,
   OpenedNvdDocument,
 } from "../../inventoryProject";
-import { getNvdFontFamily, useNvdFontsReady } from "../fonts";
+import { getNvdFontFamily } from "../fonts";
 import { getNvdFontSizePt } from "../primitives/nvdFontSize";
 import { getNvdDocumentStyleDefinitions } from "../document/nvdStyles";
-import { NvdA4PageEditorSurface } from "./NvdA4PageEditorSurface";
+import { NvdPagedEditor } from "../paged/NvdPagedEditor";
 import { clampNvdPageLayout, getNvdPageLayout } from "../layout/nvdPageLayout";
-import type { NvdEditorController } from "../adapters/NvdRichTextEditor";
-import {
-  createNvdDocumentBlocks,
-  getNvdDocumentBlockLayouts,
-  getNvdDocumentFontFamilies,
-  getNvdDocumentRuns,
-  type NvdBlockLayout,
-  type NvdTextSelection,
-} from "../document/nvdRichText";
+import type { NvdEditorController } from "../contracts/NvdEditorController";
+import type { NvdDocumentSelection } from "../document/nvdDocumentSelection";
+import { getNvdDocumentBlockLayouts, getNvdDocumentFontFamilies, getNvdDocumentRuns, type NvdBlockLayout, type NvdTextSelection } from "../document/nvdRichText";
 
 export function NvdEditor({
   openedDocument,
@@ -33,7 +26,7 @@ export function NvdEditor({
   onActivate: () => void;
   onControllerChange: (controller: NvdEditorController) => void;
   onDocumentChange: (document: NvdDocument) => void;
-  onSelectionChange: (selection: NvdTextSelection) => void;
+  onSelectionChange: (selection: NvdDocumentSelection | null) => void;
   zoomPercent: number;
 }) {
   if (!openedDocument) {
@@ -63,7 +56,7 @@ export function NvdEditor({
       ...document,
       fontFamily,
       fontSize: `${fontSizePt}pt`,
-      layoutMode: "a4",
+      layoutMode: "paged",
       blocks: nextBlocks,
     });
   }
@@ -73,7 +66,7 @@ export function NvdEditor({
       ...document,
       fontFamily,
       fontSize: `${fontSizePt}pt`,
-      layoutMode: "a4",
+      layoutMode: "paged",
       pageLayout: clampNvdPageLayout(nextPageLayout),
     });
   }
@@ -127,16 +120,14 @@ function NvdDocumentSurface({
   onActivate: () => void;
   onControllerChange: (controller: NvdEditorController) => void;
   onBlocksChange: (blocks: NvdBlock[]) => void;
-  onSelectionChange: (selection: NvdTextSelection) => void;
+  onSelectionChange: (selection: NvdDocumentSelection | null) => void;
   blocks: NvdBlock[];
   runs: NvdTextRun[];
   blockLayouts: NvdBlockLayout[];
   styleDefinitions: ReturnType<typeof getNvdDocumentStyleDefinitions>;
 }) {
-  const fontsReady = useNvdFontsReady(fontFamilies);
-
   return (
-    <NvdA4PageEditorSurface
+    <NvdPagedEditor
       defaultFontFamily={defaultFontFamily}
       defaultFontSizePt={defaultFontSizePt}
       documentPath={documentPath}

@@ -1,10 +1,10 @@
 import type { NvdPageLayout } from "../../inventoryProject";
-import { NVD_A4_PAGE_GAP_PX } from "../layout/nvdLayout";
+import { NVD_PAGE_GAP_PX } from "../layout/nvdLayout";
 import { getNvdPageLayoutPx } from "../layout/nvdPageLayout";
 import type { NvdPageFragment } from "../layout/nvdPageLayoutEngine";
 import { NvdPageFragmentView } from "../rendering/NvdPageFragmentView";
 
-export function NvdA4ProjectedTextLayer({
+export function NvdPagedTextLayer({
   defaultFontFamily,
   defaultFontSizePt,
   pageLayout,
@@ -18,20 +18,20 @@ export function NvdA4ProjectedTextLayer({
   const pageLayoutPx = getNvdPageLayoutPx(pageLayout);
 
   return (
-    <div className="nvd-a4-projected-text-layer" aria-hidden="true">
+    <div className="nvd-paged-text-layer" aria-hidden="true">
       {pages.map((page) => (
         <div
-          className="nvd-a4-projected-text-page"
+          className="nvd-paged-text-page"
           key={page.index}
           style={{
             height: `${pageLayoutPx.contentHeightPx}px`,
             left: `${pageLayoutPx.marginLeftPx}px`,
-            top: `${page.index * (pageLayoutPx.heightPx + NVD_A4_PAGE_GAP_PX) + pageLayoutPx.marginTopPx}px`,
+            top: `${page.index * (pageLayoutPx.heightPx + NVD_PAGE_GAP_PX) + pageLayoutPx.marginTopPx}px`,
             width: `${pageLayoutPx.contentWidthPx}px`,
           }}
         >
           <NvdPageFragmentView
-            className="nvd-a4-projected-fragment-view"
+            className="nvd-paged-fragment-view"
             defaultFontFamily={defaultFontFamily}
             defaultFontSizePt={defaultFontSizePt}
             page={page}

@@ -72,6 +72,7 @@ export type NvdLineFragment = {
 };
 
 export type NvdParagraphFragment = {
+  blockIndex: number;
   end: number;
   heightPx: number;
   kind: NvdBlockLayout["kind"];
@@ -156,6 +157,13 @@ export type NvdBlockSelectionGeometry = {
   widthPx: number;
 };
 
+export type NvdInsertionGeometry = {
+  blockIndex: number;
+  pageIndex: number;
+  topPx: number;
+  widthPx: number;
+};
+
 export function layoutNvdDocument(
   document: Pick<NvdDocument, "blocks" | "fontFamily" | "fontSize" | "styles" | "pageLayout">,
 ) {
@@ -172,6 +180,7 @@ export function layoutNvdDocument(
       blockLayouts,
       document.pageLayout,
       styleDefinitions,
+      getNvdTextBlockIndexes(document.blocks),
     );
   }
 
@@ -201,6 +210,7 @@ export function layoutNvdTextRuns(
   blockLayouts: readonly NvdBlockLayout[] = [],
   pageLayout?: Partial<NvdPageLayout> | null,
   styleDefinitions?: Record<NvdStyleRole, NvdStyleDefinition>,
+  textBlockIndexes: readonly number[] = [],
 ) {
   const normalizedRuns = normalizeNvdTextRuns(runs);
   const normalizedDefaultFontSizePt = getNvdFontSizePt(defaultFontSize);
@@ -213,6 +223,7 @@ export function layoutNvdTextRuns(
     blockLayouts,
     normalizedPageLayout,
     styleDefinitions,
+    textBlockIndexes,
   ]);
   const cachedLayout = nvdLayoutCache.get(cacheKey);
 
@@ -237,7 +248,14 @@ export function layoutNvdTextRuns(
     normalizedPageLayout,
     styleDefinitions,
   );
-  const pages = createPageFragments(normalizedRuns, text, lines, blockLayouts, normalizedPageLayout);
+  const pages = createPageFragments(
+    normalizedRuns,
+    text,
+    lines,
+    blockLayouts,
+    normalizedPageLayout,
+    textBlockIndexes,
+  );
   const layoutSnapshot = {
     blockLayouts,
     defaultFontFamily: normalizedDefaultFontFamily,
@@ -468,6 +486,81 @@ export function getNvdBlockSelectionGeometry(
   return null;
 }
 
+export function getNvdInsertionGeometry(
+  layout: NvdDocumentLayoutSnapshot,
+  blockIndex: number,
+) {
+  const orderedFragments = getOrderedBlockFragments(layout);
+  const pageLayoutPx = getNvdPageLayoutPx(layout.pageLayout);
+
+  if (orderedFragments.length === 0) {
+    return {
+      blockIndex: Math.max(0, Math.floor(blockIndex)),
+      pageIndex: 0,
+      topPx: 0,
+      widthPx: pageLayoutPx.contentWidthPx,
+    } satisfies NvdInsertionGeometry;
+  }
+
+  const clampedBlockIndex = clampNumber(
+    Math.floor(blockIndex),
+    0,
+    orderedFragments[orderedFragments.length - 1].blockIndex + 1,
+  );
+  const nextFragment = orderedFragments.find((fragment) => fragment.blockIndex >= clampedBlockIndex);
+
+  if (nextFragment) {
+    return {
+      blockIndex: clampedBlockIndex,
+      pageIndex: nextFragment.pageIndex,
+      topPx: nextFragment.topPx,
+      widthPx: pageLayoutPx.contentWidthPx,
+    } satisfies NvdInsertionGeometry;
+  }
+
+  const lastFragment = orderedFragments[orderedFragments.length - 1];
+  return {
+    blockIndex: clampedBlockIndex,
+    pageIndex: lastFragment.pageIndex,
+    topPx: lastFragment.topPx + lastFragment.heightPx,
+    widthPx: pageLayoutPx.contentWidthPx,
+  } satisfies NvdInsertionGeometry;
+}
+
+export function getNvdInsertionIndexAtPagePoint(
+  layout: NvdDocumentLayoutSnapshot,
+  pageIndex: number,
+  topPx: number,
+) {
+  const orderedFragments = getOrderedBlockFragments(layout);
+
+  if (orderedFragments.length === 0) {
+    return 0;
+  }
+
+  const pageFragments = orderedFragments.filter((fragment) => fragment.pageIndex === pageIndex);
+
+  if (pageFragments.length === 0) {
+    const previousFragment = [...orderedFragments]
+      .reverse()
+      .find((fragment) => fragment.pageIndex < pageIndex);
+
+    if (previousFragment) {
+      return previousFragment.blockIndex + 1;
+    }
+
+    return orderedFragments[0].blockIndex;
+  }
+
+  for (const fragment of pageFragments) {
+    if (topPx < fragment.topPx + fragment.heightPx / 2) {
+      return fragment.blockIndex;
+    }
+  }
+
+  return pageFragments[pageFragments.length - 1].blockIndex + 1;
+}
+
 export function findNvdEmbedFragmentAtPagePoint(
   layout: NvdDocumentLayoutSnapshot,
   pageIndex: number,
@@ -666,6 +759,7 @@ function layoutNvdMixedDocument(
     blockLayouts,
     normalizedPageLayout,
     pageAnchorOffsets,
+    getNvdTextBlockIndexes(blocks),
   );
   const layoutSnapshot = {
     blockLayouts,
@@ -1565,6 +1659,7 @@ function createPageFragments(
   lines: NvdLineFragment[],
   blockLayouts: readonly NvdBlockLayout[],
   pageLayout: NvdPageLayout,
+  textBlockIndexes: readonly number[],
 ) {
   const pages: NvdPageFragment[] = [];
   const pageLayoutPx = getNvdPageLayoutPx(pageLayout);
@@ -1594,6 +1689,7 @@ function createPageFragments(
         index + 1,
         pages.length,
         pageLayoutPx.contentHeightPx,
+        textBlockIndexes,
       ),
     );
     pageStartLineIndex = index + 1;
@@ -1630,6 +1726,7 @@ function createPageFragment(
   endLineIndex: number,
   pageIndex: number,
   contentHeightPx: number,
+  textBlockIndexes: readonly number[],
 ) {
   const pageLines = lines.slice(startLineIndex, endLineIndex);
   const start = pageLines[0]?.start ?? text.length;
@@ -1653,6 +1750,7 @@ function createPageFragment(
       blockLayouts,
       startLineIndex,
       pageIndex,
+      textBlockIndexes,
     ),
     paragraphIndexes: getNvdParagraphIndexesForRange(text, start, end),
     runs: sliceNvdTextRuns(normalizedRuns, start, end),
@@ -1668,6 +1766,7 @@ function createParagraphFragments(
   blockLayouts: readonly NvdBlockLayout[],
   pageStartLineIndex: number,
   pageIndex: number,
+  textBlockIndexes: readonly number[],
 ) {
   const fragments: NvdParagraphFragment[] = [];
   let fragmentStart = 0;
@@ -1689,6 +1788,7 @@ function createParagraphFragments(
     const blockLayout = blockLayouts[paragraphIndex] ?? getDefaultBlockLayout();
 
     fragments.push({
+      blockIndex: textBlockIndexes[paragraphIndex] ?? paragraphIndex,
       end,
       heightPx: fragmentLines.reduce((heightPx, line) => heightPx + line.heightPx, 0),
       kind: blockLayout.kind,
@@ -1720,6 +1820,7 @@ function createMixedPageFragments(
   blockLayouts: readonly NvdBlockLayout[],
   pageLayout: NvdPageLayout,
   pageAnchorOffsets: Map<number, number>,
+  textBlockIndexes: readonly number[],
 ) {
   const totalPageCount =
     Math.max(
@@ -1761,6 +1862,7 @@ function createMixedPageFragments(
               blockLayouts,
               pageLines[0]?.index ?? 0,
               pageIndex,
+              textBlockIndexes,
             )
           : [],
       paragraphIndexes:
@@ -1781,6 +1883,41 @@ function getNvdParagraphIndexesForRange(text: string, start: number, end: number
   const paragraphCount = countLineBreaks(text.slice(start, end)) + 1;
 
   return Array.from({ length: paragraphCount }, (_, index) => firstParagraphIndex + index);
+}
+
+function getOrderedBlockFragments(layout: NvdDocumentLayoutSnapshot) {
+  return layout.pages
+    .flatMap((page) => [
+      ...page.paragraphFragments.map((fragment) => ({
+        blockIndex: fragment.blockIndex,
+        heightPx: fragment.heightPx,
+        pageIndex: fragment.pageIndex,
+        topPx: fragment.topPx,
+      })),
+      ...page.embedFragments.map((fragment) => ({
+        blockIndex: fragment.blockIndex,
+        heightPx: fragment.heightPx,
+        pageIndex: fragment.pageIndex,
+        topPx: fragment.topPx,
+      })),
+    ])
+    .sort((left, right) =>
+      left.blockIndex === right.blockIndex
+        ? left.pageIndex === right.pageIndex
+          ? left.topPx - right.topPx
+          : left.pageIndex - right.pageIndex
+        : left.blockIndex - right.blockIndex,
+    );
+}
+
+function getNvdTextBlockIndexes(blocks: readonly NvdBlock[]) {
+  return blocks.reduce<number[]>((indexes, block, index) => {
+    if (block.kind !== "embed") {
+      indexes.push(index);
+    }
+
+    return indexes;
+  }, []);
 }
 
 function getDefaultBlockLayout(): NvdBlockLayout {

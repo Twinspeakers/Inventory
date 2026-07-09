@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  NVD_A4_CONTENT_HEIGHT_PX,
-  NVD_A4_PAGE_GAP_PX,
-  NVD_A4_PAGE_MARGIN_Y_PX,
-  getNvdA4PageBreaks,
+  NVD_DEFAULT_CONTENT_HEIGHT_PX,
+  NVD_DEFAULT_PAGE_MARGIN_Y_PX,
+  NVD_PAGE_GAP_PX,
+  getNvdPageBreaks,
   getNvdLayoutMode,
   paginateNvdTextRuns,
 } from "./nvdLayout";
@@ -25,12 +25,13 @@ function createLayout(overrides: Partial<NvdBlockLayout> = {}): NvdBlockLayout {
   };
 }
 
-describe("NVD A4 pagination", () => {
-  it("keeps A4 as the only supported layout mode", () => {
-    expect(getNvdLayoutMode("a4")).toBe("a4");
-    expect(getNvdLayoutMode("pageless")).toBe("a4");
-    expect(getNvdLayoutMode("not-a-mode")).toBe("a4");
-    expect(getNvdLayoutMode(null)).toBe("a4");
+describe("NVD paged pagination", () => {
+  it("keeps paged as the only supported layout mode", () => {
+    expect(getNvdLayoutMode("paged")).toBe("paged");
+    expect(getNvdLayoutMode("a4")).toBe("paged");
+    expect(getNvdLayoutMode("pageless")).toBe("paged");
+    expect(getNvdLayoutMode("not-a-mode")).toBe("paged");
+    expect(getNvdLayoutMode(null)).toBe("paged");
   });
 
   it("keeps a generated 100-page document contiguous and within page bounds", () => {
@@ -48,7 +49,7 @@ describe("NVD A4 pagination", () => {
     expect(pages[pages.length - 1]?.end).toBe(text.length);
 
     pages.forEach((page, index) => {
-      expect(page.contentHeightPx).toBeLessThanOrEqual(NVD_A4_CONTENT_HEIGHT_PX);
+      expect(page.contentHeightPx).toBeLessThanOrEqual(NVD_DEFAULT_CONTENT_HEIGHT_PX);
       expect(page.text).toBe(text.slice(page.start, page.end));
 
       if (index > 0) {
@@ -90,7 +91,7 @@ describe("NVD A4 pagination", () => {
     );
   });
 
-  it("wraps expanded character spacing into more A4 pages", () => {
+  it("wraps expanded character spacing into more pages", () => {
     const text = "Inventory character spacing pagination regression. ".repeat(1_000);
     const normalPages = paginateNvdTextRuns([{ text }], "Inter", 12);
     const expandedPages = paginateNvdTextRuns(
@@ -108,16 +109,16 @@ describe("NVD A4 pagination", () => {
       "Inter",
       12,
     );
-    const pageBreaks = getNvdA4PageBreaks(pages);
+    const pageBreaks = getNvdPageBreaks(pages);
 
     expect(pageBreaks).toHaveLength(pages.length - 1);
     pageBreaks.forEach((pageBreak, index) => {
       expect(pageBreak.offset).toBe(pages[index].end);
       expect(pageBreak.heightPx).toBe(
-        NVD_A4_CONTENT_HEIGHT_PX -
+        NVD_DEFAULT_CONTENT_HEIGHT_PX -
           pages[index].contentHeightPx +
-          NVD_A4_PAGE_MARGIN_Y_PX * 2 +
-          NVD_A4_PAGE_GAP_PX,
+          NVD_DEFAULT_PAGE_MARGIN_Y_PX * 2 +
+          NVD_PAGE_GAP_PX,
       );
     });
   });

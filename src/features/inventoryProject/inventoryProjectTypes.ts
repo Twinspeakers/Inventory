@@ -110,7 +110,7 @@ export type NvdTextRun = {
   style?: NvdTextStyle;
 };
 
-export type NvdLayoutMode = "a4";
+export type NvdLayoutMode = "paged";
 
 export type NvdPageSizePreset = "a4" | "custom";
 

@@ -12,15 +12,15 @@ import {
 export type { NvdTextPage } from "./nvdPageLayoutEngine";
 export { layoutNvdDocument, layoutNvdText, layoutNvdTextRuns } from "./nvdPageLayoutEngine";
 
-export const DEFAULT_NVD_LAYOUT_MODE: NvdLayoutMode = "a4";
-export const NVD_A4_PAGE_GAP_PX = 20;
+export const DEFAULT_NVD_LAYOUT_MODE: NvdLayoutMode = "paged";
+export const NVD_PAGE_GAP_PX = 20;
 export const NVD_TEXT_LINE_HEIGHT = DEFAULT_NVD_LINE_HEIGHT;
 
-export const NVD_A4_PAGE_WIDTH_PX = getNvdPageLayoutPx(DEFAULT_NVD_PAGE_LAYOUT).widthPx;
-export const NVD_A4_PAGE_HEIGHT_PX = getNvdPageLayoutPx(DEFAULT_NVD_PAGE_LAYOUT).heightPx;
-export const NVD_A4_PAGE_MARGIN_X_PX = getNvdPageLayoutPx(DEFAULT_NVD_PAGE_LAYOUT).marginLeftPx;
-export const NVD_A4_PAGE_MARGIN_Y_PX = getNvdPageLayoutPx(DEFAULT_NVD_PAGE_LAYOUT).marginTopPx;
-export const NVD_A4_CONTENT_HEIGHT_PX = getNvdPageLayoutPx(DEFAULT_NVD_PAGE_LAYOUT).contentHeightPx;
+export const NVD_DEFAULT_PAGE_WIDTH_PX = getNvdPageLayoutPx(DEFAULT_NVD_PAGE_LAYOUT).widthPx;
+export const NVD_DEFAULT_PAGE_HEIGHT_PX = getNvdPageLayoutPx(DEFAULT_NVD_PAGE_LAYOUT).heightPx;
+export const NVD_DEFAULT_PAGE_MARGIN_X_PX = getNvdPageLayoutPx(DEFAULT_NVD_PAGE_LAYOUT).marginLeftPx;
+export const NVD_DEFAULT_PAGE_MARGIN_Y_PX = getNvdPageLayoutPx(DEFAULT_NVD_PAGE_LAYOUT).marginTopPx;
+export const NVD_DEFAULT_CONTENT_HEIGHT_PX = getNvdPageLayoutPx(DEFAULT_NVD_PAGE_LAYOUT).contentHeightPx;
 
 export type NvdPageBreak = {
   heightPx: number;
@@ -30,7 +30,7 @@ export type NvdPageBreak = {
 export { getNvdDocumentText };
 
 export function getNvdLayoutMode(layoutMode: NvdLayoutMode | string | null | undefined): NvdLayoutMode {
-  return layoutMode === "a4" ? layoutMode : DEFAULT_NVD_LAYOUT_MODE;
+  return layoutMode === "paged" ? layoutMode : DEFAULT_NVD_LAYOUT_MODE;
 }
 
 export function paginateNvdDocument(
@@ -63,7 +63,7 @@ export function paginateNvdTextRuns(
   ).pages;
 }
 
-export function getNvdA4PageBreaks(
+export function getNvdPageBreaks(
   pages: readonly NvdTextPage[],
   pageLayout?: Partial<NvdPageLayout> | null,
 ) {
@@ -75,7 +75,7 @@ export function getNvdA4PageBreaks(
       page.contentHeightPx +
       pageLayoutPx.marginTopPx +
       pageLayoutPx.marginBottomPx +
-      NVD_A4_PAGE_GAP_PX,
+      NVD_PAGE_GAP_PX,
     offset: page.end,
   })) satisfies NvdPageBreak[];
 }

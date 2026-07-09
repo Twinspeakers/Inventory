@@ -19,10 +19,10 @@ import {
   type OpenedNvvDocument,
 } from "../../features/inventoryProject";
 import {
-  type NvdEditorController,
   type NvdStyleDefinition,
-  type NvdTextSelection,
+  type NvdDocumentSelection,
 } from "../../features/nvdEditor";
+import type { NvdEditorController } from "../../features/nvdEditor/contracts/NvdEditorController";
 import { PreviewStage, type SceneMode } from "../../features/sceneViewer";
 import type { ModelInspectorResult, ModelTransform } from "../../sceneReaders/threeModelReader";
 import type { Asset } from "../appTypes";
@@ -63,8 +63,9 @@ export function MainWorkspace({
   onNvvDocumentChange,
   onNvdEditorControllerChange,
   onNvdStyleDraftChange,
+  onInsertSelectedAssetIntoNvdDocument,
   onDismissNvdSaveReminder,
-  onNvdTextSelectionChange,
+  onNvdSelectionChange,
   onOpenAssetContextMenu,
   onOpenFolder,
   onPlayAudio,
@@ -116,8 +117,9 @@ export function MainWorkspace({
   onNvvDocumentChange: (document: NvvDocument) => void;
   onNvdEditorControllerChange: (controller: NvdEditorController | null) => void;
   onNvdStyleDraftChange: (style: NvdStyleDefinition) => void;
+  onInsertSelectedAssetIntoNvdDocument: () => void;
   onDismissNvdSaveReminder: () => void;
-  onNvdTextSelectionChange: (selection: NvdTextSelection | null) => void;
+  onNvdSelectionChange: (selection: NvdDocumentSelection | null) => void;
   onOpenAssetContextMenu: (asset: Asset, event: ReactMouseEvent<HTMLElement>) => void;
   onOpenFolder: () => void;
   onPlayAudio: (asset: Asset) => void;
@@ -158,7 +160,8 @@ export function MainWorkspace({
         onNvdDocumentChange={onNvdDocumentChange}
         onNvdEditorControllerChange={onNvdEditorControllerChange}
         onNvdStyleDraftChange={onNvdStyleDraftChange}
-        onNvdTextSelectionChange={onNvdTextSelectionChange}
+        onInsertSelectedAssetIntoNvdDocument={onInsertSelectedAssetIntoNvdDocument}
+        onNvdSelectionChange={onNvdSelectionChange}
         onNvvDocumentChange={onNvvDocumentChange}
         onOpenFolder={onOpenFolder}
         onSceneModeChange={onSceneModeChange}

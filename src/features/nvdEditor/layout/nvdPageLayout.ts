@@ -5,15 +5,15 @@ export const NVD_PT_PER_INCH = 72;
 export const NVD_MM_PER_INCH = 25.4;
 export const NVD_PT_TO_MM = NVD_MM_PER_INCH / NVD_PT_PER_INCH;
 export const NVD_DEFAULT_PAGE_SIZE: NvdPageSizePreset = "a4";
-export const NVD_A4_PAGE_WIDTH_PT = (210 / 25.4) * 72;
-export const NVD_A4_PAGE_HEIGHT_PT = (297 / 25.4) * 72;
+export const NVD_DEFAULT_PAGE_WIDTH_PT = (210 / 25.4) * 72;
+export const NVD_DEFAULT_PAGE_HEIGHT_PT = (297 / 25.4) * 72;
 export const NVD_DEFAULT_PAGE_MARGIN_PT = 72;
 export const NVD_MIN_PAGE_CONTENT_SIZE_PT = 36;
 
 export const DEFAULT_NVD_PAGE_LAYOUT: NvdPageLayout = {
   pageSize: NVD_DEFAULT_PAGE_SIZE,
-  widthPt: NVD_A4_PAGE_WIDTH_PT,
-  heightPt: NVD_A4_PAGE_HEIGHT_PT,
+  widthPt: NVD_DEFAULT_PAGE_WIDTH_PT,
+  heightPt: NVD_DEFAULT_PAGE_HEIGHT_PT,
   marginTopPt: NVD_DEFAULT_PAGE_MARGIN_PT,
   marginRightPt: NVD_DEFAULT_PAGE_MARGIN_PT,
   marginBottomPt: NVD_DEFAULT_PAGE_MARGIN_PT,

@@ -105,9 +105,9 @@ export function NvdThumbnail({
   }
 
   return (
-    <div className="nvd-thumbnail nvd-thumbnail-a4" style={{ aspectRatio: `${pageLayoutPx.widthPx} / ${pageLayoutPx.heightPx}` }}>
+    <div className="nvd-thumbnail nvd-thumbnail-paged" style={{ aspectRatio: `${pageLayoutPx.widthPx} / ${pageLayoutPx.heightPx}` }}>
       <div
-        className="nvd-thumbnail-page nvd-thumbnail-page-a4"
+        className="nvd-thumbnail-page nvd-thumbnail-page-paged"
         style={{
           ...fontStyle,
           paddingBottom: `${(pageLayoutPx.marginBottomPx / pageLayoutPx.widthPx) * 100}%`,

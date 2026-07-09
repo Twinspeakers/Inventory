@@ -4,8 +4,11 @@ import type { EditorSaveState } from "../../features/editors";
 import type { PersistedOpenedNvdDocument, NvdHistoryState } from "../appTypes";
 import {
   DEFAULT_NVD_STYLE_DEFINITIONS,
+  getNvdTextSelectionFromDocumentSelection,
   getNvdDocumentStyleDefinitions,
+  type NvdDocumentSelection,
   type NvdEditorController,
+  type NvdInsertAssetPayload,
   type NvdStyleDefinition,
   type NvdStyleRole,
   type NvdTextSelection,
@@ -26,25 +29,30 @@ export function useNvdStyleControls({
   setStatusMessage: (message: string) => void;
   updateNvdStyleResetConfirmationEnabled: (enabled: boolean) => void;
 }) {
+  const [activeNvdSelection, setActiveNvdSelection] = useState<NvdDocumentSelection | null>(null);
   const [activeNvdTextSelection, setActiveNvdTextSelection] = useState<NvdTextSelection | null>(null);
   const [nvdStyleDefinitions, setNvdStyleDefinitions] = useState(() => ({ ...DEFAULT_NVD_STYLE_DEFINITIONS }));
   const [activeNvdStyleRole, setActiveNvdStyleRole] = useState<NvdStyleRole | null>(null);
   const [nvdStyleDraft, setNvdStyleDraft] = useState<NvdStyleDefinition | null>(null);
   const [activeNvdCharacterSpacingPt, setActiveNvdCharacterSpacingPt] = useState<number | null>(null);
   const [activeNvdLineHeight, setActiveNvdLineHeight] = useState<number | null>(null);
-  const [activeNvdSelectionKind, setActiveNvdSelectionKind] = useState<"block" | "none" | "text">("none");
+  const [activeNvdSelectionKind, setActiveNvdSelectionKind] = useState<"block" | "insertion" | "none" | "text">("none");
   const [activeNvdSpaceAfterPt, setActiveNvdSpaceAfterPt] = useState<number | null>(null);
   const [activeNvdSpaceBeforePt, setActiveNvdSpaceBeforePt] = useState<number | null>(null);
   const [pendingNvdStyleResetRole, setPendingNvdStyleResetRole] = useState<NvdStyleRole | null>(null);
   const [hideFutureNvdStyleResetConfirmations, setHideFutureNvdStyleResetConfirmations] = useState(true);
   const nvdEditorControllerRef = useRef<NvdEditorController | null>(null);
 
-  const handleNvdTextSelectionChange = useCallback((selection: NvdTextSelection | null) => {
+  const handleNvdSelectionChange = useCallback((selection: NvdDocumentSelection | null) => {
+    setActiveNvdSelection((currentSelection) =>
+      JSON.stringify(currentSelection) === JSON.stringify(selection) ? currentSelection : selection,
+    );
+    const textSelection = getNvdTextSelectionFromDocumentSelection(selection);
     const nextSelection =
-      selection && selection.end > selection.start
+      textSelection && textSelection.end > textSelection.start
         ? {
-            start: selection.start,
-            end: selection.end,
+            start: textSelection.start,
+            end: textSelection.end,
           }
         : null;
 
@@ -74,7 +82,8 @@ export function useNvdStyleControls({
     });
   }, [setNvdHistoryState]);
 
-  function clearNvdTextSelection() {
+  function clearNvdSelection() {
+    setActiveNvdSelection(null);
     setActiveNvdTextSelection(null);
   }
 
@@ -113,6 +122,18 @@ export function useNvdStyleControls({
 
   function navigateToNvdBlock(blockIndex: number) {
     nvdEditorControllerRef.current?.focusBlock(blockIndex);
+  }
+
+  function insertAssetIntoNvdDocument(asset: NvdInsertAssetPayload) {
+    const controller = nvdEditorControllerRef.current;
+
+    if (!controller) {
+      setStatusMessage("Open an NVD document before inserting an asset.");
+      return;
+    }
+
+    controller.insertAsset(asset);
+    setStatusMessage(`Inserted "${asset.assetName}" into the document.`);
   }
 
   function updateNvdStyleDraft(style: NvdStyleDefinition) {
@@ -303,6 +324,7 @@ export function useNvdStyleControls({
   return {
     activeNvdCharacterSpacingPt,
     activeNvdLineHeight,
+    activeNvdSelection,
     activeNvdSelectionKind,
     activeNvdSpaceAfterPt,
     activeNvdSpaceBeforePt,
@@ -319,10 +341,11 @@ export function useNvdStyleControls({
     changeNvdSpaceAfterPt,
     changeNvdSpaceBeforePt,
     clearNvdStyleSelection,
-    clearNvdTextSelection,
+    clearNvdSelection,
     confirmNvdStyleReset,
     handleNvdEditorControllerChange,
-    handleNvdTextSelectionChange,
+    handleNvdSelectionChange,
+    insertAssetIntoNvdDocument,
     loadNvdStyleDefinitions,
     navigateToNvdBlock,
     redoNvd,

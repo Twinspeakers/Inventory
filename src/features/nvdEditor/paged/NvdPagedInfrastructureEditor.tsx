@@ -7,11 +7,11 @@ import type {
 } from "react";
 import { NvdInputBridge, type NvdInputBridgeHandle } from "./NvdInputBridge";
 
-export type NvdA4InfrastructureEditorHandle = {
+export type NvdPagedInfrastructureEditorHandle = {
   focusBridge: () => void;
 };
 
-type NvdA4InfrastructureEditorProps = {
+type NvdPagedInfrastructureEditorProps = {
   focusBridgeRequestKey: number;
   onBeforeInput: FormEventHandler<HTMLTextAreaElement>;
   onInput: FormEventHandler<HTMLTextAreaElement>;
@@ -25,7 +25,7 @@ type NvdA4InfrastructureEditorProps = {
   selectedText: string;
 };
 
-export const NvdA4InfrastructureEditor = forwardRef<NvdA4InfrastructureEditorHandle, NvdA4InfrastructureEditorProps>(({
+export const NvdPagedInfrastructureEditor = forwardRef<NvdPagedInfrastructureEditorHandle, NvdPagedInfrastructureEditorProps>(({
   focusBridgeRequestKey,
   onBeforeInput,
   onInput,
@@ -59,7 +59,7 @@ export const NvdA4InfrastructureEditor = forwardRef<NvdA4InfrastructureEditorHan
   }, [focusBridgeRequestKey]);
 
   return (
-    <div className="nvd-a4-infrastructure-editor">
+    <div className="nvd-paged-infrastructure-editor">
       <NvdInputBridge
         onBeforeInput={onBeforeInput}
         onInput={onInput}
@@ -77,4 +77,4 @@ export const NvdA4InfrastructureEditor = forwardRef<NvdA4InfrastructureEditorHan
   );
 });
 
-NvdA4InfrastructureEditor.displayName = "NvdA4InfrastructureEditor";
+NvdPagedInfrastructureEditor.displayName = "NvdPagedInfrastructureEditor";

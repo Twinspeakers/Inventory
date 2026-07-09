@@ -1,27 +1,27 @@
 import { useMemo, useRef } from "react";
-import type { NvdBlock, NvdPageLayout, NvdTextRun } from "../../inventoryProject";
+import type { NvdBlock, NvdTextRun } from "../../inventoryProject";
 import { useNvdFontsReady } from "../fonts";
-import { NVD_A4_PAGE_GAP_PX, layoutNvdDocument } from "../layout/nvdLayout";
+import { NVD_PAGE_GAP_PX, layoutNvdDocument } from "../layout/nvdLayout";
 import {
-  NvdA4InfrastructureEditor,
-  type NvdA4InfrastructureEditorHandle,
-} from "../a4/NvdA4InfrastructureEditor";
-import { NvdA4PageHostLayer } from "../a4/NvdA4PageHostLayer";
-import { NvdA4ProjectedTextLayer } from "../a4/NvdA4ProjectedTextLayer";
-import { NvdA4SelectionOverlay } from "../a4/NvdA4SelectionOverlay";
+  NvdPagedInfrastructureEditor,
+  type NvdPagedInfrastructureEditorHandle,
+} from "./NvdPagedInfrastructureEditor";
+import { NvdPagedHostLayer } from "./NvdPagedHostLayer";
+import { NvdPagedTextLayer } from "./NvdPagedTextLayer";
+import { NvdPagedSelectionOverlay } from "./NvdPagedSelectionOverlay";
 import { NvdPageRulers } from "../controls/NvdPageRulers";
 import { getNvdPageLayout, getNvdPageLayoutPx } from "../layout/nvdPageLayout";
-import type { NvdEditorController } from "../adapters/NvdRichTextEditor";
+import type { NvdEditorController } from "../contracts/NvdEditorController";
+import type { NvdDocumentSelection } from "../document/nvdDocumentSelection";
 import {
   createNvdDocumentBlocks,
   type NvdBlockLayout,
-  type NvdTextSelection,
 } from "../document/nvdRichText";
 import type { NvdStyleDefinition, NvdStyleRole } from "../document/nvdStyles";
-import { useNvdA4DocumentController } from "../a4/useNvdA4DocumentController";
-import { useNvdA4SelectionController } from "../a4/useNvdA4SelectionController";
+import { useNvdPagedDocumentController } from "./useNvdPagedDocumentController";
+import { useNvdPagedSelectionController } from "./useNvdPagedSelectionController";
 
-export function NvdA4PageEditorSurface({
+export function NvdPagedEditor({
   defaultFontFamily,
   defaultFontSizePt,
   documentPath,
@@ -46,21 +46,21 @@ export function NvdA4PageEditorSurface({
   onActivate: () => void;
   onControllerChange: (controller: NvdEditorController) => void;
   onBlocksChange: (blocks: NvdBlock[]) => void;
-  onSelectionChange: (selection: NvdTextSelection) => void;
+  onSelectionChange: (selection: NvdDocumentSelection | null) => void;
   blocks: NvdBlock[];
   runs: NvdTextRun[];
   blockLayouts: NvdBlockLayout[];
   styleDefinitions: Record<NvdStyleRole, NvdStyleDefinition>;
 }) {
   const fontsReady = useNvdFontsReady(fontFamilies);
-  const infrastructureEditorRef = useRef<NvdA4InfrastructureEditorHandle | null>(null);
+  const infrastructureEditorRef = useRef<NvdPagedInfrastructureEditorHandle | null>(null);
   const pageLayoutPx = getNvdPageLayoutPx(pageLayout);
   const {
     activeDocumentSelection,
     bridgeFocusRequestKey,
     handleDocumentSelectionRequest,
     handleTextSelectionRequest,
-  } = useNvdA4SelectionController({ onSelectionChange });
+  } = useNvdPagedSelectionController({ onSelectionChange });
   const baseBlocks = useMemo(
     () => createNvdDocumentBlocks(runs, blocks, blockLayouts),
     [blockLayouts, blocks, runs],
@@ -91,7 +91,7 @@ export function NvdA4PageEditorSurface({
     onKeyDown,
     onPaste,
     selectedText,
-  } = useNvdA4DocumentController({
+  } = useNvdPagedDocumentController({
     blocks,
     blockLayouts,
     defaultFontFamily,
@@ -133,13 +133,13 @@ export function NvdA4PageEditorSurface({
 
   return (
     <article
-      aria-label={`${pages.length} A4 page${pages.length === 1 ? "" : "s"}`}
-      className="nvd-editor-a4-document"
+      aria-label={`${pages.length} page${pages.length === 1 ? "" : "s"}`}
+      className="nvd-editor-paged-document"
       onPointerDown={onActivate}
       style={{
         minHeight:
           pages.length * pageLayoutPx.heightPx +
-          Math.max(0, pages.length - 1) * NVD_A4_PAGE_GAP_PX,
+          Math.max(0, pages.length - 1) * NVD_PAGE_GAP_PX,
         paddingBottom: `${pageLayoutPx.marginBottomPx}px`,
         paddingLeft: `${pageLayoutPx.marginLeftPx}px`,
         paddingRight: `${pageLayoutPx.marginRightPx}px`,
@@ -147,21 +147,21 @@ export function NvdA4PageEditorSurface({
         width: `${pageLayoutPx.widthPx}px`,
       }}
     >
-      <div className="nvd-a4-page-sheets" aria-hidden="true">
+      <div className="nvd-paged-page-sheets" aria-hidden="true">
         {pages.map((page) => (
           <span
-            className="nvd-a4-page-sheet"
+            className="nvd-paged-page-sheet"
             key={page.index}
             style={{
               height: `${pageLayoutPx.heightPx}px`,
-              top: page.index * (pageLayoutPx.heightPx + NVD_A4_PAGE_GAP_PX),
+              top: page.index * (pageLayoutPx.heightPx + NVD_PAGE_GAP_PX),
               width: `${pageLayoutPx.widthPx}px`,
             }}
           />
         ))}
       </div>
       {layoutSnapshot ? (
-        <NvdA4PageHostLayer
+        <NvdPagedHostLayer
           layout={layoutSnapshot}
           onDocumentSelectionRequest={handleDocumentSelectionRequest}
           onPointerInteractionStart={() => {
@@ -173,7 +173,7 @@ export function NvdA4PageEditorSurface({
         />
       ) : null}
       {pages.length > 0 ? (
-        <NvdA4ProjectedTextLayer
+        <NvdPagedTextLayer
           defaultFontFamily={defaultFontFamily}
           defaultFontSizePt={defaultFontSizePt}
           pageLayout={pageLayout}
@@ -181,7 +181,7 @@ export function NvdA4PageEditorSurface({
         />
       ) : null}
       {layoutSnapshot ? (
-        <NvdA4SelectionOverlay
+        <NvdPagedSelectionOverlay
           layout={layoutSnapshot}
           pageLayout={pageLayout}
           selection={activeDocumentSelection}
@@ -189,12 +189,12 @@ export function NvdA4PageEditorSurface({
       ) : null}
       <NvdPageRulers
         pageCount={Math.max(1, pages.length)}
-        pageGapPx={NVD_A4_PAGE_GAP_PX}
+        pageGapPx={NVD_PAGE_GAP_PX}
         pageLayout={pageLayout}
         onPageLayoutChange={onPageLayoutChange}
       />
-      {!fontsReady ? <NvdA4FontLoadingDocument pageLayout={pageLayout} /> : null}
-      <NvdA4InfrastructureEditor
+      {!fontsReady ? <NvdPagedFontLoadingDocument pageLayout={pageLayout} /> : null}
+      <NvdPagedInfrastructureEditor
         focusBridgeRequestKey={bridgeFocusRequestKey}
         onBeforeInput={onBeforeInput}
         onInput={onInput}
@@ -212,7 +212,7 @@ export function NvdA4PageEditorSurface({
   );
 }
 
-function NvdA4FontLoadingDocument({
+function NvdPagedFontLoadingDocument({
   pageLayout,
 }: {
   pageLayout: ReturnType<typeof getNvdPageLayout>;
@@ -222,7 +222,7 @@ function NvdA4FontLoadingDocument({
   return (
     <div className="nvd-editor-pages absolute inset-0 z-10" aria-label="Loading document fonts">
       <article
-        className="nvd-editor-page nvd-editor-page-a4"
+        className="nvd-editor-page nvd-editor-page-paged"
         style={{
           height: `${pageLayoutPx.heightPx}px`,
           paddingBottom: `${pageLayoutPx.marginBottomPx}px`,

@@ -22,9 +22,10 @@ import type {
 import {
   getNvdDocumentFontFamilies,
   getNvdDocumentText,
+  getNvdTextSelectionFromDocumentSelection,
   paginateNvdDocument,
   useNvdFontsReady,
-  type NvdTextSelection,
+  type NvdDocumentSelection,
 } from "../../features/nvdEditor";
 import { getDocumentStatistics } from "../../features/editors";
 import {
@@ -45,7 +46,7 @@ import type { SceneMode } from "../../features/sceneViewer";
 export function useAppDerivedState({
   activeNvdDocument,
   activeNvdDocumentPath,
-  activeNvdTextSelection,
+  activeNvdSelection,
   activeView,
   assetSearchQuery,
   assetSortDirection,
@@ -69,7 +70,7 @@ export function useAppDerivedState({
 }: {
   activeNvdDocument: PersistedOpenedNvdDocument | null;
   activeNvdDocumentPath: string | null;
-  activeNvdTextSelection: NvdTextSelection | null;
+  activeNvdSelection: NvdDocumentSelection | null;
   activeView: LibraryView;
   assetSearchQuery: string;
   assetSortDirection: SortDirection;
@@ -260,6 +261,7 @@ export function useAppDerivedState({
 
     const document = activeNvdDocument.document;
     const text = getNvdDocumentText(document);
+    const activeNvdTextSelection = getNvdTextSelectionFromDocumentSelection(activeNvdSelection);
     const selectionStart = clamp(activeNvdTextSelection?.start ?? 0, 0, text.length);
     const selectionEnd = clamp(activeNvdTextSelection?.end ?? selectionStart, selectionStart, text.length);
 
@@ -270,7 +272,7 @@ export function useAppDerivedState({
     const pages = deferredDocumentPageCount;
 
     return getDocumentStatistics(text, pages);
-  }, [activeNvdDocument, activeNvdTextSelection, deferredDocumentPageCount]);
+  }, [activeNvdDocument, activeNvdSelection, deferredDocumentPageCount]);
   const structure = useMemo(
     () =>
       buildStructure(

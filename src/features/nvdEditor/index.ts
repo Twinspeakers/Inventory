@@ -1,5 +1,5 @@
 export { NvdEditor } from "./surfaces/NvdEditor";
-export type { NvdEditorController } from "./adapters/NvdRichTextEditor";
+export type { NvdEditorController } from "./contracts/NvdEditorController";
 export {
   DEFAULT_NVD_CHARACTER_SPACING_PT,
   MAX_NVD_CHARACTER_SPACING_PT,
@@ -23,19 +23,19 @@ export { NvdFontSizeSelector } from "./controls/NvdFontSizeSelector";
 export { NvdZoomSelector } from "./controls/NvdZoomSelector";
 export { NvdThumbnail } from "./preview/NvdThumbnail";
 export { NvdPageFragmentView } from "./rendering/NvdPageFragmentView";
-export { NvdA4PageHostLayer } from "./a4/NvdA4PageHostLayer";
-export { NvdA4ProjectedTextLayer } from "./a4/NvdA4ProjectedTextLayer";
-export { NvdA4SelectionOverlay } from "./a4/NvdA4SelectionOverlay";
-export { NvdA4PageEditorSurface } from "./surfaces/NvdA4PageEditorSurface";
-export { NvdA4InfrastructureEditor } from "./a4/NvdA4InfrastructureEditor";
-export { NvdInputBridge } from "./a4/NvdInputBridge";
-export { useNvdA4SelectionController } from "./a4/useNvdA4SelectionController";
-export { useNvdA4DocumentController } from "./a4/useNvdA4DocumentController";
-export type { NvdInputBridgeHandle } from "./a4/NvdInputBridge";
+export { NvdPagedHostLayer } from "./paged/NvdPagedHostLayer";
+export { NvdPagedTextLayer } from "./paged/NvdPagedTextLayer";
+export { NvdPagedSelectionOverlay } from "./paged/NvdPagedSelectionOverlay";
+export { NvdPagedEditor } from "./paged/NvdPagedEditor";
+export { NvdPagedInfrastructureEditor } from "./paged/NvdPagedInfrastructureEditor";
+export { NvdInputBridge } from "./paged/NvdInputBridge";
+export { useNvdPagedSelectionController } from "./paged/useNvdPagedSelectionController";
+export { useNvdPagedDocumentController } from "./paged/useNvdPagedDocumentController";
+export type { NvdInputBridgeHandle } from "./paged/NvdInputBridge";
 export {
   DEFAULT_NVD_PAGE_LAYOUT,
-  NVD_A4_PAGE_HEIGHT_PT,
-  NVD_A4_PAGE_WIDTH_PT,
+  NVD_DEFAULT_PAGE_HEIGHT_PT,
+  NVD_DEFAULT_PAGE_WIDTH_PT,
   NVD_DEFAULT_PAGE_MARGIN_PT,
   NVD_MM_PER_INCH,
   NVD_MIN_PAGE_CONTENT_SIZE_PT,
@@ -84,11 +84,15 @@ export {
 export {
   DEFAULT_NVD_LAYOUT_MODE,
   findNvdPageIndexForOffset,
-  getNvdA4PageBreaks,
+  getNvdPageBreaks,
   getNvdDocumentText,
   getNvdLayoutMode,
-  NVD_A4_CONTENT_HEIGHT_PX,
-  NVD_A4_PAGE_GAP_PX,
+  NVD_DEFAULT_CONTENT_HEIGHT_PX,
+  NVD_DEFAULT_PAGE_HEIGHT_PX,
+  NVD_DEFAULT_PAGE_MARGIN_X_PX,
+  NVD_DEFAULT_PAGE_MARGIN_Y_PX,
+  NVD_DEFAULT_PAGE_WIDTH_PX,
+  NVD_PAGE_GAP_PX,
   paginateNvdDocument,
   paginateNvdText,
   paginateNvdTextRuns,
@@ -99,6 +103,8 @@ export {
   findNvdPageFragmentForOffset,
   findNvdParagraphFragmentForOffset,
   getNvdCaretGeometry,
+  getNvdInsertionGeometry,
+  getNvdInsertionIndexAtPagePoint,
   getNvdOffsetAtPagePoint,
   getNvdSelectionGeometry,
   layoutNvdDocument,
@@ -108,6 +114,7 @@ export {
 export type {
   NvdCaretGeometry,
   NvdDocumentLayoutSnapshot,
+  NvdInsertionGeometry,
   NvdLineFragment,
   NvdParagraphFragment,
   NvdPageFragment,
@@ -161,9 +168,22 @@ export {
 } from "./document/nvdDocumentModel";
 export type { NvdDocumentBlockOperationResult } from "./document/nvdDocumentModel";
 export {
+  getNvdTextSelectionForBlockIndex,
+  insertNvdAssetAtSelection,
+  insertNvdParagraphAtSelection,
+  moveSelectedNvdBlock,
+  normalizeNvdDocumentSelection,
+  removeSelectedNvdBlock,
+  resolveNvdInsertionIndexFromSelection,
+  updateSelectedNvdEmbed,
+} from "./document/nvdDocumentOperations";
+export type { NvdInsertAssetPayload } from "./document/nvdDocumentOperations";
+export {
   createNvdBlockDocumentSelection,
   createNvdInsertionDocumentSelection,
   createNvdTextDocumentSelection,
+  getNvdDocumentSelectionKind,
+  getNvdTextSelectionFromDocumentSelection,
   isNvdBlockDocumentSelection,
   isNvdInsertionDocumentSelection,
   isNvdTextDocumentSelection,

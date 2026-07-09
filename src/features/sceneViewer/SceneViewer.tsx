@@ -33,10 +33,10 @@ import {
   NvdZoomSelector,
   DEFAULT_NVD_ZOOM_PERCENT,
   stepNvdZoomPercent,
-  type NvdEditorController,
+  type NvdDocumentSelection,
   type NvdStyleDefinition,
-  type NvdTextSelection,
 } from "../nvdEditor";
+import type { NvdEditorController } from "../nvdEditor/contracts/NvdEditorController";
 import { DEFAULT_NVV_ZOOM_PERCENT, NvvEditor, NvvZoomSelector, stepNvvZoomPercent } from "../nvvEditor";
 import { NativeHub, type NativeHubAsset, type NativeHubView } from "../nativeHubs";
 import { AudioThumbnail } from "../../sceneReaders/audioReader";
@@ -106,8 +106,9 @@ export function PreviewStage<TAsset extends SceneViewerAsset>({
   onNvvDocumentActivate,
   onNvdDocumentChange,
   onNvdEditorControllerChange,
+  onInsertSelectedAssetIntoNvdDocument,
   onNvdStyleDraftChange,
-  onNvdTextSelectionChange,
+  onNvdSelectionChange,
   onCloseNvvDocument,
   onNvvDocumentChange,
   onModelInspectorResult,
@@ -139,8 +140,9 @@ export function PreviewStage<TAsset extends SceneViewerAsset>({
   onNvvDocumentActivate: () => void;
   onNvdDocumentChange: (document: NvdDocument) => void;
   onNvdEditorControllerChange: (controller: NvdEditorController | null) => void;
+  onInsertSelectedAssetIntoNvdDocument: () => void;
   onNvdStyleDraftChange: (style: NvdStyleDefinition) => void;
-  onNvdTextSelectionChange: (selection: NvdTextSelection | null) => void;
+  onNvdSelectionChange: (selection: NvdDocumentSelection | null) => void;
   onCloseNvvDocument: () => void;
   onNvvDocumentChange: (document: NvvDocument, options?: NvvDocumentChangeOptions) => void;
   onModelInspectorResult: (asset: TAsset, result: ModelInspectorResult) => void;
@@ -181,8 +183,8 @@ export function PreviewStage<TAsset extends SceneViewerAsset>({
   useEffect(() => {
     setNvdEditorController(null);
     onNvdEditorControllerChange(null);
-    onNvdTextSelectionChange(null);
-  }, [nvdDocument?.path, onNvdEditorControllerChange, onNvdTextSelectionChange, sceneMode]);
+    onNvdSelectionChange(null);
+  }, [nvdDocument?.path, onNvdEditorControllerChange, onNvdSelectionChange, sceneMode]);
 
   function handleNvdEditorControllerChange(controller: NvdEditorController) {
     setNvdEditorController(controller);
@@ -192,6 +194,7 @@ export function PreviewStage<TAsset extends SceneViewerAsset>({
   return (
     <section className="relative flex min-h-[310px] flex-1 flex-col overflow-hidden border-b border-line bg-preview">
       <SceneToolbar
+        asset={asset}
         pendingPreviewName={
           sceneMode === "nvd-document" && asset && asset.id !== nvdDocument?.entry.assetId ? asset.name : null
         }
@@ -200,6 +203,7 @@ export function PreviewStage<TAsset extends SceneViewerAsset>({
         nvdEditorController={nvdEditorController}
         nvdStyleDraft={nvdStyleDraft}
         nvvDocument={nvvDocument}
+        onInsertSelectedAssetIntoNvdDocument={onInsertSelectedAssetIntoNvdDocument}
         onNvdDocumentChange={onNvdDocumentChange}
         onCloseNvdDocument={onCloseNvdDocument}
         onCloseNvvDocument={onCloseNvvDocument}
@@ -239,7 +243,7 @@ export function PreviewStage<TAsset extends SceneViewerAsset>({
             onNvdDocumentActivate={onNvdDocumentActivate}
             onNvdEditorControllerChange={handleNvdEditorControllerChange}
             onNvdDocumentChange={onNvdDocumentChange}
-            onNvdTextSelectionChange={onNvdTextSelectionChange}
+            onNvdSelectionChange={onNvdSelectionChange}
             onNvdZoomChange={setNvdZoomPercent}
             nvdZoomPercent={nvdZoomPercent}
           />
@@ -304,10 +308,12 @@ function NvdDocumentEmptyPreview({ onCreateNvdDocument }: { onCreateNvdDocument:
 
 function SceneToolbar({
   mode,
+  asset,
   nvdDocument,
   nvdEditorController,
   nvdStyleDraft,
   nvvDocument,
+  onInsertSelectedAssetIntoNvdDocument,
   onCloseNvdDocument,
   onCloseNvvDocument,
   onNvdDocumentChange,
@@ -321,10 +327,12 @@ function SceneToolbar({
   nvvZoomPercent,
 }: {
   mode: SceneMode;
+  asset: SceneViewerAsset | null;
   nvdDocument: OpenedNvdDocument | null;
   nvdEditorController: NvdEditorController | null;
   nvdStyleDraft: NvdStyleDefinition | null;
   nvvDocument: OpenedNvvDocument | null;
+  onInsertSelectedAssetIntoNvdDocument: () => void;
   onCloseNvdDocument: () => void;
   onCloseNvvDocument: () => void;
   onNvdDocumentChange: (document: NvdDocument) => void;
@@ -340,6 +348,11 @@ function SceneToolbar({
   const previewHasAttention = Boolean(pendingPreviewName);
   const previewLabel = previewHasAttention ? `Asset Preview: ${pendingPreviewName} selected` : previewModeLabel;
   const formattingEnabled = Boolean(nvdEditorController || nvdStyleDraft);
+  const canInsertSelectedAsset =
+    mode === "nvd-document" &&
+    Boolean(asset) &&
+    asset?.id !== nvdDocument?.entry.assetId &&
+    Boolean(nvdEditorController?.canInsertAsset);
   const fontFamily = nvdStyleDraft?.fontFamily ?? nvdEditorController?.fontFamily ?? getNvdFontFamily(nvdDocument?.document.fontFamily);
   const fontSizePt = nvdStyleDraft?.fontSizePt ?? nvdEditorController?.fontSizePt ?? getNvdFontSizePt(nvdDocument?.document.fontSize);
   const isBold = nvdStyleDraft?.bold ?? nvdEditorController?.isBold ?? false;
@@ -435,6 +448,18 @@ function SceneToolbar({
                 <AlignmentIcon size={15} aria-hidden="true" />
               </button>
             ))}
+            {canInsertSelectedAsset ? (
+              <button
+                aria-label={`Insert ${asset?.name}`}
+                className="nvd-format-button"
+                title={`Insert ${asset?.name}`}
+                type="button"
+                onClick={onInsertSelectedAssetIntoNvdDocument}
+                onMouseDown={(event) => event.preventDefault()}
+              >
+                <FilePlus2 size={15} aria-hidden="true" />
+              </button>
+            ) : null}
           </>
         ) : null}
       </div>
@@ -474,7 +499,7 @@ function NvdDocumentMode({
   onNvdDocumentActivate,
   onNvdEditorControllerChange,
   onNvdDocumentChange,
-  onNvdTextSelectionChange,
+  onNvdSelectionChange,
   onNvdZoomChange,
   nvdZoomPercent,
 }: {
@@ -482,7 +507,7 @@ function NvdDocumentMode({
   onNvdDocumentActivate: () => void;
   onNvdEditorControllerChange: (controller: NvdEditorController) => void;
   onNvdDocumentChange: (document: NvdDocument) => void;
-  onNvdTextSelectionChange: (selection: NvdTextSelection) => void;
+  onNvdSelectionChange: (selection: NvdDocumentSelection | null) => void;
   onNvdZoomChange: (zoomPercent: number) => void;
   nvdZoomPercent: number;
 }) {
@@ -502,7 +527,7 @@ function NvdDocumentMode({
         onActivate={onNvdDocumentActivate}
         onControllerChange={onNvdEditorControllerChange}
         onDocumentChange={onNvdDocumentChange}
-        onSelectionChange={onNvdTextSelectionChange}
+        onSelectionChange={onNvdSelectionChange}
         zoomPercent={nvdZoomPercent}
       />
     </div>

@@ -1,17 +1,22 @@
 import { useRef } from "react";
-import { NVD_A4_PAGE_GAP_PX } from "../layout/nvdLayout";
+import { NVD_PAGE_GAP_PX } from "../layout/nvdLayout";
 import { getNvdPageLayoutPx } from "../layout/nvdPageLayout";
 import type { NvdPageLayout } from "../../inventoryProject";
 import {
   findNvdEmbedFragmentAtPagePoint,
+  getNvdInsertionGeometry,
+  getNvdInsertionIndexAtPagePoint,
   getNvdOffsetAtPagePoint,
   type NvdDocumentLayoutSnapshot,
   type NvdPageFragment,
 } from "../layout/nvdPageLayoutEngine";
 import type { NvdTextSelection } from "../document/nvdRichText";
-import type { NvdDocumentSelection } from "../document/nvdDocumentSelection";
+import {
+  createNvdInsertionDocumentSelection,
+  type NvdDocumentSelection,
+} from "../document/nvdDocumentSelection";
 
-export function NvdA4PageHostLayer({
+export function NvdPagedHostLayer({
   layout,
   onDocumentSelectionRequest,
   onPointerInteractionStart,
@@ -33,15 +38,16 @@ export function NvdA4PageHostLayer({
     clientX: number,
     clientY: number,
     element: HTMLDivElement,
-  ): NvdTextSelection | Extract<NvdDocumentSelection, { kind: "block" }> {
+  ): NvdTextSelection | NvdDocumentSelection {
     const bounds = element.getBoundingClientRect();
     const localX = clientX - bounds.left;
     const localY = clientY - bounds.top;
     const pageIndex = findPageIndexForLocalPoint(localY);
     const pageTopPx =
-      pageIndex * (pageLayoutPx.heightPx + NVD_A4_PAGE_GAP_PX) + pageLayoutPx.marginTopPx;
+      pageIndex * (pageLayoutPx.heightPx + NVD_PAGE_GAP_PX) + pageLayoutPx.marginTopPx;
     const leftPx = localX - pageLayoutPx.marginLeftPx;
     const topPx = localY - pageTopPx;
+    const page = pages[pageIndex];
     const embedFragment = findNvdEmbedFragmentAtPagePoint(layout, pageIndex, leftPx, topPx);
 
     if (embedFragment) {
@@ -49,6 +55,13 @@ export function NvdA4PageHostLayer({
         blockId: embedFragment.blockId,
         kind: "block",
       };
+    }
+
+    const insertionIndex = getNvdInsertionIndexAtPagePoint(layout, pageIndex, topPx);
+    const insertionGeometry = getNvdInsertionGeometry(layout, insertionIndex);
+
+    if (!page || page.lines.length === 0 || Math.abs(topPx - insertionGeometry.topPx) <= 12) {
+      return createNvdInsertionDocumentSelection(insertionIndex);
     }
 
     const offset = getNvdOffsetAtPagePoint(layout, pageIndex, leftPx, topPx);
@@ -61,14 +74,14 @@ export function NvdA4PageHostLayer({
   }
 
   function findPageIndexForLocalPoint(localY: number) {
-    const pageSpanPx = pageLayoutPx.heightPx + NVD_A4_PAGE_GAP_PX;
+    const pageSpanPx = pageLayoutPx.heightPx + NVD_PAGE_GAP_PX;
     const roughIndex = Math.floor(localY / pageSpanPx);
     return Math.min(Math.max(roughIndex, 0), Math.max(0, pages.length - 1));
   }
 
   return (
     <div
-      className="nvd-a4-page-host-layer"
+      className="nvd-paged-host-layer"
       onPointerDown={(event) => {
         onPointerInteractionStart?.();
         const selection = getSelectionFromPointerEvent(
@@ -76,7 +89,7 @@ export function NvdA4PageHostLayer({
           event.clientY,
           event.currentTarget,
         );
-        if ("blockId" in selection) {
+        if ("kind" in selection) {
           dragAnchorOffsetRef.current = null;
           onDocumentSelectionRequest(selection);
           event.preventDefault();
@@ -99,7 +112,7 @@ export function NvdA4PageHostLayer({
           event.currentTarget,
         );
 
-        if ("blockId" in selection) {
+        if ("kind" in selection) {
           return;
         }
 
@@ -116,12 +129,12 @@ export function NvdA4PageHostLayer({
     >
       {pages.map((page) => (
         <div
-          className="nvd-a4-page-host"
+          className="nvd-paged-host"
           key={page.index}
           style={{
             height: `${pageLayoutPx.contentHeightPx}px`,
             left: `${pageLayoutPx.marginLeftPx}px`,
-            top: `${page.index * (pageLayoutPx.heightPx + NVD_A4_PAGE_GAP_PX) + pageLayoutPx.marginTopPx}px`,
+            top: `${page.index * (pageLayoutPx.heightPx + NVD_PAGE_GAP_PX) + pageLayoutPx.marginTopPx}px`,
             width: `${pageLayoutPx.contentWidthPx}px`,
           }}
         />

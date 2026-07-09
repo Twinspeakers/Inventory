@@ -200,11 +200,11 @@ export function App() {
   const {
     activeNvdCharacterSpacingPt,
     activeNvdLineHeight,
+    activeNvdSelection,
     activeNvdSelectionKind,
     activeNvdSpaceAfterPt,
     activeNvdSpaceBeforePt,
     activeNvdStyleRole,
-    activeNvdTextSelection,
     hideFutureNvdStyleResetConfirmations,
     nvdStyleDefinitions,
     nvdStyleDraft,
@@ -216,10 +216,11 @@ export function App() {
     changeNvdSpaceAfterPt,
     changeNvdSpaceBeforePt,
     clearNvdStyleSelection,
-    clearNvdTextSelection,
+    clearNvdSelection,
     confirmNvdStyleReset,
     handleNvdEditorControllerChange,
-    handleNvdTextSelectionChange,
+    handleNvdSelectionChange,
+    insertAssetIntoNvdDocument,
     loadNvdStyleDefinitions,
     navigateToNvdBlock,
     redoNvd,
@@ -253,7 +254,7 @@ export function App() {
   } = useAppDerivedState({
     activeNvdDocument,
     activeNvdDocumentPath,
-    activeNvdTextSelection,
+    activeNvdSelection,
     activeView,
     assetSearchQuery,
     assetSortDirection,
@@ -382,7 +383,7 @@ export function App() {
     cancelPendingLibrarySave,
     changeSceneMode,
     clearNvdStyleSelection,
-    clearNvdTextSelection,
+    clearNvdSelection,
     handleNvdEditorControllerChange,
     loadNvdStyleDefinitions,
     openTreeNodePath,
@@ -769,6 +770,21 @@ export function App() {
     });
   }
 
+  function insertSelectedAssetIntoActiveNvdDocument() {
+    if (!selectedAsset) {
+      setStatusMessage("Select an asset before inserting it into the document.");
+      return;
+    }
+
+    insertAssetIntoNvdDocument({
+      assetId: selectedAsset.id,
+      assetKind: getNvdEmbedAssetKind(selectedAsset),
+      assetName: selectedAsset.name,
+      assetPath: selectedAsset.path,
+      ...(selectedAsset.extension.toLowerCase() === "nvv" ? { sourceDocumentKind: "nvv" } : {}),
+    });
+  }
+
   function updateSelectedModelTransform(transform: ModelTransform) {
     updateModelTransformOverride(inspectorModelKey, transform);
   }
@@ -1085,12 +1101,13 @@ export function App() {
           setDetailsColumnWidths((widths) => ({ ...widths, [columnKey]: width }));
         },
         onDismissNvdSaveReminder: dismissNvdSaveReminder,
+        onInsertSelectedAssetIntoNvdDocument: insertSelectedAssetIntoActiveNvdDocument,
         onModelInspectorResult: handleModelInspectorResult,
         onNvdDocumentActivate: activateNvdDocumentContext,
         onNvdDocumentChange: updateActiveNvdDocument,
         onNvdEditorControllerChange: handleNvdEditorControllerChange,
         onNvdStyleDraftChange: updateNvdStyleDraft,
-        onNvdTextSelectionChange: handleNvdTextSelectionChange,
+        onNvdSelectionChange: handleNvdSelectionChange,
         onNvvDocumentActivate: activateNvvDocumentContext,
         onNvvDocumentChange: updateActiveNvvDocument,
         onOpenAssetContextMenu: openAssetContextMenu,
@@ -1231,5 +1248,25 @@ export function App() {
       }}
     />
   );
+}
+
+function getNvdEmbedAssetKind(asset: Asset) {
+  if (asset.type === "Image") {
+    return "image";
+  }
+
+  if (asset.type === "3D") {
+    return "3d";
+  }
+
+  if (asset.type === "Audio") {
+    return "audio";
+  }
+
+  if (asset.type === "Archive") {
+    return "archive";
+  }
+
+  return "document";
 }
 

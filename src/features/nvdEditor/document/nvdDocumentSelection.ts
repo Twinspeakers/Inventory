@@ -55,3 +55,15 @@ export function isNvdInsertionDocumentSelection(
 ): selection is Extract<NvdDocumentSelection, { kind: "insertion" }> {
   return selection.kind === "insertion";
 }
+
+export function getNvdDocumentSelectionKind(
+  selection: NvdDocumentSelection | null | undefined,
+): NvdDocumentSelection["kind"] | "none" {
+  return selection?.kind ?? "none";
+}
+
+export function getNvdTextSelectionFromDocumentSelection(
+  selection: NvdDocumentSelection | null | undefined,
+) {
+  return selection?.kind === "text" ? selection.text : null;
+}

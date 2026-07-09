@@ -11,7 +11,7 @@ import {
   applyNvdTextEdit,
   deleteNvdBackward,
   deleteNvdForward,
-} from "../document/nvdDocumentController";
+} from "../document/nvdTextOperations";
 import { getNvdFontFamily } from "../fonts";
 import { getNvdFontSizePt } from "../primitives/nvdFontSize";
 import { getNvdLineHeight } from "../primitives/nvdLineHeight";
@@ -26,17 +26,25 @@ import {
   getNvdCaretGeometry,
   getNvdOffsetAtPagePoint,
 } from "../layout/nvdPageLayoutEngine";
-import type { NvdEditorController } from "../adapters/NvdRichTextEditor";
+import type { NvdEditorController } from "../contracts/NvdEditorController";
 import {
-  createNvdTextDocumentSelection,
   createNvdBlockDocumentSelection,
+  createNvdInsertionDocumentSelection,
+  createNvdTextDocumentSelection,
   isNvdBlockDocumentSelection,
+  isNvdInsertionDocumentSelection,
   isNvdTextDocumentSelection,
   type NvdDocumentSelection,
 } from "../document/nvdDocumentSelection";
 import {
-  removeNvdSelectedBlock,
-} from "../document/nvdDocumentModel";
+  insertNvdAssetAtSelection,
+  insertNvdParagraphAtSelection,
+  insertNvdParagraphTextAtSelection,
+  moveSelectedNvdBlock,
+  normalizeNvdDocumentSelection,
+  removeSelectedNvdBlock,
+  updateSelectedNvdEmbed,
+} from "../document/nvdDocumentOperations";
 import {
   createNvdDocumentBlocks,
   getNvdTextRunCharacterSpacingPt,
@@ -80,7 +88,7 @@ type NvdCompositionState = {
   text: string;
 } | null;
 
-export function useNvdA4DocumentController({
+export function useNvdPagedDocumentController({
   blocks,
   blockLayouts,
   defaultFontFamily,
@@ -110,6 +118,7 @@ export function useNvdA4DocumentController({
   const textSelection = selection && isNvdTextDocumentSelection(selection) ? selection.text : null;
   const hasTextSelection = textSelection !== null;
   const hasBlockSelection = selection ? isNvdBlockDocumentSelection(selection) : false;
+  const hasInsertionSelection = selection ? isNvdInsertionDocumentSelection(selection) : false;
   const effectiveSelection = textSelection ?? { start: 0, end: 0 };
   const normalizedRuns = useMemo(() => normalizeNvdTextRuns(runs), [runs]);
   const text = useMemo(() => getNvdTextRunsText(normalizedRuns), [normalizedRuns]);
@@ -249,6 +258,22 @@ export function useNvdA4DocumentController({
     refreshController();
   }
 
+  function commitDocumentOperation(
+    result: { blocks: NvdBlock[]; selection: NvdDocumentSelection | null },
+    options?: {
+      onRedo?: () => void;
+      onUndo?: () => void;
+      trackHistory?: boolean;
+    },
+  ) {
+    commitBlockDocumentChange(
+      result.blocks,
+      normalizeNvdDocumentSelection(result.blocks, result.selection) ??
+        createNvdInsertionDocumentSelection(result.blocks.length),
+      options,
+    );
+  }
+
   function updateTypingStyle(
     update: (style: NvdResolvedTypingStyle) => NvdResolvedTypingStyle,
   ) {
@@ -357,7 +382,17 @@ export function useNvdA4DocumentController({
     typingStyleRef.current = null;
   }
 
+  function insertParagraphSelection() {
+    commitDocumentOperation(insertNvdParagraphAtSelection(blocks, selection, styleDefinitions.p));
+    typingStyleRef.current = getTypingStyleFromDefinition(styleDefinitions.p);
+  }
+
   function insertParagraphBreak() {
+    if (hasBlockSelection || hasInsertionSelection) {
+      insertParagraphSelection();
+      return;
+    }
+
     const paragraphRanges = getParagraphRanges(text, blockLayouts.length);
     const currentParagraphIndex = touchedParagraphIndexes[0] ?? 0;
     const currentParagraphRange = paragraphRanges[currentParagraphIndex];
@@ -391,6 +426,20 @@ export function useNvdA4DocumentController({
 
   function insertPlainText(insertedText: string) {
     if (!insertedText) {
+      return;
+    }
+
+    if (hasBlockSelection || hasInsertionSelection) {
+      commitDocumentOperation(
+        insertNvdParagraphTextAtSelection(
+          blocks,
+          selection,
+          styleDefinitions.p,
+          insertedText,
+          [createStyledInsertRun(insertedText, activeTypingStyle)],
+        ),
+      );
+      typingStyleRef.current = null;
       return;
     }
 
@@ -429,7 +478,7 @@ export function useNvdA4DocumentController({
         clearInputBridgeValue(event.currentTarget);
       }
     },
-    [activeTypingStyle, blockLayouts, effectiveSelection, normalizedRuns],
+    [insertParagraphBreak],
   );
 
   const onInput = useMemo<FormEventHandler<HTMLTextAreaElement>>(
@@ -455,7 +504,7 @@ export function useNvdA4DocumentController({
       insertPlainText(insertedText);
       clearInputBridgeValue(event.currentTarget);
     },
-    [activeTypingStyle, blockLayouts, effectiveSelection, normalizedRuns],
+    [insertPlainText],
   );
 
   const onKeyDown = useMemo<KeyboardEventHandler<HTMLTextAreaElement>>(
@@ -485,9 +534,13 @@ export function useNvdA4DocumentController({
       if (event.key === "Backspace") {
         event.preventDefault();
 
-        if (selection && isNvdBlockDocumentSelection(selection)) {
-          commitBlockDocumentChange(removeNvdSelectedBlock(blocks, selection).blocks, removeNvdSelectedBlock(blocks, selection).selection);
+        if (hasBlockSelection) {
+          commitDocumentOperation(removeSelectedNvdBlock(blocks, selection));
           typingStyleRef.current = null;
+          return;
+        }
+
+        if (hasInsertionSelection) {
           return;
         }
 
@@ -498,9 +551,13 @@ export function useNvdA4DocumentController({
       if (event.key === "Delete") {
         event.preventDefault();
 
-        if (selection && isNvdBlockDocumentSelection(selection)) {
-          commitBlockDocumentChange(removeNvdSelectedBlock(blocks, selection).blocks, removeNvdSelectedBlock(blocks, selection).selection);
+        if (hasBlockSelection) {
+          commitDocumentOperation(removeSelectedNvdBlock(blocks, selection));
           typingStyleRef.current = null;
+          return;
+        }
+
+        if (hasInsertionSelection) {
           return;
         }
 
@@ -509,20 +566,12 @@ export function useNvdA4DocumentController({
       }
 
       if (event.key === "Enter") {
-        if (hasBlockSelection) {
-          return;
-        }
-
         event.preventDefault();
         insertParagraphBreak();
         return;
       }
 
       if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key.length === 1) {
-        if (hasBlockSelection) {
-          return;
-        }
-
         event.preventDefault();
         insertPlainText(event.key);
         return;
@@ -530,6 +579,21 @@ export function useNvdA4DocumentController({
 
       if (event.key === "ArrowLeft") {
         event.preventDefault();
+        if (selection && isNvdBlockDocumentSelection(selection)) {
+          const blockIndex = blocks.findIndex((block) => block.id === selection.blockId);
+          onDocumentSelectionRequest(createNvdInsertionDocumentSelection(Math.max(0, blockIndex)));
+          typingStyleRef.current = null;
+          refreshController();
+          return;
+        }
+
+        if (selection && isNvdInsertionDocumentSelection(selection)) {
+          onDocumentSelectionRequest(createNvdInsertionDocumentSelection(Math.max(0, selection.blockIndex - 1)));
+          typingStyleRef.current = null;
+          refreshController();
+          return;
+        }
+
         onDocumentSelectionRequest(
           createNvdTextDocumentSelection(
             moveSelectionHorizontally(effectiveSelection, -1).start,
@@ -543,6 +607,21 @@ export function useNvdA4DocumentController({
 
       if (event.key === "ArrowRight") {
         event.preventDefault();
+        if (selection && isNvdBlockDocumentSelection(selection)) {
+          const blockIndex = blocks.findIndex((block) => block.id === selection.blockId);
+          onDocumentSelectionRequest(createNvdInsertionDocumentSelection(Math.max(0, blockIndex + 1)));
+          typingStyleRef.current = null;
+          refreshController();
+          return;
+        }
+
+        if (selection && isNvdInsertionDocumentSelection(selection)) {
+          onDocumentSelectionRequest(createNvdInsertionDocumentSelection(selection.blockIndex + 1));
+          typingStyleRef.current = null;
+          refreshController();
+          return;
+        }
+
         onDocumentSelectionRequest(
           createNvdTextDocumentSelection(
             moveSelectionHorizontally(effectiveSelection, 1, text.length).start,
@@ -555,6 +634,14 @@ export function useNvdA4DocumentController({
       }
 
       if (event.key === "ArrowUp") {
+        if (selection && isNvdInsertionDocumentSelection(selection)) {
+          event.preventDefault();
+          onDocumentSelectionRequest(createNvdInsertionDocumentSelection(Math.max(0, selection.blockIndex - 1)));
+          typingStyleRef.current = null;
+          refreshController();
+          return;
+        }
+
         if (!layoutSnapshot) {
           return;
         }
@@ -568,6 +655,14 @@ export function useNvdA4DocumentController({
       }
 
       if (event.key === "ArrowDown") {
+        if (selection && isNvdInsertionDocumentSelection(selection)) {
+          event.preventDefault();
+          onDocumentSelectionRequest(createNvdInsertionDocumentSelection(selection.blockIndex + 1));
+          typingStyleRef.current = null;
+          refreshController();
+          return;
+        }
+
         if (!layoutSnapshot) {
           return;
         }
@@ -605,7 +700,7 @@ export function useNvdA4DocumentController({
         refreshController();
       }
     },
-    [activeTypingStyle, blockLayouts, blocks, commitBlockDocumentChange, compositionState, commitInlineStyleChange, effectiveSelection, hasBlockSelection, layoutSnapshot, normalizedRuns, onDocumentSelectionRequest, selection, text.length],
+    [blocks, commitDocumentOperation, compositionState, effectiveSelection, hasBlockSelection, hasInsertionSelection, insertParagraphBreak, insertPlainText, layoutSnapshot, normalizedRuns, onDocumentSelectionRequest, selection, text.length],
   );
 
   const onPaste = useMemo<ClipboardEventHandler<HTMLTextAreaElement>>(
@@ -616,18 +711,10 @@ export function useNvdA4DocumentController({
         return;
       }
 
-      if (hasBlockSelection) {
-        return;
-      }
-
       event.preventDefault();
-      applyDocumentEdit(
-        applyNvdTextEdit(normalizedRuns, blockLayouts, effectiveSelection, [
-          createStyledInsertRun(pastedText, activeTypingStyle),
-        ]),
-      );
+      insertPlainText(pastedText);
     },
-    [activeTypingStyle, blockLayouts, effectiveSelection, hasBlockSelection, normalizedRuns],
+    [insertPlainText],
   );
 
   const onCopy = useMemo<ClipboardEventHandler<HTMLTextAreaElement>>(
@@ -677,6 +764,10 @@ export function useNvdA4DocumentController({
 
   const onCompositionStart = useMemo<CompositionEventHandler<HTMLTextAreaElement>>(
     () => () => {
+      if (!hasTextSelection || hasBlockSelection || hasInsertionSelection) {
+        return;
+      }
+
       setCompositionState({
         baseBlockLayouts: blockLayouts.map((layout) => ({ ...layout })),
         baseRuns: normalizeNvdTextRuns(normalizedRuns),
@@ -684,7 +775,7 @@ export function useNvdA4DocumentController({
         text: "",
       });
     },
-    [blockLayouts, effectiveSelection, normalizedRuns],
+    [blockLayouts, effectiveSelection, hasBlockSelection, hasInsertionSelection, hasTextSelection, normalizedRuns],
   );
 
   const onCompositionUpdate = useMemo<CompositionEventHandler<HTMLTextAreaElement>>(
@@ -729,6 +820,7 @@ export function useNvdA4DocumentController({
   const controller = useMemo<NvdEditorController>(() => ({
     canRedo: historyRef.current.redoStack.length > 0,
     canUndo: historyRef.current.undoStack.length > 0,
+    canInsertAsset: true,
     characterSpacingPt: getUniformInlineValue(
       normalizedRuns,
       effectiveSelection,
@@ -741,7 +833,8 @@ export function useNvdA4DocumentController({
     isBold: activeTypingStyle.bold,
     isItalic: activeTypingStyle.italic,
     lineHeight: getUniformBlockValue(blockLayouts, touchedParagraphIndexes, "lineHeight"),
-    selectionKind: hasTextSelection ? "text" : hasBlockSelection ? "block" : "none",
+    selection,
+    selectionKind: hasTextSelection ? "text" : hasBlockSelection ? "block" : hasInsertionSelection ? "insertion" : "none",
     spaceAfterPt: getUniformBlockValue(blockLayouts, touchedParagraphIndexes, "spaceAfterPt"),
     spaceBeforePt: getUniformBlockValue(blockLayouts, touchedParagraphIndexes, "spaceBeforePt"),
     textAlign: getUniformBlockValue(blockLayouts, touchedParagraphIndexes, "textAlign"),
@@ -770,6 +863,22 @@ export function useNvdA4DocumentController({
       onDocumentSelectionRequest(createNvdTextDocumentSelection(nextSelection.start, nextSelection.end));
       refreshController();
     },
+    insertAsset: (asset) => {
+      commitDocumentOperation(insertNvdAssetAtSelection(blocks, selection, asset));
+      typingStyleRef.current = null;
+    },
+    moveBlock: (fromIndex, toIndex) => {
+      const targetBlock = blocks[fromIndex];
+
+      if (!targetBlock) {
+        return;
+      }
+
+      commitDocumentOperation(
+        moveSelectedNvdBlock(blocks, createNvdBlockDocumentSelection(targetBlock.id), toIndex),
+      );
+      typingStyleRef.current = null;
+    },
     redo: () => {
       const entry = historyRef.current.redoStack.pop();
 
@@ -781,6 +890,20 @@ export function useNvdA4DocumentController({
       entry.onRedo?.();
       applySnapshot(entry.after);
       typingStyleRef.current = null;
+      refreshController();
+    },
+    removeSelectedBlock: () => {
+      commitDocumentOperation(removeSelectedNvdBlock(blocks, selection));
+      typingStyleRef.current = null;
+    },
+    setInsertionPoint: (blockIndex) => {
+      typingStyleRef.current = null;
+      onDocumentSelectionRequest(createNvdInsertionDocumentSelection(blockIndex));
+      refreshController();
+    },
+    setSelection: (nextSelection) => {
+      typingStyleRef.current = null;
+      onDocumentSelectionRequest(nextSelection);
       refreshController();
     },
     setCharacterSpacingPt: (characterSpacingPt) => {
@@ -844,19 +967,32 @@ export function useNvdA4DocumentController({
       typingStyleRef.current = null;
       refreshController();
     },
+    updateSelectedEmbed: (updates) => {
+      commitDocumentOperation(updateSelectedNvdEmbed(blocks, selection, updates));
+      typingStyleRef.current = null;
+    },
     updateStyle: updateDocumentStyleDefinition,
   }), [
     activeTypingStyle,
+    applyStyleToTouchedParagraphs,
     blockLayouts,
     blocks,
+    commitBlockLayoutChange,
+    commitDocumentOperation,
+    commitInlineStyleChange,
     defaultFontFamily,
     defaultFontSizePt,
     effectiveSelection,
+    hasBlockSelection,
+    hasInsertionSelection,
+    hasTextSelection,
     normalizedRuns,
     onDocumentSelectionRequest,
+    selection,
     styleDefinitions,
     text,
     touchedParagraphIndexes,
+    updateDocumentStyleDefinition,
   ]);
 
   useEffect(() => {
