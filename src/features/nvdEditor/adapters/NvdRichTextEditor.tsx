@@ -43,6 +43,7 @@ export type NvdEditorController = {
   isBold: boolean;
   isItalic: boolean;
   lineHeight: number | null;
+  selectionKind: "block" | "none" | "text";
   spaceAfterPt: number | null;
   spaceBeforePt: number | null;
   textAlign: NvdTextAlignment | null;
@@ -381,6 +382,7 @@ export function NvdRichTextEditor({
       isBold: activeEditor.isActive("bold"),
       isItalic: activeEditor.isActive("italic"),
       lineHeight: getActiveNvdLineHeight(activeEditor),
+      selectionKind: "text",
       spaceAfterPt: getActiveNvdBlockNumber(activeEditor, "spaceAfterPt", getNvdParagraphSpacingPt),
       spaceBeforePt: getActiveNvdBlockNumber(activeEditor, "spaceBeforePt", getNvdParagraphSpacingPt),
       textAlign: getActiveNvdTextAlignment(activeEditor),

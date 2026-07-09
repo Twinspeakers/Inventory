@@ -3,12 +3,15 @@ import { DEFAULT_NVD_PAGE_LAYOUT } from "./nvdPageLayout";
 import type { NvdBlockLayout } from "../document/nvdRichText";
 import { DEFAULT_NVD_STYLE_DEFINITIONS } from "../document/nvdStyles";
 import {
+  findNvdEmbedFragmentAtPagePoint,
   findNvdLineFragmentForOffset,
   findNvdPageFragmentForOffset,
   findNvdParagraphFragmentForOffset,
+  getNvdBlockSelectionGeometry,
   getNvdCaretGeometry,
   getNvdOffsetAtPagePoint,
   getNvdSelectionGeometry,
+  layoutNvdDocument,
   layoutNvdTextRuns,
 } from "./nvdPageLayoutEngine";
 
@@ -360,5 +363,126 @@ describe("NVD page layout engine", () => {
     expect(layout.pages[0].text).toBe("One\nTwo\nThree\nThis paragraph ");
     expect(layout.pages[1].text).toBe("wraps onto several lines when the content ");
     expect(layout.pages[2].text).toBe("width is narrow.");
+  });
+
+  it("lays out embed blocks between text paragraphs and exposes block hit testing", () => {
+    const layout = layoutNvdDocument({
+      blocks: [
+        {
+          id: "intro",
+          kind: "paragraph",
+          text: "Intro paragraph before the image block.",
+        },
+        {
+          id: "embed-1",
+          kind: "embed",
+          embed: {
+            alignment: "center",
+            assetId: 4,
+            assetKind: "image",
+            assetName: "Reference",
+            assetPath: "workspace/reference.png",
+            caption: "Figure 1",
+            displayMode: "custom",
+            heightPx: 180,
+            widthPx: 240,
+          },
+        },
+        {
+          id: "outro",
+          kind: "paragraph",
+          text: "Outro paragraph after the image block.",
+        },
+      ],
+      fontFamily: "Inter",
+      fontSize: "12pt",
+      pageLayout: DEFAULT_NVD_PAGE_LAYOUT,
+      styles: DEFAULT_NVD_STYLE_DEFINITIONS,
+    });
+
+    const page = layout.pages[0];
+    const embedFragment = page.embedFragments[0];
+    const blockSelection = getNvdBlockSelectionGeometry(layout, "embed-1");
+    const hitFragment = findNvdEmbedFragmentAtPagePoint(
+      layout,
+      page.index,
+      embedFragment.leftPx + 12,
+      embedFragment.topPx + 12,
+    );
+
+    expect(embedFragment).toBeDefined();
+    expect(page.lines[0].topPx).toBeLessThan(embedFragment.topPx);
+    expect(page.lines[page.lines.length - 1].topPx).toBeGreaterThan(embedFragment.topPx);
+    expect(blockSelection).not.toBeNull();
+    expect(blockSelection?.widthPx).toBe(embedFragment.widthPx);
+    expect(hitFragment?.blockId).toBe("embed-1");
+  });
+
+  it("keeps a heading with its following embed when keep-with-next is enabled", () => {
+    const layout = layoutNvdDocument({
+      blocks: [
+        {
+          id: "body-a",
+          kind: "paragraph",
+          text: "One paragraph fills the top of the page a little more than a single word would.",
+        },
+        {
+          id: "body-b",
+          kind: "paragraph",
+          text: "Two paragraph continues the body content so the heading should not be stranded below it.",
+        },
+        {
+          id: "body-c",
+          kind: "paragraph",
+          text: "Three paragraph adds enough extra body copy that the heading and embed need to move as a pair.",
+        },
+        {
+          id: "heading",
+          keepLinesTogether: true,
+          keepWithNext: true,
+          kind: "heading",
+          text: "Heading",
+        },
+        {
+          id: "embed-2",
+          kind: "embed",
+          embed: {
+            alignment: "center",
+            assetId: 9,
+            assetKind: "image",
+            assetName: "Diagram",
+            assetPath: "workspace/diagram.png",
+            displayMode: "custom",
+            heightPx: 160,
+            widthPx: 220,
+          },
+        },
+      ],
+      fontFamily: "Inter",
+      fontSize: "12pt",
+      pageLayout: {
+        pageSize: "custom",
+        widthPt: 200,
+        heightPt: 280,
+        marginTopPt: 14,
+        marginRightPt: 20,
+        marginBottomPt: 14,
+        marginLeftPt: 20,
+      },
+      styles: DEFAULT_NVD_STYLE_DEFINITIONS,
+    });
+
+    expect(layout.pages[0].text).toContain("One paragraph");
+    expect(layout.pages[0].text).toContain("Two paragraph");
+    expect(layout.pages[0].text).toContain("Three paragraph");
+    expect(layout.pages[0].embedFragments).toHaveLength(0);
+    const headingPage = layout.pages.find((page) => page.text.includes("Heading"));
+    const embedPage = layout.pages.find((page) =>
+      page.embedFragments.some((fragment) => fragment.blockId === "embed-2"),
+    );
+
+    expect(headingPage).toBeDefined();
+    expect(embedPage).toBeDefined();
+    expect(embedPage?.index).toBe(headingPage?.index);
   });
 });

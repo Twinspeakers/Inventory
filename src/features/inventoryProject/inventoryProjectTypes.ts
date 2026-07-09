@@ -57,7 +57,24 @@ export type ActiveInventory = {
 
 export type NvdTextAlignment = "left" | "center" | "right" | "justify";
 
-export type NvdBlock = {
+export type NvdEmbedAlignment = "left" | "center" | "right";
+
+export type NvdEmbedDisplayMode = "fit" | "actual" | "custom";
+
+export type NvdAssetEmbed = {
+  assetId: number;
+  assetKind: "image" | string;
+  assetName: string;
+  assetPath: string;
+  alignment?: NvdEmbedAlignment;
+  caption?: string;
+  displayMode?: NvdEmbedDisplayMode;
+  heightPx?: number;
+  sourceDocumentKind?: "nvv" | string;
+  widthPx?: number;
+};
+
+export type NvdTextBlock = {
   id: string;
   kind: "paragraph" | "heading" | string;
   keepLinesTogether?: boolean;
@@ -72,6 +89,14 @@ export type NvdBlock = {
   widowLineCount?: number;
 };
 
+export type NvdEmbedBlock = {
+  id: string;
+  kind: "embed";
+  embed: NvdAssetEmbed;
+};
+
+export type NvdBlock = NvdTextBlock | NvdEmbedBlock;
+
 export type NvdTextStyle = {
   bold?: boolean;
   characterSpacingPt?: number;
@@ -85,7 +110,7 @@ export type NvdTextRun = {
   style?: NvdTextStyle;
 };
 
-export type NvdLayoutMode = "pageless" | "a4";
+export type NvdLayoutMode = "a4";
 
 export type NvdPageSizePreset = "a4" | "custom";
 

@@ -14,6 +14,7 @@ import {
 
 export function ParagraphSettings({
   characterSpacingPt,
+  controlsEnabled,
   lineHeight,
   onCharacterSpacingPtChange,
   onLineHeightChange,
@@ -23,6 +24,7 @@ export function ParagraphSettings({
   spaceBeforePt,
 }: {
   characterSpacingPt: number | null;
+  controlsEnabled: boolean;
   lineHeight: number | null;
   onCharacterSpacingPtChange: (characterSpacingPt: number, finalizeStyle?: boolean) => void;
   onLineHeightChange: (lineHeight: number, finalizeStyle?: boolean) => void;
@@ -57,6 +59,7 @@ export function ParagraphSettings({
                 onChange={onSpaceBeforePtChange}
                 suffix="pt"
                 step="1"
+                disabled={!controlsEnabled}
                 value={spaceBeforePt}
               />
             </label>
@@ -70,6 +73,7 @@ export function ParagraphSettings({
                 onChange={onSpaceAfterPtChange}
                 suffix="pt"
                 step="1"
+                disabled={!controlsEnabled}
                 value={spaceAfterPt}
               />
             </label>
@@ -85,6 +89,7 @@ export function ParagraphSettings({
                 normalize={getNvdLineHeight}
                 onChange={onLineHeightChange}
                 step="0.05"
+                disabled={!controlsEnabled}
                 value={lineHeight}
               />
             </label>
@@ -98,6 +103,7 @@ export function ParagraphSettings({
                 onChange={onCharacterSpacingPtChange}
                 suffix="pt"
                 step="0.1"
+                disabled={!controlsEnabled}
                 value={characterSpacingPt}
               />
             </label>
@@ -114,6 +120,7 @@ function ParagraphNumberInput({
   min,
   normalize,
   onChange,
+  disabled = false,
   step,
   suffix,
   value,
@@ -123,19 +130,25 @@ function ParagraphNumberInput({
   min: number;
   normalize: (value: number | string | null | undefined) => number;
   onChange: (value: number, finalizeStyle?: boolean) => void;
+  disabled?: boolean;
   step: string;
   suffix?: string;
   value: number | null;
 }) {
-  const [draft, setDraft] = useState(value?.toString() ?? "");
+  const resolvedValue = disabled ? null : value;
+  const [draft, setDraft] = useState(resolvedValue?.toString() ?? "");
 
   useEffect(() => {
-    setDraft(value?.toString() ?? "");
-  }, [value]);
+    setDraft(resolvedValue?.toString() ?? "");
+  }, [resolvedValue]);
 
   function commit(finalizeStyle = false) {
+    if (disabled) {
+      return;
+    }
+
     if (!draft.trim()) {
-      setDraft(value?.toString() ?? "");
+      setDraft(resolvedValue?.toString() ?? "");
       return;
     }
 
@@ -145,6 +158,10 @@ function ParagraphNumberInput({
   }
 
   function stepDraft(direction: -1 | 1) {
+    if (disabled) {
+      return;
+    }
+
     const currentValue = Number(draft);
     const fallbackValue = value ?? min;
     const nextValue = normalize((Number.isFinite(currentValue) ? currentValue : fallbackValue) + Number(step) * direction);
@@ -155,10 +172,11 @@ function ParagraphNumberInput({
     <input
       aria-label={ariaLabel}
       className={`paragraph-setting-select ${suffix ? "paragraph-setting-select-with-suffix" : "paragraph-setting-select-with-spinner"}`}
+      disabled={disabled}
       inputMode="decimal"
       max={max}
       min={min}
-      placeholder={value === null ? "Mixed" : undefined}
+      placeholder={disabled ? undefined : resolvedValue === null ? "Mixed" : undefined}
       step={step}
       type="number"
       value={draft}
@@ -174,9 +192,9 @@ function ParagraphNumberInput({
   );
 
   return (
-    <span className="paragraph-setting-field mt-1">
+    <span className={`paragraph-setting-field mt-1${disabled ? " paragraph-setting-field-disabled" : ""}`}>
       {input}
-      {suffix ? (
+      {suffix && draft.trim() ? (
         <span
           className="paragraph-setting-suffix"
           style={{ left: `calc(0.5rem + ${Math.max(draft.length, 1)}ch + 6px)` }}
@@ -189,6 +207,7 @@ function ParagraphNumberInput({
         <button
           aria-label={`Increase ${ariaLabel.toLowerCase()}`}
           className="paragraph-setting-spinner-button"
+          disabled={disabled}
           tabIndex={-1}
           type="button"
           onClick={() => stepDraft(1)}
@@ -199,6 +218,7 @@ function ParagraphNumberInput({
         <button
           aria-label={`Decrease ${ariaLabel.toLowerCase()}`}
           className="paragraph-setting-spinner-button"
+          disabled={disabled}
           tabIndex={-1}
           type="button"
           onClick={() => stepDraft(-1)}

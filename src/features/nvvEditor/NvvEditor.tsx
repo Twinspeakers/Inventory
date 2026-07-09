@@ -59,10 +59,12 @@ type NvvBounds = {
 
 export function NvvEditor({
   document,
+  onActivate,
   onChange,
   zoomPercent,
 }: {
   document: NvvDocument;
+  onActivate: () => void;
   onChange: (document: NvvDocument, options?: NvvDocumentChangeOptions) => void;
   zoomPercent: number;
 }) {
@@ -225,6 +227,8 @@ export function NvvEditor({
   }
 
   function handleCanvasPointerDown(event: ReactPointerEvent<SVGSVGElement>) {
+    onActivate();
+
     if (activeTool === "select" && isPrimaryPointer(event)) {
       setActivePathId(null);
     }

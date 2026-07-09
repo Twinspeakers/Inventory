@@ -27,7 +27,6 @@ export { NvdA4PageHostLayer } from "./a4/NvdA4PageHostLayer";
 export { NvdA4ProjectedTextLayer } from "./a4/NvdA4ProjectedTextLayer";
 export { NvdA4SelectionOverlay } from "./a4/NvdA4SelectionOverlay";
 export { NvdA4PageEditorSurface } from "./surfaces/NvdA4PageEditorSurface";
-export { NvdPagelessEditorSurface } from "./pageless/NvdPagelessEditorSurface";
 export { NvdA4InfrastructureEditor } from "./a4/NvdA4InfrastructureEditor";
 export { NvdInputBridge } from "./a4/NvdInputBridge";
 export { useNvdA4SelectionController } from "./a4/useNvdA4SelectionController";
@@ -135,12 +134,14 @@ export {
   getNvdDocumentFontFamilies,
   getNvdDocumentRuns,
   getNvdDocumentTextAlignments,
+  getNvdTextBlocks,
   getNvdTextAlignment,
   getNvdTextRunFontFamily,
   getNvdTextRunFontSizePt,
   getNvdTextRunsText,
   isNvdTextRunBold,
   isNvdTextRunItalic,
+  isNvdTextBlock,
   NVD_TEXT_ALIGNMENTS,
   normalizeNvdTextRuns,
   replaceNvdTextRunRange,
@@ -148,3 +149,23 @@ export {
   splitNvdTextRunsIntoParagraphs,
 } from "./document/nvdRichText";
 export type { NvdBlockLayout, NvdTextSelection } from "./document/nvdRichText";
+export {
+  createNvdEmbedBlock,
+  findNvdBlockIndexById,
+  insertNvdBlock,
+  moveNvdBlock,
+  removeNvdBlockAtIndex,
+  removeNvdBlockById,
+  removeNvdSelectedBlock,
+  resolveNvdInsertionIndex,
+} from "./document/nvdDocumentModel";
+export type { NvdDocumentBlockOperationResult } from "./document/nvdDocumentModel";
+export {
+  createNvdBlockDocumentSelection,
+  createNvdInsertionDocumentSelection,
+  createNvdTextDocumentSelection,
+  isNvdBlockDocumentSelection,
+  isNvdInsertionDocumentSelection,
+  isNvdTextDocumentSelection,
+} from "./document/nvdDocumentSelection";
+export type { NvdDocumentSelection } from "./document/nvdDocumentSelection";

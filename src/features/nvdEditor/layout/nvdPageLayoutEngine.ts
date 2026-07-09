@@ -1,4 +1,4 @@
-import type { NvdDocument, NvdPageLayout, NvdTextRun } from "../../inventoryProject";
+import type { NvdBlock, NvdDocument, NvdPageLayout, NvdTextRun } from "../../inventoryProject";
 import { getNvdFontCssStack } from "../fonts";
 import { getNvdFontSizePt, getNvdFontSizePx } from "../primitives/nvdFontSize";
 import { getNvdLineHeight } from "../primitives/nvdLineHeight";
@@ -16,6 +16,7 @@ import {
   getNvdTextRunFontFamily,
   getNvdTextRunFontSizePt,
   getNvdTextRunsText,
+  isNvdTextBlock,
   isNvdTextRunBold,
   isNvdTextRunItalic,
   normalizeNvdTextRuns,
@@ -88,9 +89,29 @@ export type NvdParagraphFragment = {
   topPx: number;
 };
 
+export type NvdEmbedFragment = {
+  alignment: "left" | "center" | "right";
+  assetKind: string;
+  assetName: string;
+  assetPath: string;
+  blockId: string;
+  blockIndex: number;
+  caption?: string;
+  displayMode: "fit" | "actual" | "custom";
+  heightPx: number;
+  leftPx: number;
+  mediaHeightPx: number;
+  mediaWidthPx: number;
+  pageIndex: number;
+  sourceDocumentKind?: string;
+  topPx: number;
+  widthPx: number;
+};
+
 export type NvdPageFragment = NvdTextPage & {
   contentBottomPx: number;
   contentTopPx: number;
+  embedFragments: NvdEmbedFragment[];
   lineEndIndex: number;
   lineStartIndex: number;
   lines: NvdLineFragment[];
@@ -126,18 +147,42 @@ export type NvdSelectionRect = {
   widthPx: number;
 };
 
+export type NvdBlockSelectionGeometry = {
+  blockId: string;
+  heightPx: number;
+  leftPx: number;
+  pageIndex: number;
+  topPx: number;
+  widthPx: number;
+};
+
 export function layoutNvdDocument(
   document: Pick<NvdDocument, "blocks" | "fontFamily" | "fontSize" | "styles" | "pageLayout">,
 ) {
-  const paragraphStyle = getNvdDocumentStyleDefinitions(document.styles).p;
+  const styleDefinitions = getNvdDocumentStyleDefinitions(document.styles);
+  const paragraphStyle = styleDefinitions.p;
+  const normalizedRuns = getNvdDocumentRuns(document);
+  const blockLayouts = getNvdDocumentBlockLayouts(document);
 
-  return layoutNvdTextRuns(
-    getNvdDocumentRuns(document),
+  if (!document.blocks.some((block) => block.kind === "embed")) {
+    return layoutNvdTextRuns(
+      normalizedRuns,
+      paragraphStyle.fontFamily,
+      paragraphStyle.fontSizePt,
+      blockLayouts,
+      document.pageLayout,
+      styleDefinitions,
+    );
+  }
+
+  return layoutNvdMixedDocument(
+    document.blocks,
     paragraphStyle.fontFamily,
     paragraphStyle.fontSizePt,
-    getNvdDocumentBlockLayouts(document),
+    normalizedRuns,
+    blockLayouts,
     document.pageLayout,
-    getNvdDocumentStyleDefinitions(document.styles),
+    styleDefinitions,
   );
 }
 
@@ -401,6 +446,51 @@ export function getNvdSelectionGeometry(
   return rects;
 }
 
+export function getNvdBlockSelectionGeometry(
+  layout: NvdDocumentLayoutSnapshot,
+  blockId: string,
+) {
+  for (const page of layout.pages) {
+    const embedFragment = page.embedFragments.find((fragment) => fragment.blockId === blockId);
+
+    if (embedFragment) {
+      return {
+        blockId,
+        heightPx: embedFragment.heightPx,
+        leftPx: embedFragment.leftPx,
+        pageIndex: embedFragment.pageIndex,
+        topPx: embedFragment.topPx,
+        widthPx: embedFragment.widthPx,
+      } satisfies NvdBlockSelectionGeometry;
+    }
+  }
+
+  return null;
+}
+
+export function findNvdEmbedFragmentAtPagePoint(
+  layout: NvdDocumentLayoutSnapshot,
+  pageIndex: number,
+  leftPx: number,
+  topPx: number,
+) {
+  const page = layout.pages[pageIndex];
+
+  if (!page) {
+    return null;
+  }
+
+  return (
+    page.embedFragments.find(
+      (fragment) =>
+        leftPx >= fragment.leftPx &&
+        leftPx <= fragment.leftPx + fragment.widthPx &&
+        topPx >= fragment.topPx &&
+        topPx <= fragment.topPx + fragment.heightPx,
+    ) ?? null
+  );
+}
+
 export function getNvdOffsetAtPagePoint(
   layout: NvdDocumentLayoutSnapshot,
   pageIndex: number,
@@ -494,6 +584,573 @@ function positionNvdTextRuns(
   }
 
   return positionedRuns;
+}
+
+type NvdEmbedLayoutSeed = Omit<NvdEmbedFragment, "pageIndex" | "topPx"> & {
+  anchorOffset: number;
+};
+
+type NvdMixedTextBlockSeed = {
+  anchorOffset: number;
+  blockIndex: number;
+  blockLayout: NvdBlockLayout;
+  firstUnitHeightPx: number;
+  kind: "text";
+  lineSeeds: Array<Omit<NvdLineFragment, "index" | "pageIndex" | "topPx">>;
+  textBlockIndex: number;
+  totalHeightPx: number;
+};
+
+type NvdMixedEmbedBlockSeed = {
+  anchorOffset: number;
+  blockIndex: number;
+  firstUnitHeightPx: number;
+  kind: "embed";
+  seed: NvdEmbedLayoutSeed;
+  totalHeightPx: number;
+};
+
+type NvdMixedBlockSeed = NvdMixedTextBlockSeed | NvdMixedEmbedBlockSeed;
+
+type NvdPagePlacementCursor = {
+  nextLineIndex: number;
+  pageHeightPx: number;
+  pageIndex: number;
+  topPx: number;
+};
+
+function layoutNvdMixedDocument(
+  blocks: readonly NvdBlock[],
+  defaultFontFamily: string | null | undefined,
+  defaultFontSize: string | number | null | undefined,
+  runs: NvdTextRun[],
+  blockLayouts: readonly NvdBlockLayout[],
+  pageLayout?: Partial<NvdPageLayout> | null,
+  styleDefinitions?: Record<NvdStyleRole, NvdStyleDefinition>,
+) {
+  const normalizedRuns = normalizeNvdTextRuns(runs);
+  const normalizedDefaultFontSizePt = getNvdFontSizePt(defaultFontSize);
+  const normalizedPageLayout = getNvdPageLayout(pageLayout);
+  const normalizedDefaultFontFamily = defaultFontFamily ?? "";
+  const cacheKey = JSON.stringify([
+    "mixed",
+    normalizedDefaultFontFamily,
+    normalizedDefaultFontSizePt,
+    blocks,
+    blockLayouts,
+    normalizedPageLayout,
+    styleDefinitions,
+  ]);
+  const cachedLayout = nvdLayoutCache.get(cacheKey);
+
+  if (cachedLayout) {
+    nvdLayoutCache.delete(cacheKey);
+    nvdLayoutCache.set(cacheKey, cachedLayout);
+    return cachedLayout;
+  }
+
+  const text = getNvdTextRunsText(normalizedRuns);
+  const { embedFragments, lines, pageAnchorOffsets } = createMixedBlockFragments(
+    blocks,
+    normalizedDefaultFontFamily,
+    normalizedDefaultFontSizePt,
+    blockLayouts,
+    normalizedPageLayout,
+    styleDefinitions,
+  );
+  const pages = createMixedPageFragments(
+    normalizedRuns,
+    text,
+    lines,
+    embedFragments,
+    blockLayouts,
+    normalizedPageLayout,
+    pageAnchorOffsets,
+  );
+  const layoutSnapshot = {
+    blockLayouts,
+    defaultFontFamily: normalizedDefaultFontFamily,
+    defaultFontSizePt: normalizedDefaultFontSizePt,
+    pageLayout: normalizedPageLayout,
+    pages,
+    runs: normalizedRuns,
+    styleDefinitions,
+    text,
+  } satisfies NvdDocumentLayoutSnapshot;
+
+  nvdLayoutCache.set(cacheKey, layoutSnapshot);
+
+  if (nvdLayoutCache.size > NVD_LAYOUT_CACHE_SIZE) {
+    nvdLayoutCache.delete(nvdLayoutCache.keys().next().value as string);
+  }
+
+  return layoutSnapshot;
+}
+
+function createMixedBlockFragments(
+  blocks: readonly NvdBlock[],
+  defaultFontFamily: string,
+  defaultFontSizePt: number,
+  blockLayouts: readonly NvdBlockLayout[],
+  pageLayout: NvdPageLayout,
+  styleDefinitions?: Record<NvdStyleRole, NvdStyleDefinition>,
+) {
+  const pageLayoutPx = getNvdPageLayoutPx(pageLayout);
+  const blockSeeds = createMixedBlockSeeds(
+    blocks,
+    defaultFontFamily,
+    defaultFontSizePt,
+    blockLayouts,
+    pageLayout,
+    styleDefinitions,
+  );
+  const embedFragments: NvdEmbedFragment[] = [];
+  const lines: NvdLineFragment[] = [];
+  const pageAnchorOffsets = new Map<number, number>();
+  let cursor: NvdPagePlacementCursor = {
+    nextLineIndex: 0,
+    pageHeightPx: 0,
+    pageIndex: 0,
+    topPx: 0,
+  };
+
+  pageAnchorOffsets.set(0, 0);
+
+  blockSeeds.forEach((blockSeed, blockSeedIndex) => {
+    const nextMinHeightPx =
+      blockSeed.kind === "text" &&
+      blockLayouts[blockSeed.textBlockIndex]?.keepWithNext
+        ? blockSeeds[blockSeedIndex + 1]?.firstUnitHeightPx ?? 0
+        : 0;
+
+    if (blockSeed.kind === "text") {
+      cursor = placeMixedTextBlockOnPages(
+        blockSeed,
+        cursor,
+        lines,
+        pageAnchorOffsets,
+        pageLayoutPx.contentHeightPx,
+        nextMinHeightPx,
+      );
+      return;
+    }
+
+    cursor = placeMixedEmbedBlockOnPages(
+      blockSeed,
+      cursor,
+      embedFragments,
+      pageAnchorOffsets,
+      pageLayoutPx.contentHeightPx,
+    );
+  });
+
+  return {
+    embedFragments,
+    lines,
+    pageAnchorOffsets,
+  };
+}
+
+function createMixedBlockSeeds(
+  blocks: readonly NvdBlock[],
+  defaultFontFamily: string,
+  defaultFontSizePt: number,
+  blockLayouts: readonly NvdBlockLayout[],
+  pageLayout: NvdPageLayout,
+  styleDefinitions?: Record<NvdStyleRole, NvdStyleDefinition>,
+) {
+  const textBlockCount = blocks.filter((block) => block.kind !== "embed").length;
+  const blockSeeds: NvdMixedBlockSeed[] = [];
+  let textBlockIndex = 0;
+  let textOffset = 0;
+
+  blocks.forEach((block, blockIndex) => {
+    if (!isNvdTextBlock(block)) {
+      const seed = createEmbedLayoutSeed(
+        block,
+        blockIndex,
+        textOffset,
+        defaultFontFamily,
+        defaultFontSizePt,
+        pageLayout,
+      );
+
+      blockSeeds.push({
+        anchorOffset: textOffset,
+        blockIndex,
+        firstUnitHeightPx: seed.heightPx,
+        kind: "embed",
+        seed,
+        totalHeightPx: seed.heightPx,
+      });
+      return;
+    }
+
+    const blockLayout = blockLayouts[textBlockIndex] ?? getDefaultBlockLayout();
+    const hasTrailingParagraphBreak = textBlockIndex < textBlockCount - 1;
+    const lineSeeds = createLineSeedsForMixedTextBlock(
+      block.text,
+      hasTrailingParagraphBreak,
+      textOffset,
+      textBlockIndex,
+      blockLayout,
+      defaultFontFamily,
+      defaultFontSizePt,
+      pageLayout,
+      styleDefinitions,
+    );
+
+    blockSeeds.push({
+      anchorOffset: textOffset,
+      blockIndex,
+      blockLayout,
+      firstUnitHeightPx: lineSeeds[0]?.heightPx ?? 0,
+      kind: "text",
+      lineSeeds,
+      textBlockIndex,
+      totalHeightPx: lineSeeds.reduce((heightPx, line) => heightPx + line.heightPx, 0),
+    });
+
+    textOffset += block.text.length + (hasTrailingParagraphBreak ? 1 : 0);
+    textBlockIndex += 1;
+  });
+
+  return blockSeeds;
+}
+
+function createLineSeedsForMixedTextBlock(
+  blockText: string,
+  hasTrailingParagraphBreak: boolean,
+  startOffset: number,
+  textBlockIndex: number,
+  blockLayout: NvdBlockLayout,
+  defaultFontFamily: string,
+  defaultFontSizePt: number,
+  pageLayout: NvdPageLayout,
+  styleDefinitions?: Record<NvdStyleRole, NvdStyleDefinition>,
+) {
+  const text = `${blockText}${hasTrailingParagraphBreak ? "\n" : ""}`;
+  const positionedRuns = positionNvdTextRuns(
+    text ? [{ text }] : [],
+    defaultFontFamily || undefined,
+    defaultFontSizePt,
+  );
+  const pageLayoutPx = getNvdPageLayoutPx(pageLayout);
+  const fallbackStyle = getFallbackParagraphTextStyle(
+    0,
+    [blockLayout],
+    defaultFontFamily,
+    defaultFontSizePt,
+    styleDefinitions,
+  );
+
+  if (!text) {
+    const lineMetrics = measureTextRangeLineMetrics(
+      0,
+      0,
+      positionedRuns,
+      fallbackStyle,
+      blockLayout.lineHeight,
+    );
+
+    return [
+      {
+        baselineOffsetPx: getParagraphSpacingPx(blockLayout.spaceBeforePt) + lineMetrics.baselineOffsetPx,
+        end: startOffset,
+        heightPx:
+          lineMetrics.lineHeightPx +
+          getParagraphSpacingPx(blockLayout.spaceBeforePt) +
+          getParagraphSpacingPx(blockLayout.spaceAfterPt),
+        isFirstParagraphLine: true,
+        isLastParagraphLine: true,
+        paragraphIndex: textBlockIndex,
+        start: startOffset,
+        textHeightPx: lineMetrics.textHeightPx,
+        textTopOffsetPx: getParagraphSpacingPx(blockLayout.spaceBeforePt) + lineMetrics.textTopOffsetPx,
+      },
+    ] satisfies Array<Omit<NvdLineFragment, "index" | "pageIndex" | "topPx">>;
+  }
+
+  const lineSeeds: Array<Omit<NvdLineFragment, "index" | "pageIndex" | "topPx">> = [];
+  let localPosition = 0;
+
+  while (localPosition < text.length) {
+    const nextPosition = findVisualLineEnd(
+      text,
+      localPosition,
+      positionedRuns,
+      pageLayoutPx.contentWidthPx,
+    );
+    const localEnd = Math.max(nextPosition, localPosition + 1);
+    const isFirstParagraphLine = localPosition === 0;
+    const isLastParagraphLine = localEnd === text.length;
+    const beforeSpacePx = isFirstParagraphLine ? getParagraphSpacingPx(blockLayout.spaceBeforePt) : 0;
+    const afterSpacePx = isLastParagraphLine ? getParagraphSpacingPx(blockLayout.spaceAfterPt) : 0;
+    const lineMetrics = measureTextRangeLineMetrics(
+      localPosition,
+      localEnd,
+      positionedRuns,
+      fallbackStyle,
+      blockLayout.lineHeight,
+    );
+
+    lineSeeds.push({
+      baselineOffsetPx: beforeSpacePx + lineMetrics.baselineOffsetPx,
+      end: startOffset + localEnd,
+      heightPx: lineMetrics.lineHeightPx + beforeSpacePx + afterSpacePx,
+      isFirstParagraphLine,
+      isLastParagraphLine,
+      paragraphIndex: textBlockIndex,
+      start: startOffset + localPosition,
+      textHeightPx: lineMetrics.textHeightPx,
+      textTopOffsetPx: beforeSpacePx + lineMetrics.textTopOffsetPx,
+    });
+
+    localPosition = localEnd;
+  }
+
+  return lineSeeds;
+}
+
+function createEmbedLayoutSeed(
+  block: Extract<NvdBlock, { kind: "embed" }>,
+  blockIndex: number,
+  anchorOffset: number,
+  defaultFontFamily: string,
+  defaultFontSizePt: number,
+  pageLayout: NvdPageLayout,
+) {
+  const pageLayoutPx = getNvdPageLayoutPx(pageLayout);
+  const embed = block.embed;
+  const widthPx = resolveEmbedWidthPx(embed.widthPx, embed.displayMode, pageLayoutPx.contentWidthPx);
+  const captionHeightPx = embed.caption
+    ? measureEmbedCaptionHeightPx(embed.caption, widthPx, defaultFontFamily, Math.max(10, defaultFontSizePt - 1))
+    : 0;
+  const captionGapPx = embed.caption ? 8 : 0;
+  const maxMediaHeightPx = Math.max(80, pageLayoutPx.contentHeightPx - captionHeightPx - captionGapPx);
+  const requestedHeightPx =
+    embed.heightPx ??
+    Math.min(
+      maxMediaHeightPx,
+      Math.max(168, widthPx * (embed.displayMode === "actual" ? 0.7 : 0.62)),
+    );
+  const mediaHeightPx = clampNumber(requestedHeightPx, 80, maxMediaHeightPx);
+  const heightPx = mediaHeightPx + captionGapPx + captionHeightPx;
+
+  return {
+    alignment: embed.alignment ?? "center",
+    anchorOffset,
+    assetKind: embed.assetKind,
+    assetName: embed.assetName,
+    assetPath: embed.assetPath,
+    blockId: block.id,
+    blockIndex,
+    ...(embed.caption ? { caption: embed.caption } : {}),
+    displayMode: embed.displayMode ?? "fit",
+    heightPx,
+    leftPx: resolveEmbedLeftPx(embed.alignment, pageLayoutPx.contentWidthPx, widthPx),
+    mediaHeightPx,
+    mediaWidthPx: widthPx,
+    ...(embed.sourceDocumentKind ? { sourceDocumentKind: embed.sourceDocumentKind } : {}),
+    widthPx,
+  } satisfies NvdEmbedLayoutSeed;
+}
+
+function placeMixedTextBlockOnPages(
+  blockSeed: NvdMixedTextBlockSeed,
+  initialCursor: NvdPagePlacementCursor,
+  lines: NvdLineFragment[],
+  pageAnchorOffsets: Map<number, number>,
+  contentHeightPx: number,
+  nextMinHeightPx: number,
+) {
+  const orphanLineCount = Math.max(1, blockSeed.blockLayout.orphanLineCount);
+  const widowLineCount = Math.max(1, blockSeed.blockLayout.widowLineCount);
+  const lineSeeds = blockSeed.lineSeeds;
+
+  if (lineSeeds.length === 0) {
+    return initialCursor;
+  }
+
+  let cursor = initialCursor;
+  let seedIndex = 0;
+  const paragraphAnchorOffset = blockSeed.anchorOffset;
+  const canMoveWholeBlockToNextPage = blockSeed.totalHeightPx <= contentHeightPx;
+
+  ensurePageAnchorOffset(pageAnchorOffsets, cursor.pageIndex, paragraphAnchorOffset);
+
+  if (
+    cursor.pageHeightPx > 0 &&
+    canMoveWholeBlockToNextPage &&
+    ((blockSeed.blockLayout.keepLinesTogether &&
+      cursor.pageHeightPx + blockSeed.totalHeightPx > contentHeightPx) ||
+      (nextMinHeightPx > 0 &&
+        blockSeed.totalHeightPx + nextMinHeightPx <= contentHeightPx &&
+        cursor.pageHeightPx + blockSeed.totalHeightPx + nextMinHeightPx > contentHeightPx))
+  ) {
+    cursor = advanceMixedLayoutPage(cursor, paragraphAnchorOffset, pageAnchorOffsets);
+  }
+
+  while (seedIndex < lineSeeds.length) {
+    ensurePageAnchorOffset(pageAnchorOffsets, cursor.pageIndex, lineSeeds[seedIndex].start);
+
+    const remainingLineSeeds = lineSeeds.slice(seedIndex);
+    const availableHeightPx = Math.max(0, contentHeightPx - cursor.pageHeightPx);
+    let fitCount = countFittingLineSeeds(remainingLineSeeds, availableHeightPx);
+
+    if (fitCount === 0 && cursor.pageHeightPx > 0) {
+      cursor = advanceMixedLayoutPage(cursor, remainingLineSeeds[0].start, pageAnchorOffsets);
+      continue;
+    }
+
+    if (fitCount === 0) {
+      fitCount = 1;
+    }
+
+    if (fitCount < remainingLineSeeds.length) {
+      const fullPageFitCount = countFittingLineSeeds(remainingLineSeeds, contentHeightPx);
+      const linesRemainingAfterSplit = remainingLineSeeds.length - fitCount;
+
+      if (
+        cursor.pageHeightPx > 0 &&
+        fitCount < orphanLineCount &&
+        fullPageFitCount > fitCount
+      ) {
+        cursor = advanceMixedLayoutPage(cursor, remainingLineSeeds[0].start, pageAnchorOffsets);
+        continue;
+      }
+
+      if (linesRemainingAfterSplit < widowLineCount) {
+        const adjustedFitCount = remainingLineSeeds.length - widowLineCount;
+
+        if (
+          adjustedFitCount > 0 &&
+          adjustedFitCount >= orphanLineCount &&
+          measureLineSeedHeights(remainingLineSeeds, adjustedFitCount) <= availableHeightPx
+        ) {
+          fitCount = adjustedFitCount;
+        } else if (cursor.pageHeightPx > 0 && fullPageFitCount > fitCount) {
+          cursor = advanceMixedLayoutPage(cursor, remainingLineSeeds[0].start, pageAnchorOffsets);
+          continue;
+        }
+      }
+    }
+
+    const placeCount = Math.min(remainingLineSeeds.length, Math.max(1, fitCount));
+
+    for (let index = 0; index < placeCount; index += 1) {
+      const lineSeed = remainingLineSeeds[index];
+      lines.push({
+        ...lineSeed,
+        index: cursor.nextLineIndex,
+        pageIndex: cursor.pageIndex,
+        topPx: cursor.topPx,
+      });
+      cursor = {
+        nextLineIndex: cursor.nextLineIndex + 1,
+        pageHeightPx: cursor.pageHeightPx + lineSeed.heightPx,
+        pageIndex: cursor.pageIndex,
+        topPx: cursor.topPx + lineSeed.heightPx,
+      };
+    }
+
+    seedIndex += placeCount;
+
+    if (seedIndex < lineSeeds.length) {
+      cursor = advanceMixedLayoutPage(cursor, lineSeeds[seedIndex].start, pageAnchorOffsets);
+    }
+  }
+
+  return cursor;
+}
+
+function placeMixedEmbedBlockOnPages(
+  blockSeed: NvdMixedEmbedBlockSeed,
+  initialCursor: NvdPagePlacementCursor,
+  embedFragments: NvdEmbedFragment[],
+  pageAnchorOffsets: Map<number, number>,
+  contentHeightPx: number,
+) {
+  let cursor = initialCursor;
+
+  ensurePageAnchorOffset(pageAnchorOffsets, cursor.pageIndex, blockSeed.anchorOffset);
+
+  if (
+    cursor.pageHeightPx > 0 &&
+    cursor.pageHeightPx + blockSeed.seed.heightPx > contentHeightPx
+  ) {
+    cursor = advanceMixedLayoutPage(cursor, blockSeed.anchorOffset, pageAnchorOffsets);
+  }
+
+  ensurePageAnchorOffset(pageAnchorOffsets, cursor.pageIndex, blockSeed.anchorOffset);
+
+  embedFragments.push({
+    ...blockSeed.seed,
+    pageIndex: cursor.pageIndex,
+    topPx: cursor.topPx,
+  });
+
+  return {
+    ...cursor,
+    pageHeightPx: cursor.pageHeightPx + blockSeed.seed.heightPx,
+    topPx: cursor.topPx + blockSeed.seed.heightPx,
+  };
+}
+
+function advanceMixedLayoutPage(
+  cursor: NvdPagePlacementCursor,
+  anchorOffset: number,
+  pageAnchorOffsets: Map<number, number>,
+) {
+  const nextCursor = {
+    ...cursor,
+    pageHeightPx: 0,
+    pageIndex: cursor.pageIndex + 1,
+    topPx: 0,
+  } satisfies NvdPagePlacementCursor;
+
+  ensurePageAnchorOffset(pageAnchorOffsets, nextCursor.pageIndex, anchorOffset);
+  return nextCursor;
+}
+
+function ensurePageAnchorOffset(
+  pageAnchorOffsets: Map<number, number>,
+  pageIndex: number,
+  anchorOffset: number,
+) {
+  if (!pageAnchorOffsets.has(pageIndex)) {
+    pageAnchorOffsets.set(pageIndex, anchorOffset);
+  }
+}
+
+function countFittingLineSeeds(
+  lineSeeds: Array<Omit<NvdLineFragment, "index" | "pageIndex" | "topPx">>,
+  availableHeightPx: number,
+) {
+  let heightPx = 0;
+  let count = 0;
+
+  for (const lineSeed of lineSeeds) {
+    if (count > 0 && heightPx + lineSeed.heightPx > availableHeightPx) {
+      break;
+    }
+
+    if (count === 0 && lineSeed.heightPx > availableHeightPx && availableHeightPx > 0) {
+      return 0;
+    }
+
+    heightPx += lineSeed.heightPx;
+    count += 1;
+  }
+
+  return count;
+}
+
+function measureLineSeedHeights(
+  lineSeeds: Array<Omit<NvdLineFragment, "index" | "pageIndex" | "topPx">>,
+  count: number,
+) {
+  return lineSeeds.slice(0, count).reduce((heightPx, lineSeed) => heightPx + lineSeed.heightPx, 0);
 }
 
 function createLineFragments(
@@ -951,6 +1608,7 @@ function createEmptyPageFragment(text: string): NvdPageFragment {
     contentHeightPx: 0,
     contentTopPx: 0,
     end: text.length,
+    embedFragments: [],
     index: 0,
     lineEndIndex: 0,
     lineStartIndex: 0,
@@ -983,6 +1641,7 @@ function createPageFragment(
     contentHeightPx: measuredContentHeightPx,
     contentTopPx: 0,
     end,
+    embedFragments: [],
     index: pageIndex,
     lineEndIndex: endLineIndex,
     lineStartIndex: startLineIndex,
@@ -1053,6 +1712,70 @@ function createParagraphFragments(
   return fragments;
 }
 
+function createMixedPageFragments(
+  normalizedRuns: NvdTextRun[],
+  text: string,
+  lines: NvdLineFragment[],
+  embedFragments: NvdEmbedFragment[],
+  blockLayouts: readonly NvdBlockLayout[],
+  pageLayout: NvdPageLayout,
+  pageAnchorOffsets: Map<number, number>,
+) {
+  const totalPageCount =
+    Math.max(
+      1,
+      ...lines.map((line) => line.pageIndex + 1),
+      ...embedFragments.map((fragment) => fragment.pageIndex + 1),
+    );
+  const pages: NvdPageFragment[] = [];
+
+  for (let pageIndex = 0; pageIndex < totalPageCount; pageIndex += 1) {
+    const pageLines = lines.filter((line) => line.pageIndex === pageIndex);
+    const pageEmbeds = embedFragments.filter((fragment) => fragment.pageIndex === pageIndex);
+    const start = pageLines[0]?.start ?? pageAnchorOffsets.get(pageIndex) ?? 0;
+    const end = pageLines[pageLines.length - 1]?.end ?? start;
+    const contentBottomPx = Math.max(
+      0,
+      ...pageLines.map((line) => line.topPx + line.heightPx),
+      ...pageEmbeds.map((fragment) => fragment.topPx + fragment.heightPx),
+    );
+    const lineStartIndex = pageLines[0]?.index ?? lines.find((line) => line.pageIndex > pageIndex)?.index ?? lines.length;
+    const lineEndIndex = pageLines.length > 0 ? pageLines[pageLines.length - 1].index + 1 : lineStartIndex;
+
+    pages.push({
+      contentBottomPx,
+      contentHeightPx: contentBottomPx,
+      contentTopPx: 0,
+      end,
+      embedFragments: pageEmbeds,
+      index: pageIndex,
+      lineEndIndex,
+      lineStartIndex,
+      lines: pageLines,
+      paragraphFragments:
+        pageLines.length > 0
+          ? createParagraphFragments(
+              normalizedRuns,
+              text,
+              pageLines,
+              blockLayouts,
+              pageLines[0]?.index ?? 0,
+              pageIndex,
+            )
+          : [],
+      paragraphIndexes:
+        pageLines.length > 0
+          ? getNvdParagraphIndexesForRange(text, start, end)
+          : [],
+      runs: sliceNvdTextRuns(normalizedRuns, start, end),
+      start,
+      text: text.slice(start, end),
+    });
+  }
+
+  return pages;
+}
+
 function getNvdParagraphIndexesForRange(text: string, start: number, end: number) {
   const firstParagraphIndex = countLineBreaks(text.slice(0, start));
   const paragraphCount = countLineBreaks(text.slice(start, end)) + 1;
@@ -1076,6 +1799,76 @@ function getDefaultBlockLayout(): NvdBlockLayout {
 
 function countLineBreaks(text: string) {
   return text.match(/\n/g)?.length ?? 0;
+}
+
+function resolveEmbedWidthPx(
+  requestedWidthPx: number | undefined,
+  displayMode: "fit" | "actual" | "custom" | undefined,
+  contentWidthPx: number,
+) {
+  const fallbackWidthPx =
+    displayMode === "actual"
+      ? Math.min(contentWidthPx, 320)
+      : displayMode === "custom"
+        ? Math.min(contentWidthPx, 420)
+        : contentWidthPx;
+
+  return clampNumber(requestedWidthPx ?? fallbackWidthPx, 120, contentWidthPx);
+}
+
+function resolveEmbedLeftPx(
+  alignment: "left" | "center" | "right" | undefined,
+  contentWidthPx: number,
+  widthPx: number,
+) {
+  if (alignment === "left") {
+    return 0;
+  }
+
+  if (alignment === "right") {
+    return Math.max(0, contentWidthPx - widthPx);
+  }
+
+  return Math.max(0, (contentWidthPx - widthPx) / 2);
+}
+
+function measureEmbedCaptionHeightPx(
+  caption: string,
+  widthPx: number,
+  fontFamily: string,
+  fontSizePt: number,
+) {
+  const trimmedCaption = caption.trim();
+
+  if (!trimmedCaption) {
+    return 0;
+  }
+
+  const words = trimmedCaption.split(/\s+/u);
+  let lineCount = 1;
+  let currentLine = "";
+
+  words.forEach((word) => {
+    const candidate = currentLine ? `${currentLine} ${word}` : word;
+    const candidateWidthPx = measureTextWidth(
+      candidate,
+      getNvdFontCssStack(fontFamily),
+      fontSizePt,
+      false,
+      0,
+      false,
+    );
+
+    if (currentLine && candidateWidthPx > widthPx) {
+      lineCount += 1;
+      currentLine = word;
+      return;
+    }
+
+    currentLine = candidate;
+  });
+
+  return lineCount * getLineHeightPx(fontSizePt, 1.2);
 }
 
 function findVisualLineEnd(

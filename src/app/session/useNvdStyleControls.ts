@@ -32,6 +32,7 @@ export function useNvdStyleControls({
   const [nvdStyleDraft, setNvdStyleDraft] = useState<NvdStyleDefinition | null>(null);
   const [activeNvdCharacterSpacingPt, setActiveNvdCharacterSpacingPt] = useState<number | null>(null);
   const [activeNvdLineHeight, setActiveNvdLineHeight] = useState<number | null>(null);
+  const [activeNvdSelectionKind, setActiveNvdSelectionKind] = useState<"block" | "none" | "text">("none");
   const [activeNvdSpaceAfterPt, setActiveNvdSpaceAfterPt] = useState<number | null>(null);
   const [activeNvdSpaceBeforePt, setActiveNvdSpaceBeforePt] = useState<number | null>(null);
   const [pendingNvdStyleResetRole, setPendingNvdStyleResetRole] = useState<NvdStyleRole | null>(null);
@@ -58,6 +59,7 @@ export function useNvdStyleControls({
     nvdEditorControllerRef.current = controller;
     setActiveNvdCharacterSpacingPt(controller?.characterSpacingPt ?? null);
     setActiveNvdLineHeight(controller?.lineHeight ?? null);
+    setActiveNvdSelectionKind(controller?.selectionKind ?? "none");
     setActiveNvdSpaceAfterPt(controller?.spaceAfterPt ?? null);
     setActiveNvdSpaceBeforePt(controller?.spaceBeforePt ?? null);
     setNvdHistoryState((historyState) => {
@@ -301,6 +303,7 @@ export function useNvdStyleControls({
   return {
     activeNvdCharacterSpacingPt,
     activeNvdLineHeight,
+    activeNvdSelectionKind,
     activeNvdSpaceAfterPt,
     activeNvdSpaceBeforePt,
     activeNvdStyleRole,

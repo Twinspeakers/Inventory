@@ -284,16 +284,48 @@ struct NvdBlock {
     id: String,
     kind: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    keep_lines_together: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    keep_with_next: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     line_height: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    orphan_line_count: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     space_after_pt: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     space_before_pt: Option<f64>,
+    #[serde(default)]
     text: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     runs: Vec<NvdTextRun>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     text_align: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    embed: Option<NvdAssetEmbed>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    widow_line_count: Option<u32>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NvdAssetEmbed {
+    asset_id: usize,
+    asset_kind: String,
+    asset_name: String,
+    asset_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    alignment: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    caption: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    display_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    height_px: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source_document_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    width_px: Option<f64>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -340,15 +372,23 @@ struct NvdStyleDefinition {
     font_family: String,
     font_size_pt: f64,
     italic: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    keep_lines_together: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    keep_with_next: Option<bool>,
     label: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     line_height: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    orphan_line_count: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     space_after_pt: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     space_before_pt: Option<f64>,
     role: String,
     text_align: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    widow_line_count: Option<u32>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -438,6 +478,8 @@ struct OpenedNvvDocument {
 }
 
 const MAX_PREVIEW_BYTES: u64 = 200 * 1024 * 1024;
+const NVD_DEFAULT_EMBED_ALIGNMENT: &str = "center";
+const NVD_DEFAULT_EMBED_DISPLAY_MODE: &str = "fit";
 const INVENTORY_SCHEMA_VERSION: u32 = 2;
 const INVENTORY_MANIFEST_KIND: &str = "inventory.project";
 const INVENTORY_MANIFEST_FILENAME: &str = "Invent.nvi";
@@ -838,13 +880,18 @@ fn create_nvd_document(
         page_layout: default_nvd_page_layout(),
         blocks: vec![NvdBlock {
             id: format!("block-{}", now),
-            kind: "paragraph".to_string(),
+            kind: "p".to_string(),
+            keep_lines_together: None,
+            keep_with_next: None,
             line_height: None,
+            orphan_line_count: None,
             space_after_pt: None,
             space_before_pt: None,
             text: String::new(),
             runs: Vec::new(),
             text_align: None,
+            embed: None,
+            widow_line_count: None,
         }],
         styles: BTreeMap::new(),
     };
@@ -882,14 +929,9 @@ fn save_nvd_document(
     let document_path = PathBuf::from(path);
     validate_nvd_document_path(&document_path)?;
 
-    document.schema_version = NVD_SCHEMA_VERSION;
-    document.kind = NVD_DOCUMENT_KIND.to_string();
     document.title = sanitize_document_title(&document.title)?;
     document.updated_at_unix = unix_now();
-    document.font_family = normalize_nvd_font_family(&document.font_family);
-    document.font_size = normalize_nvd_font_size(&document.font_size);
-    document.layout_mode = normalize_nvd_layout_mode(&document.layout_mode);
-    document.page_layout = normalize_nvd_page_layout(&document.page_layout);
+    document = normalize_nvd_document(document);
 
     write_nvd_document(&document_path, &document)?;
     let opened_document = open_nvd_document_from_parts(document_path, document)?;
@@ -1006,13 +1048,9 @@ fn rename_nvd_document(
 
     let document_title = sanitize_document_title(&title)?;
     let mut document = document.unwrap_or(read_nvd_document(&document_path)?);
-    document.schema_version = NVD_SCHEMA_VERSION;
-    document.kind = NVD_DOCUMENT_KIND.to_string();
     document.title = document_title.clone();
     document.updated_at_unix = unix_now();
-    document.font_family = normalize_nvd_font_family(&document.font_family);
-    document.font_size = normalize_nvd_font_size(&document.font_size);
-    document.layout_mode = normalize_nvd_layout_mode(&document.layout_mode);
+    document = normalize_nvd_document(document);
 
     let parent = document_path
         .parent()
@@ -2384,7 +2422,7 @@ fn read_inventory_manifest(path: &Path) -> Result<InventoryManifest, String> {
 
 fn read_nvd_document(path: &Path) -> Result<NvdDocument, String> {
     let contents = fs::read_to_string(path).map_err(|error| error.to_string())?;
-    let mut document =
+    let document =
         serde_json::from_str::<NvdDocument>(&contents).map_err(|error| error.to_string())?;
 
     if document.schema_version == 0 || document.schema_version > NVD_SCHEMA_VERSION {
@@ -2398,13 +2436,7 @@ fn read_nvd_document(path: &Path) -> Result<NvdDocument, String> {
         return Err("Selected file is not an Inventory NVD document.".to_string());
     }
 
-    document.font_family = normalize_nvd_font_family(&document.font_family);
-    document.font_size = normalize_nvd_font_size(&document.font_size);
-    document.layout_mode = normalize_nvd_layout_mode(&document.layout_mode);
-    document.page_layout = normalize_nvd_page_layout(&document.page_layout);
-    document.schema_version = NVD_SCHEMA_VERSION;
-
-    Ok(document)
+    Ok(normalize_nvd_document(document))
 }
 
 fn write_inventory_manifest(path: &Path, manifest: &InventoryManifest) -> Result<(), String> {
@@ -2574,10 +2606,130 @@ fn default_nvd_layout_mode() -> String {
 
 fn normalize_nvd_layout_mode(layout_mode: &str) -> String {
     match layout_mode {
-        "pageless" => "pageless".to_string(),
         NVD_LAYOUT_MODE_A4 => NVD_LAYOUT_MODE_A4.to_string(),
         _ => default_nvd_layout_mode(),
     }
+}
+
+fn normalize_nvd_document(mut document: NvdDocument) -> NvdDocument {
+    document.schema_version = NVD_SCHEMA_VERSION;
+    document.kind = NVD_DOCUMENT_KIND.to_string();
+    document.font_family = normalize_nvd_font_family(&document.font_family);
+    document.font_size = normalize_nvd_font_size(&document.font_size);
+    document.layout_mode = normalize_nvd_layout_mode(&document.layout_mode);
+    document.page_layout = normalize_nvd_page_layout(&document.page_layout);
+    document.blocks = document
+        .blocks
+        .into_iter()
+        .map(normalize_nvd_block)
+        .collect();
+    document.styles = document
+        .styles
+        .into_iter()
+        .map(|(role, style)| (role, normalize_nvd_style_definition(style)))
+        .collect();
+    document
+}
+
+fn normalize_nvd_block(mut block: NvdBlock) -> NvdBlock {
+    if block.kind.trim().eq_ignore_ascii_case("embed") || block.embed.is_some() {
+        block.kind = "embed".to_string();
+        block.embed = block.embed.map(normalize_nvd_asset_embed);
+        return block;
+    }
+
+    block.kind = normalize_nvd_text_block_kind(&block.kind);
+    block
+}
+
+fn normalize_nvd_text_block_kind(kind: &str) -> String {
+    match kind.trim() {
+        "paragraph" => "p".to_string(),
+        "heading" => "h1".to_string(),
+        "p" | "h1" | "h2" | "h3" => kind.trim().to_string(),
+        "" => "p".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn normalize_nvd_style_definition(mut style: NvdStyleDefinition) -> NvdStyleDefinition {
+    style.font_family = normalize_nvd_font_family(&style.font_family);
+    style.font_size_pt = style.font_size_pt.clamp(6.0, 144.0);
+    style.orphan_line_count = normalize_nvd_line_constraint(style.orphan_line_count);
+    style.widow_line_count = normalize_nvd_line_constraint(style.widow_line_count);
+    style
+}
+
+fn normalize_nvd_asset_embed(mut embed: NvdAssetEmbed) -> NvdAssetEmbed {
+    let trimmed_kind = embed.asset_kind.trim();
+    embed.asset_kind = if trimmed_kind.is_empty() {
+        "image".to_string()
+    } else {
+        trimmed_kind.to_string()
+    };
+
+    let trimmed_path = embed.asset_path.trim().to_string();
+    embed.asset_path = trimmed_path.clone();
+
+    let trimmed_name = embed.asset_name.trim();
+    embed.asset_name = if trimmed_name.is_empty() {
+        Path::new(&trimmed_path)
+            .file_name()
+            .and_then(|value| value.to_str())
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or("Embedded Asset")
+            .to_string()
+    } else {
+        trimmed_name.to_string()
+    };
+
+    embed.alignment = Some(normalize_nvd_embed_alignment(embed.alignment.as_deref()));
+    embed.caption = normalize_nvd_optional_trimmed_string(embed.caption);
+    embed.display_mode = Some(normalize_nvd_embed_display_mode(
+        embed.display_mode.as_deref(),
+    ));
+    embed.height_px = normalize_nvd_embed_extent_px(embed.height_px);
+    embed.source_document_kind = normalize_nvd_optional_trimmed_string(embed.source_document_kind)
+        .map(|kind| kind.to_lowercase());
+    embed.width_px = normalize_nvd_embed_extent_px(embed.width_px);
+    embed
+}
+
+fn normalize_nvd_embed_alignment(alignment: Option<&str>) -> String {
+    match alignment.map(str::trim) {
+        Some("left") => "left".to_string(),
+        Some("right") => "right".to_string(),
+        Some("center") => "center".to_string(),
+        _ => NVD_DEFAULT_EMBED_ALIGNMENT.to_string(),
+    }
+}
+
+fn normalize_nvd_embed_display_mode(display_mode: Option<&str>) -> String {
+    match display_mode.map(str::trim) {
+        Some("actual") => "actual".to_string(),
+        Some("custom") => "custom".to_string(),
+        Some("fit") => "fit".to_string(),
+        _ => NVD_DEFAULT_EMBED_DISPLAY_MODE.to_string(),
+    }
+}
+
+fn normalize_nvd_embed_extent_px(value: Option<f64>) -> Option<f64> {
+    value.filter(|extent| extent.is_finite() && *extent > 0.0)
+}
+
+fn normalize_nvd_line_constraint(value: Option<u32>) -> Option<u32> {
+    value.and_then(|count| if count > 2 { Some(count) } else { None })
+}
+
+fn normalize_nvd_optional_trimmed_string(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
 }
 
 fn default_nvd_page_layout() -> NvdPageLayout {
@@ -2837,16 +2989,171 @@ mod tests {
         assert_eq!(document.layout_mode, NVD_LAYOUT_MODE_A4);
         assert_eq!(document.schema_version, NVD_SCHEMA_VERSION);
         assert_eq!(document.page_layout.page_size, NVD_PAGE_SIZE_A4);
-        assert_eq!(document.page_layout.margin_left_pt, NVD_DEFAULT_PAGE_MARGIN_PT);
+        assert_eq!(
+            document.page_layout.margin_left_pt,
+            NVD_DEFAULT_PAGE_MARGIN_PT
+        );
         assert!(document.styles.is_empty());
         let _ = fs::remove_file(document_path);
     }
 
     #[test]
-    fn preserves_pageless_layout_mode_while_defaulting_invalid_modes_to_a4() {
-        assert_eq!(normalize_nvd_layout_mode("pageless"), "pageless");
+    fn normalizes_removed_pageless_layout_mode_to_a4() {
+        assert_eq!(normalize_nvd_layout_mode("pageless"), "a4");
         assert_eq!(normalize_nvd_layout_mode("a4"), "a4");
         assert_eq!(normalize_nvd_layout_mode("invalid"), "a4");
+    }
+
+    #[test]
+    fn normalizes_mixed_content_nvd_blocks_and_embed_defaults_on_read() {
+        let unique_suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after the Unix epoch")
+            .as_nanos();
+        let document_path = std::env::temp_dir().join(format!(
+            "inventory-mixed-content-nvd-test-{}-{unique_suffix}.nvd",
+            std::process::id()
+        ));
+        let contents = serde_json::json!({
+            "schemaVersion": 1,
+            "kind": NVD_DOCUMENT_KIND,
+            "title": "Mixed Document",
+            "createdAtUnix": 10,
+            "updatedAtUnix": 20,
+            "fontFamily": " Inter ",
+            "fontSize": "16pt",
+            "layoutMode": "pageless",
+            "blocks": [
+                {
+                    "id": "legacy-paragraph",
+                    "kind": "paragraph",
+                    "keepLinesTogether": true,
+                    "keepWithNext": true,
+                    "orphanLineCount": 3,
+                    "spaceAfterPt": 12,
+                    "spaceBeforePt": 6,
+                    "text": "Intro",
+                    "widowLineCount": 4
+                },
+                {
+                    "id": "image-1",
+                    "kind": "embed",
+                    "text": "should be ignored later by UI",
+                    "embed": {
+                        "assetId": 12,
+                        "assetKind": " ",
+                        "assetName": " ",
+                        "assetPath": " workspace/reference.png ",
+                        "caption": "  Figure 1  ",
+                        "displayMode": "invalid",
+                        "heightPx": -1,
+                        "sourceDocumentKind": " NVV ",
+                        "widthPx": 480
+                    }
+                }
+            ],
+            "styles": {
+                "h1": {
+                    "bold": true,
+                    "fontFamily": " Google Sans ",
+                    "fontSizePt": 24,
+                    "italic": false,
+                    "keepLinesTogether": true,
+                    "keepWithNext": true,
+                    "label": "Heading 1",
+                    "orphanLineCount": 2,
+                    "role": "h1",
+                    "textAlign": "left",
+                    "widowLineCount": 4
+                }
+            }
+        });
+        fs::write(
+            &document_path,
+            serde_json::to_string_pretty(&contents).expect("mixed NVD document should serialize"),
+        )
+        .expect("mixed NVD document should be written");
+
+        let document = read_nvd_document(&document_path).expect("mixed NVD document should open");
+
+        assert_eq!(document.font_family, "Inter");
+        assert_eq!(document.layout_mode, "a4");
+        assert_eq!(document.blocks[0].kind, "p");
+        assert_eq!(document.blocks[0].keep_lines_together, Some(true));
+        assert_eq!(document.blocks[0].keep_with_next, Some(true));
+        assert_eq!(document.blocks[0].orphan_line_count, Some(3));
+        assert_eq!(document.blocks[0].widow_line_count, Some(4));
+        assert_eq!(document.blocks[1].kind, "embed");
+        assert_eq!(
+            document.blocks[1]
+                .embed
+                .as_ref()
+                .and_then(|embed| embed.alignment.as_deref()),
+            Some("center")
+        );
+        assert_eq!(
+            document.blocks[1]
+                .embed
+                .as_ref()
+                .and_then(|embed| embed.display_mode.as_deref()),
+            Some("fit")
+        );
+        assert_eq!(
+            document.blocks[1]
+                .embed
+                .as_ref()
+                .map(|embed| embed.asset_kind.as_str()),
+            Some("image")
+        );
+        assert_eq!(
+            document.blocks[1]
+                .embed
+                .as_ref()
+                .map(|embed| embed.asset_name.as_str()),
+            Some("reference.png")
+        );
+        assert_eq!(
+            document.blocks[1]
+                .embed
+                .as_ref()
+                .map(|embed| embed.asset_path.as_str()),
+            Some("workspace/reference.png")
+        );
+        assert_eq!(
+            document.blocks[1]
+                .embed
+                .as_ref()
+                .and_then(|embed| embed.caption.as_deref()),
+            Some("Figure 1")
+        );
+        assert_eq!(
+            document.blocks[1]
+                .embed
+                .as_ref()
+                .and_then(|embed| embed.height_px),
+            None
+        );
+        assert_eq!(
+            document.blocks[1]
+                .embed
+                .as_ref()
+                .and_then(|embed| embed.width_px),
+            Some(480.0)
+        );
+        assert_eq!(
+            document.blocks[1]
+                .embed
+                .as_ref()
+                .and_then(|embed| embed.source_document_kind.as_deref()),
+            Some("nvv")
+        );
+        assert_eq!(document.styles["h1"].keep_lines_together, Some(true));
+        assert_eq!(document.styles["h1"].keep_with_next, Some(true));
+        assert_eq!(document.styles["h1"].orphan_line_count, None);
+        assert_eq!(document.styles["h1"].widow_line_count, Some(4));
+        assert_eq!(document.styles["h1"].font_family, "Google Sans");
+
+        let _ = fs::remove_file(document_path);
     }
 
     #[test]
@@ -3248,7 +3555,10 @@ mod tests {
                 NvdBlock {
                     id: "block-1".to_string(),
                     kind: "paragraph".to_string(),
+                    keep_lines_together: Some(true),
+                    keep_with_next: Some(true),
                     line_height: Some(2.25),
+                    orphan_line_count: Some(3),
                     space_after_pt: Some(18.0),
                     space_before_pt: Some(6.0),
                     text: "Original content".to_string(),
@@ -3263,16 +3573,23 @@ mod tests {
                         }),
                     }],
                     text_align: Some("center".to_string()),
+                    embed: None,
+                    widow_line_count: Some(4),
                 },
                 NvdBlock {
                     id: "block-2".to_string(),
                     kind: "paragraph".to_string(),
+                    keep_lines_together: None,
+                    keep_with_next: None,
                     line_height: None,
+                    orphan_line_count: None,
                     space_after_pt: None,
                     space_before_pt: None,
                     text: "Second paragraph".to_string(),
                     runs: Vec::new(),
                     text_align: None,
+                    embed: None,
+                    widow_line_count: None,
                 },
             ],
             styles: BTreeMap::new(),
@@ -3342,7 +3659,20 @@ mod tests {
         assert_eq!(renamed_document.document.font_size, "24pt");
         assert_eq!(renamed_document.document.blocks.len(), 2);
         assert_eq!(renamed_document.document.blocks[0].id, "block-1");
+        assert_eq!(renamed_document.document.blocks[0].kind, "p");
         assert_eq!(renamed_document.document.blocks[0].line_height, Some(2.25));
+        assert_eq!(
+            renamed_document.document.blocks[0].keep_lines_together,
+            Some(true)
+        );
+        assert_eq!(
+            renamed_document.document.blocks[0].keep_with_next,
+            Some(true)
+        );
+        assert_eq!(
+            renamed_document.document.blocks[0].orphan_line_count,
+            Some(3)
+        );
         assert_eq!(
             renamed_document.document.blocks[0].space_after_pt,
             Some(18.0)
@@ -3360,6 +3690,10 @@ mod tests {
         assert_eq!(
             renamed_document.document.blocks[1].text_align.as_deref(),
             None
+        );
+        assert_eq!(
+            renamed_document.document.blocks[0].widow_line_count,
+            Some(4)
         );
         assert_eq!(
             renamed_document.document.blocks[0].runs[0]

@@ -5,7 +5,7 @@ import type {
   FormEventHandler,
   KeyboardEventHandler,
 } from "react";
-import type { NvdTextRun } from "../../inventoryProject";
+import type { NvdBlock, NvdTextRun } from "../../inventoryProject";
 import { getNvdCharacterSpacingPt } from "../primitives/nvdCharacterSpacing";
 import {
   applyNvdTextEdit,
@@ -28,6 +28,17 @@ import {
 } from "../layout/nvdPageLayoutEngine";
 import type { NvdEditorController } from "../adapters/NvdRichTextEditor";
 import {
+  createNvdTextDocumentSelection,
+  createNvdBlockDocumentSelection,
+  isNvdBlockDocumentSelection,
+  isNvdTextDocumentSelection,
+  type NvdDocumentSelection,
+} from "../document/nvdDocumentSelection";
+import {
+  removeNvdSelectedBlock,
+} from "../document/nvdDocumentModel";
+import {
+  createNvdDocumentBlocks,
   getNvdTextRunCharacterSpacingPt,
   getNvdTextRunFontFamily,
   getNvdTextRunFontSizePt,
@@ -43,9 +54,8 @@ import {
 import type { NvdStyleDefinition, NvdStyleRole } from "../document/nvdStyles";
 
 type NvdHistorySnapshot = {
-  blockLayouts: NvdBlockLayout[];
-  runs: NvdTextRun[];
-  selection: NvdTextSelection;
+  blocks: NvdBlock[];
+  selection: NvdDocumentSelection | null;
 };
 
 type NvdHistoryEntry = {
@@ -71,31 +81,36 @@ type NvdCompositionState = {
 } | null;
 
 export function useNvdA4DocumentController({
+  blocks,
   blockLayouts,
   defaultFontFamily,
   defaultFontSizePt,
   documentKey,
   layoutSnapshot,
+  onBlocksChange,
   onControllerChange,
-  onRunsChange,
-  onSelectionRequest,
+  onDocumentSelectionRequest,
   runs,
   selection,
   styleDefinitions,
 }: {
+  blocks: NvdBlock[];
   blockLayouts: NvdBlockLayout[];
   defaultFontFamily: string;
   defaultFontSizePt: number;
   documentKey: string;
   layoutSnapshot: NvdDocumentLayoutSnapshot | null;
+  onBlocksChange: (blocks: NvdBlock[]) => void;
   onControllerChange: (controller: NvdEditorController) => void;
-  onRunsChange: (runs: NvdTextRun[], blockLayouts?: NvdBlockLayout[]) => void;
-  onSelectionRequest: (selection: NvdTextSelection) => void;
+  onDocumentSelectionRequest: (selection: NvdDocumentSelection) => void;
   runs: NvdTextRun[];
-  selection: NvdTextSelection | null;
+  selection: NvdDocumentSelection | null;
   styleDefinitions: Record<NvdStyleRole, NvdStyleDefinition>;
 }) {
-  const effectiveSelection = selection ?? { start: 0, end: 0 };
+  const textSelection = selection && isNvdTextDocumentSelection(selection) ? selection.text : null;
+  const hasTextSelection = textSelection !== null;
+  const hasBlockSelection = selection ? isNvdBlockDocumentSelection(selection) : false;
+  const effectiveSelection = textSelection ?? { start: 0, end: 0 };
   const normalizedRuns = useMemo(() => normalizeNvdTextRuns(runs), [runs]);
   const text = useMemo(() => getNvdTextRunsText(normalizedRuns), [normalizedRuns]);
   const historyRef = useRef<{ documentKey: string; redoStack: NvdHistoryEntry[]; undoStack: NvdHistoryEntry[] }>({
@@ -131,8 +146,8 @@ export function useNvdA4DocumentController({
     [defaultFontFamily, defaultFontSizePt, effectiveSelection, normalizedRuns],
   );
   const touchedParagraphIndexes = useMemo(
-    () => getTouchedParagraphIndexes(text, blockLayouts, effectiveSelection),
-    [blockLayouts, effectiveSelection, text],
+    () => (hasTextSelection ? getTouchedParagraphIndexes(text, blockLayouts, effectiveSelection) : []),
+    [blockLayouts, effectiveSelection, hasTextSelection, text],
   );
   const compositionPreview = useMemo(() => {
     if (!compositionState) {
@@ -160,8 +175,10 @@ export function useNvdA4DocumentController({
   }
 
   function applySnapshot(snapshot: NvdHistorySnapshot) {
-    onRunsChange(snapshot.runs, snapshot.blockLayouts);
-    onSelectionRequest(snapshot.selection);
+    onBlocksChange(snapshot.blocks);
+    if (snapshot.selection) {
+      onDocumentSelectionRequest(snapshot.selection);
+    }
   }
 
   function commitContentChange(
@@ -174,12 +191,47 @@ export function useNvdA4DocumentController({
       trackHistory?: boolean;
     },
   ) {
-    const before = createSnapshot(normalizedRuns, blockLayouts, effectiveSelection);
-    const after = createSnapshot(nextRuns, nextBlockLayouts, nextSelection);
+    const before = createSnapshot(blocks, selection);
+    const after = createSnapshot(
+      createNvdDocumentBlocks(nextRuns, blocks, nextBlockLayouts),
+      createNvdTextDocumentSelection(nextSelection.start, nextSelection.end),
+    );
     const changed = !snapshotsEqual(before, after);
 
     if (!changed) {
-      onSelectionRequest(nextSelection);
+      onDocumentSelectionRequest(createNvdTextDocumentSelection(nextSelection.start, nextSelection.end));
+      return;
+    }
+
+    if (options?.trackHistory ?? true) {
+      historyRef.current.undoStack.push({
+        after,
+        before,
+        onRedo: options?.onRedo,
+        onUndo: options?.onUndo,
+      });
+      historyRef.current.redoStack = [];
+    }
+
+    applySnapshot(after);
+    refreshController();
+  }
+
+  function commitBlockDocumentChange(
+    nextBlocks: NvdBlock[],
+    nextSelection: NvdDocumentSelection,
+    options?: {
+      onRedo?: () => void;
+      onUndo?: () => void;
+      trackHistory?: boolean;
+    },
+  ) {
+    const before = createSnapshot(blocks, selection);
+    const after = createSnapshot(nextBlocks, nextSelection);
+    const changed = !snapshotsEqual(before, after);
+
+    if (!changed) {
+      onDocumentSelectionRequest(nextSelection);
       return;
     }
 
@@ -414,10 +466,7 @@ export function useNvdA4DocumentController({
 
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a") {
         event.preventDefault();
-        onSelectionRequest({
-          end: text.length,
-          start: 0,
-        });
+        onDocumentSelectionRequest(createNvdTextDocumentSelection(0, text.length));
         return;
       }
 
@@ -435,23 +484,45 @@ export function useNvdA4DocumentController({
 
       if (event.key === "Backspace") {
         event.preventDefault();
+
+        if (selection && isNvdBlockDocumentSelection(selection)) {
+          commitBlockDocumentChange(removeNvdSelectedBlock(blocks, selection).blocks, removeNvdSelectedBlock(blocks, selection).selection);
+          typingStyleRef.current = null;
+          return;
+        }
+
         applyDocumentEdit(deleteNvdBackward(normalizedRuns, blockLayouts, effectiveSelection));
         return;
       }
 
       if (event.key === "Delete") {
         event.preventDefault();
+
+        if (selection && isNvdBlockDocumentSelection(selection)) {
+          commitBlockDocumentChange(removeNvdSelectedBlock(blocks, selection).blocks, removeNvdSelectedBlock(blocks, selection).selection);
+          typingStyleRef.current = null;
+          return;
+        }
+
         applyDocumentEdit(deleteNvdForward(normalizedRuns, blockLayouts, effectiveSelection));
         return;
       }
 
       if (event.key === "Enter") {
+        if (hasBlockSelection) {
+          return;
+        }
+
         event.preventDefault();
         insertParagraphBreak();
         return;
       }
 
       if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key.length === 1) {
+        if (hasBlockSelection) {
+          return;
+        }
+
         event.preventDefault();
         insertPlainText(event.key);
         return;
@@ -459,7 +530,12 @@ export function useNvdA4DocumentController({
 
       if (event.key === "ArrowLeft") {
         event.preventDefault();
-        onSelectionRequest(moveSelectionHorizontally(effectiveSelection, -1));
+        onDocumentSelectionRequest(
+          createNvdTextDocumentSelection(
+            moveSelectionHorizontally(effectiveSelection, -1).start,
+            moveSelectionHorizontally(effectiveSelection, -1).end,
+          ),
+        );
         typingStyleRef.current = null;
         refreshController();
         return;
@@ -467,7 +543,12 @@ export function useNvdA4DocumentController({
 
       if (event.key === "ArrowRight") {
         event.preventDefault();
-        onSelectionRequest(moveSelectionHorizontally(effectiveSelection, 1, text.length));
+        onDocumentSelectionRequest(
+          createNvdTextDocumentSelection(
+            moveSelectionHorizontally(effectiveSelection, 1, text.length).start,
+            moveSelectionHorizontally(effectiveSelection, 1, text.length).end,
+          ),
+        );
         typingStyleRef.current = null;
         refreshController();
         return;
@@ -479,7 +560,8 @@ export function useNvdA4DocumentController({
         }
 
         event.preventDefault();
-        onSelectionRequest(moveSelectionVertically(layoutSnapshot, effectiveSelection, -1));
+        const nextSelection = moveSelectionVertically(layoutSnapshot, effectiveSelection, -1);
+        onDocumentSelectionRequest(createNvdTextDocumentSelection(nextSelection.start, nextSelection.end));
         typingStyleRef.current = null;
         refreshController();
         return;
@@ -491,7 +573,8 @@ export function useNvdA4DocumentController({
         }
 
         event.preventDefault();
-        onSelectionRequest(moveSelectionVertically(layoutSnapshot, effectiveSelection, 1));
+        const nextSelection = moveSelectionVertically(layoutSnapshot, effectiveSelection, 1);
+        onDocumentSelectionRequest(createNvdTextDocumentSelection(nextSelection.start, nextSelection.end));
         typingStyleRef.current = null;
         refreshController();
         return;
@@ -503,7 +586,8 @@ export function useNvdA4DocumentController({
         }
 
         event.preventDefault();
-        onSelectionRequest(moveSelectionToLineBoundary(layoutSnapshot, effectiveSelection, "start"));
+        const nextSelection = moveSelectionToLineBoundary(layoutSnapshot, effectiveSelection, "start");
+        onDocumentSelectionRequest(createNvdTextDocumentSelection(nextSelection.start, nextSelection.end));
         typingStyleRef.current = null;
         refreshController();
         return;
@@ -515,12 +599,13 @@ export function useNvdA4DocumentController({
         }
 
         event.preventDefault();
-        onSelectionRequest(moveSelectionToLineBoundary(layoutSnapshot, effectiveSelection, "end"));
+        const nextSelection = moveSelectionToLineBoundary(layoutSnapshot, effectiveSelection, "end");
+        onDocumentSelectionRequest(createNvdTextDocumentSelection(nextSelection.start, nextSelection.end));
         typingStyleRef.current = null;
         refreshController();
       }
     },
-    [activeTypingStyle, blockLayouts, compositionState, commitInlineStyleChange, effectiveSelection, layoutSnapshot, normalizedRuns, onSelectionRequest, text.length],
+    [activeTypingStyle, blockLayouts, blocks, commitBlockDocumentChange, compositionState, commitInlineStyleChange, effectiveSelection, hasBlockSelection, layoutSnapshot, normalizedRuns, onDocumentSelectionRequest, selection, text.length],
   );
 
   const onPaste = useMemo<ClipboardEventHandler<HTMLTextAreaElement>>(
@@ -531,6 +616,10 @@ export function useNvdA4DocumentController({
         return;
       }
 
+      if (hasBlockSelection) {
+        return;
+      }
+
       event.preventDefault();
       applyDocumentEdit(
         applyNvdTextEdit(normalizedRuns, blockLayouts, effectiveSelection, [
@@ -538,11 +627,15 @@ export function useNvdA4DocumentController({
         ]),
       );
     },
-    [activeTypingStyle, blockLayouts, effectiveSelection, normalizedRuns],
+    [activeTypingStyle, blockLayouts, effectiveSelection, hasBlockSelection, normalizedRuns],
   );
 
   const onCopy = useMemo<ClipboardEventHandler<HTMLTextAreaElement>>(
     () => (event) => {
+      if (!hasTextSelection) {
+        return;
+      }
+
       if (effectiveSelection.end <= effectiveSelection.start) {
         return;
       }
@@ -550,11 +643,15 @@ export function useNvdA4DocumentController({
       event.preventDefault();
       event.clipboardData.setData("text/plain", text.slice(effectiveSelection.start, effectiveSelection.end));
     },
-    [effectiveSelection.end, effectiveSelection.start, text],
+    [effectiveSelection.end, effectiveSelection.start, hasTextSelection, text],
   );
 
   const onCut = useMemo<ClipboardEventHandler<HTMLTextAreaElement>>(
     () => (event) => {
+      if (!hasTextSelection) {
+        return;
+      }
+
       if (effectiveSelection.end <= effectiveSelection.start) {
         return;
       }
@@ -563,16 +660,20 @@ export function useNvdA4DocumentController({
       event.clipboardData.setData("text/plain", text.slice(effectiveSelection.start, effectiveSelection.end));
       applyDocumentEdit(applyNvdTextEdit(normalizedRuns, blockLayouts, effectiveSelection, []));
     },
-    [blockLayouts, effectiveSelection, normalizedRuns, text],
+    [blockLayouts, effectiveSelection, hasTextSelection, normalizedRuns, text],
   );
 
   const selectedText = useMemo(() => {
+    if (!hasTextSelection) {
+      return "";
+    }
+
     if (effectiveSelection.end <= effectiveSelection.start) {
       return "";
     }
 
     return text.slice(effectiveSelection.start, effectiveSelection.end);
-  }, [effectiveSelection.end, effectiveSelection.start, text]);
+  }, [effectiveSelection.end, effectiveSelection.start, hasTextSelection, text]);
 
   const onCompositionStart = useMemo<CompositionEventHandler<HTMLTextAreaElement>>(
     () => () => {
@@ -640,11 +741,25 @@ export function useNvdA4DocumentController({
     isBold: activeTypingStyle.bold,
     isItalic: activeTypingStyle.italic,
     lineHeight: getUniformBlockValue(blockLayouts, touchedParagraphIndexes, "lineHeight"),
+    selectionKind: hasTextSelection ? "text" : hasBlockSelection ? "block" : "none",
     spaceAfterPt: getUniformBlockValue(blockLayouts, touchedParagraphIndexes, "spaceAfterPt"),
     spaceBeforePt: getUniformBlockValue(blockLayouts, touchedParagraphIndexes, "spaceBeforePt"),
     textAlign: getUniformBlockValue(blockLayouts, touchedParagraphIndexes, "textAlign"),
     applyStyle: applyStyleToTouchedParagraphs,
     focusBlock: (blockIndex) => {
+      const targetBlock = blocks[blockIndex];
+
+      if (!targetBlock) {
+        return;
+      }
+
+      if (targetBlock.kind === "embed") {
+        typingStyleRef.current = null;
+        onDocumentSelectionRequest(createNvdBlockDocumentSelection(targetBlock.id));
+        refreshController();
+        return;
+      }
+
       const nextSelection = getBlockSelection(text, blockLayouts, blockIndex);
 
       if (!nextSelection) {
@@ -652,7 +767,7 @@ export function useNvdA4DocumentController({
       }
 
       typingStyleRef.current = null;
-      onSelectionRequest(nextSelection);
+      onDocumentSelectionRequest(createNvdTextDocumentSelection(nextSelection.start, nextSelection.end));
       refreshController();
     },
     redo: () => {
@@ -733,11 +848,12 @@ export function useNvdA4DocumentController({
   }), [
     activeTypingStyle,
     blockLayouts,
+    blocks,
     defaultFontFamily,
     defaultFontSizePt,
     effectiveSelection,
     normalizedRuns,
-    onSelectionRequest,
+    onDocumentSelectionRequest,
     styleDefinitions,
     text,
     touchedParagraphIndexes,
@@ -750,7 +866,8 @@ export function useNvdA4DocumentController({
   return {
     displayBlockLayouts: compositionPreview?.blockLayouts ?? blockLayouts,
     displayRuns: compositionPreview?.runs ?? runs,
-    displaySelection: compositionPreview?.selection ?? effectiveSelection,
+    displaySelection: compositionPreview?.selection ?? (hasTextSelection ? effectiveSelection : null),
+    hasBlockSelection,
     onBeforeInput,
     onInput,
     onCompositionEnd,
@@ -765,19 +882,21 @@ export function useNvdA4DocumentController({
 }
 
 function createSnapshot(
-  runs: readonly NvdTextRun[],
-  blockLayouts: readonly NvdBlockLayout[],
-  selection: NvdTextSelection,
+  blocks: readonly NvdBlock[],
+  selection: NvdDocumentSelection | null,
 ): NvdHistorySnapshot {
   return {
-    blockLayouts: blockLayouts.map((layout) => ({ ...layout })),
-    runs: normalizeNvdTextRuns([...runs]),
-    selection: { ...selection },
+    blocks: cloneNvdBlocks(blocks),
+    selection: selection ? JSON.parse(JSON.stringify(selection)) : null,
   };
 }
 
 function snapshotsEqual(left: NvdHistorySnapshot, right: NvdHistorySnapshot) {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function cloneNvdBlocks(blocks: readonly NvdBlock[]) {
+  return JSON.parse(JSON.stringify(blocks)) as NvdBlock[];
 }
 
 function createStyledInsertRun(text: string, style: NvdResolvedTypingStyle): NvdTextRun {

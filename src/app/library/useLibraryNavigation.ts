@@ -28,6 +28,8 @@ export function useLibraryNavigation({
   selectedId,
   virtualFolders,
   visibleAssets,
+  focusInspectorOnDocument,
+  focusInspectorOnSelection,
   clearNvdStyleSelection,
   openTreeNodePath,
   setActiveView,
@@ -48,6 +50,8 @@ export function useLibraryNavigation({
   selectedId: number | null;
   virtualFolders: VirtualFolder[];
   visibleAssets: Asset[];
+  focusInspectorOnDocument: (kind: "nvd-document" | "nvv-document") => void;
+  focusInspectorOnSelection: () => void;
   clearNvdStyleSelection: () => void;
   openTreeNodePath: (nodeIds: string[]) => void;
   setActiveView: Dispatch<SetStateAction<LibraryView>>;
@@ -93,6 +97,7 @@ export function useLibraryNavigation({
 
   function selectAsset(assetId: number) {
     clearNvdStyleSelection();
+    focusInspectorOnSelection();
     const asset = assets.find((candidate) => candidate.id === assetId);
     const isInventoryDocument = Boolean(asset && inventoryDocumentPaths.has(normalizePath(asset.path)));
 
@@ -124,7 +129,12 @@ export function useLibraryNavigation({
     }
 
     setUndoContext("nvd");
-    selectAsset(activeNvdDocument.entry.assetId);
+    focusInspectorOnDocument("nvd-document");
+  }
+
+  function activateNvvDocumentContext() {
+    setUndoContext("nvv");
+    focusInspectorOnDocument("nvv-document");
   }
 
   function changeSceneMode(mode: SceneMode) {
@@ -150,6 +160,7 @@ export function useLibraryNavigation({
 
   return {
     activateNvdDocumentContext,
+    activateNvvDocumentContext,
     changeLeftPaneView,
     changeSceneMode,
     selectAsset,

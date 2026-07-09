@@ -2,6 +2,7 @@ import type { Editor, JSONContent } from "@tiptap/core";
 import type {
   NvdBlock,
   NvdDocument,
+  NvdTextBlock,
   NvdTextAlignment,
   NvdTextRun,
   NvdTextStyle,
@@ -45,14 +46,15 @@ export type NvdTextSelection = {
 };
 
 export function getNvdDocumentText(document: Pick<NvdDocument, "blocks">) {
-  return document.blocks.map((block) => block.text).join("\n");
+  return getNvdTextBlocks(document.blocks).map((block) => block.text).join("\n");
 }
 
 export function getNvdDocumentRuns(document: Pick<NvdDocument, "blocks" | "styles">) {
   const runs: NvdTextRun[] = [];
   const styles = getNvdDocumentStyleDefinitions(document.styles);
+  const textBlocks = getNvdTextBlocks(document.blocks);
 
-  document.blocks.forEach((block, index) => {
+  textBlocks.forEach((block, index) => {
     if (index > 0) {
       appendNvdTextRun(runs, { text: "\n" });
     }
@@ -72,9 +74,9 @@ export function createNvdDocumentBlocks(
 ) {
   const paragraphRuns = splitNvdTextRunsIntoParagraphs(runs);
   const paragraphTexts = paragraphRuns.map(getNvdTextRunsText);
-  const matchedBlocks = matchExistingBlocksToParagraphs(existingBlocks, paragraphTexts);
-
-  return paragraphRuns.map((runs, index) => {
+  const textBlocks = getNvdTextBlocks(existingBlocks);
+  const matchedBlocks = matchExistingBlocksToParagraphs(textBlocks, paragraphTexts);
+  const nextTextBlocks = paragraphRuns.map((runs, index) => {
     const existingBlock = matchedBlocks[index];
     const requestedLayout = blockLayouts?.[index];
     const kind = requestedLayout?.kind ?? getNvdStyleRole(existingBlock?.kind);
@@ -117,7 +119,9 @@ export function createNvdDocumentBlocks(
       ...(textAlign !== DEFAULT_NVD_TEXT_ALIGNMENT ? { textAlign } : {}),
       ...(widowLineCount > 2 ? { widowLineCount } : {}),
     };
-  }) satisfies NvdBlock[];
+  }) satisfies NvdTextBlock[];
+
+  return mergeNvdBlocksWithPreservedOrder(existingBlocks, nextTextBlocks);
 }
 
 export function getNvdTextRunsText(runs: NvdTextRun[]) {
@@ -174,13 +178,14 @@ export function getNvdTextAlignment(value: string | null | undefined): NvdTextAl
 }
 
 export function getNvdDocumentTextAlignments(document: Pick<NvdDocument, "blocks">) {
-  return document.blocks.map((block) => getNvdTextAlignment(block.textAlign));
+  return getNvdTextBlocks(document.blocks).map((block) => getNvdTextAlignment(block.textAlign));
 }
 
 export function getNvdDocumentBlockLayouts(document: Pick<NvdDocument, "blocks" | "styles">) {
   const styles = getNvdDocumentStyleDefinitions(document.styles);
+  const textBlocks = getNvdTextBlocks(document.blocks);
 
-  return document.blocks.map((block) => {
+  return textBlocks.map((block) => {
     const kind = getNvdStyleRole(block.kind);
     return {
       kind,
@@ -201,6 +206,18 @@ export function getNvdDocumentBlockLayouts(document: Pick<NvdDocument, "blocks" 
       ),
     };
   }) satisfies NvdBlockLayout[];
+}
+
+export function isNvdTextBlock(block: NvdBlock): block is NvdTextBlock {
+  return block.kind !== "embed";
+}
+
+export function getNvdTextBlocks(blocks: readonly NvdBlock[]): NvdTextBlock[] {
+  return blocks.filter(isNvdTextBlock);
+}
+
+export function getNvdNonTextBlocks(blocks: readonly NvdBlock[]): Exclude<NvdBlock, NvdTextBlock>[] {
+  return blocks.filter((block): block is Exclude<NvdBlock, NvdTextBlock> => !isNvdTextBlock(block));
 }
 
 export function normalizeNvdTextRuns(runs: NvdTextRun[]) {
@@ -339,9 +356,9 @@ export function getNvdEditorSelection(editor: Editor): NvdTextSelection {
   };
 }
 
-function getNvdBlockRuns(block: NvdBlock, roleStyle: NvdStyleDefinition) {
+function getNvdBlockRuns(block: NvdTextBlock, roleStyle: NvdStyleDefinition) {
   const normalizedRuns = normalizeNvdTextRuns(block.runs ?? []);
-  const blockRuns =
+  const blockRuns: NvdTextRun[] =
     getNvdTextRunsText(normalizedRuns) === block.text
       ? normalizedRuns
       : block.text
@@ -402,8 +419,8 @@ export function splitNvdTextRunsIntoParagraphs(runs: NvdTextRun[]) {
   return paragraphs;
 }
 
-function matchExistingBlocksToParagraphs(existingBlocks: NvdBlock[], paragraphTexts: string[]) {
-  const matches: (NvdBlock | undefined)[] = new Array(paragraphTexts.length);
+function matchExistingBlocksToParagraphs(existingBlocks: NvdTextBlock[], paragraphTexts: string[]) {
+  const matches: (NvdTextBlock | undefined)[] = new Array(paragraphTexts.length);
   let prefixLength = 0;
 
   while (
@@ -438,6 +455,31 @@ function matchExistingBlocksToParagraphs(existingBlocks: NvdBlock[], paragraphTe
   }
 
   return matches;
+}
+
+function mergeNvdBlocksWithPreservedOrder(existingBlocks: readonly NvdBlock[], nextTextBlocks: readonly NvdTextBlock[]) {
+  const mergedBlocks: NvdBlock[] = [];
+  let nextTextBlockIndex = 0;
+
+  existingBlocks.forEach((block) => {
+    if (!isNvdTextBlock(block)) {
+      mergedBlocks.push(block);
+      return;
+    }
+
+    const replacement = nextTextBlocks[nextTextBlockIndex];
+    if (replacement) {
+      mergedBlocks.push(replacement);
+      nextTextBlockIndex += 1;
+    }
+  });
+
+  while (nextTextBlockIndex < nextTextBlocks.length) {
+    mergedBlocks.push(nextTextBlocks[nextTextBlockIndex]);
+    nextTextBlockIndex += 1;
+  }
+
+  return mergedBlocks;
 }
 
 function normalizeNvdTextStyle(style: NvdTextStyle | null | undefined) {

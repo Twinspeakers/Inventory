@@ -22,7 +22,6 @@ import type {
 import {
   getNvdDocumentFontFamilies,
   getNvdDocumentText,
-  getNvdLayoutMode,
   paginateNvdDocument,
   useNvdFontsReady,
   type NvdTextSelection,
@@ -248,24 +247,14 @@ export function useAppDerivedState({
   const selectedDocumentFontsReady = useNvdFontsReady(getNvdDocumentFontFamilies(activeNvdDocument?.document));
   const deferredActiveNvdDocument = useDeferredValue(activeNvdDocument);
   const deferredDocumentPageCount = useMemo(() => {
-    if (
-      !selectedAsset ||
-      !deferredActiveNvdDocument ||
-      normalizePath(selectedAsset.path) !== normalizePath(deferredActiveNvdDocument.path) ||
-      getNvdLayoutMode(deferredActiveNvdDocument.document.layoutMode) !== "a4" ||
-      !selectedDocumentFontsReady
-    ) {
+    if (!deferredActiveNvdDocument || !selectedDocumentFontsReady) {
       return null;
     }
 
     return paginateNvdDocument(deferredActiveNvdDocument.document).length;
-  }, [deferredActiveNvdDocument, selectedAsset, selectedDocumentFontsReady]);
-  const selectedDocumentStatistics = useMemo(() => {
-    if (
-      !selectedAsset ||
-      !activeNvdDocument ||
-      normalizePath(selectedAsset.path) !== normalizePath(activeNvdDocument.path)
-    ) {
+  }, [deferredActiveNvdDocument, selectedDocumentFontsReady]);
+  const activeNvdDocumentStatistics = useMemo(() => {
+    if (!activeNvdDocument) {
       return null;
     }
 
@@ -278,10 +267,10 @@ export function useAppDerivedState({
       return getDocumentStatistics(text.slice(selectionStart, selectionEnd), null, "selection");
     }
 
-    const pages = getNvdLayoutMode(document.layoutMode) === "a4" ? deferredDocumentPageCount : null;
+    const pages = deferredDocumentPageCount;
 
     return getDocumentStatistics(text, pages);
-  }, [activeNvdDocument, activeNvdTextSelection, deferredDocumentPageCount, selectedAsset]);
+  }, [activeNvdDocument, activeNvdTextSelection, deferredDocumentPageCount]);
   const structure = useMemo(
     () =>
       buildStructure(
@@ -307,9 +296,9 @@ export function useAppDerivedState({
     inventoryDocumentAssetIds,
     inventoryDocumentPaths,
     masterLibraryAssets,
+    activeNvdDocumentStatistics,
     searchFilteredVisibleAssets,
     selectedAsset,
-    selectedDocumentStatistics,
     selectedVisibleAsset,
     sortedShelfAssets,
     sortedVisibleAssets,

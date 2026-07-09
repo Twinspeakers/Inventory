@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
@@ -100,6 +100,8 @@ const defaultLibrarySectionLabels: Record<
   "library-archives": "Archives",
 };
 
+type InspectorFocusMode = "selection" | "nvd-document" | "nvv-document";
+
 export function App() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [sourceFolders, setSourceFolders] = useState<SourceFolder[]>([]);
@@ -116,6 +118,7 @@ export function App() {
   const [recentUserTagIds, setRecentUserTagIds] = useState<string[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [hiddenDefaultLibraryViews, setHiddenDefaultLibraryViews] = useState<LibraryView[]>([]);
+  const [inspectorFocusMode, setInspectorFocusMode] = useState<InspectorFocusMode>("selection");
   const [editingLibraryAssetId, setEditingLibraryAssetId] = useState<number | null>(null);
   const [editingLibraryFolderId, setEditingLibraryFolderId] = useState<string | null>(null);
   const [virtualFolders, setVirtualFolders] = useState<VirtualFolder[]>(initialVirtualFolders);
@@ -197,6 +200,7 @@ export function App() {
   const {
     activeNvdCharacterSpacingPt,
     activeNvdLineHeight,
+    activeNvdSelectionKind,
     activeNvdSpaceAfterPt,
     activeNvdSpaceBeforePt,
     activeNvdStyleRole,
@@ -235,14 +239,13 @@ export function App() {
   });
   const {
     activeFolder,
-    assetTagSuggestions,
+    activeNvdDocumentStatistics,
     assets,
     currentLibraryState,
     currentWorkspaceState,
     inventoryDocumentPaths,
     masterLibraryAssets,
     selectedAsset,
-    selectedDocumentStatistics,
     sortedShelfAssets,
     sourceSummary,
     structure,
@@ -274,6 +277,7 @@ export function App() {
   });
   const {
     activateNvdDocumentContext,
+    activateNvvDocumentContext,
     changeLeftPaneView,
     changeSceneMode,
     selectAsset,
@@ -291,6 +295,8 @@ export function App() {
     selectedId,
     virtualFolders,
     visibleAssets,
+    focusInspectorOnDocument: (kind) => setInspectorFocusMode(kind),
+    focusInspectorOnSelection: () => setInspectorFocusMode("selection"),
     clearNvdStyleSelection,
     openTreeNodePath,
     setActiveView,
@@ -542,7 +548,42 @@ export function App() {
     setInventoryDocuments,
     setStatusMessage,
   });
-  const { selectedModelKey, selectedModelInspectorResult, selectedModelTransformOverride } = getSelectedModelState(selectedAsset);
+  const { selectedModelTransformOverride } = getSelectedModelState(selectedAsset);
+  const activeNvdInspectorAsset = useMemo(
+    () => (activeNvdDocument ? (assets.find((asset) => asset.id === activeNvdDocument.entry.assetId) ?? null) : null),
+    [activeNvdDocument, assets],
+  );
+  const activeNvvInspectorAsset = useMemo(
+    () => (activeNvvDocument ? (assets.find((asset) => asset.id === activeNvvDocument.entry.assetId) ?? null) : null),
+    [activeNvvDocument, assets],
+  );
+  const inspectorAsset =
+    inspectorFocusMode === "nvd-document"
+      ? activeNvdInspectorAsset ?? selectedAsset
+      : inspectorFocusMode === "nvv-document"
+        ? activeNvvInspectorAsset ?? selectedAsset
+        : selectedAsset;
+  const {
+    selectedModelKey: inspectorModelKey,
+    selectedModelInspectorResult: inspectorModelInspectorResult,
+    selectedModelTransformOverride: inspectorModelTransformOverride,
+  } = getSelectedModelState(inspectorAsset);
+  const inspectorDocumentStatistics =
+    activeNvdDocument && inspectorAsset && normalizePath(inspectorAsset.path) === normalizePath(activeNvdDocument.path)
+      ? activeNvdDocumentStatistics
+      : null;
+  const inspectorNvvDocument =
+    activeNvvDocument && inspectorAsset && normalizePath(inspectorAsset.path) === normalizePath(activeNvvDocument.path)
+      ? activeNvvDocument.document
+      : null;
+  const inspectorTagSuggestions = useMemo(() => {
+    if (!inspectorAsset) {
+      return [];
+    }
+
+    const existingTags = new Set(inspectorAsset.tags.map((tag) => createProjectTagId(tag) || tag));
+    return recentUserTagIds.filter((tag) => !existingTags.has(createProjectTagId(tag) || tag)).slice(0, 12);
+  }, [inspectorAsset, recentUserTagIds]);
   const { requestAssetReanalysis } = useImageAnalysis({
     activeInventory,
     scanResult,
@@ -560,6 +601,15 @@ export function App() {
       void openNvvDocumentFromAsset(selectedAsset);
     }
   }, [selectedAsset?.id, selectedAsset?.path]);
+  useEffect(() => {
+    if (inspectorFocusMode === "nvd-document" && !activeNvdDocument) {
+      setInspectorFocusMode("selection");
+    }
+
+    if (inspectorFocusMode === "nvv-document" && !activeNvvDocument) {
+      setInspectorFocusMode("selection");
+    }
+  }, [activeNvdDocument, activeNvvDocument, inspectorFocusMode]);
 
   useEffect(() => {
     if (!activeInventory || sourceFolders.length === 0) {
@@ -720,11 +770,11 @@ export function App() {
   }
 
   function updateSelectedModelTransform(transform: ModelTransform) {
-    updateModelTransformOverride(selectedModelKey, transform);
+    updateModelTransformOverride(inspectorModelKey, transform);
   }
 
   function resetSelectedModelTransform() {
-    resetModelTransformOverride(selectedModelKey);
+    resetModelTransformOverride(inspectorModelKey);
   }
 
   function addTagToAsset(assetId: number, tag: string) {
@@ -916,14 +966,6 @@ export function App() {
     });
   }
 
-  const activeInspectorNvvDocument =
-    sceneMode === "nvv-document" &&
-    selectedAsset &&
-    activeNvvDocument &&
-    normalizePath(selectedAsset.path) === normalizePath(activeNvvDocument.path)
-      ? activeNvvDocument.document
-      : null;
-
   return (
     <AppShell
       themeStyle={themeStyle}
@@ -1049,6 +1091,7 @@ export function App() {
         onNvdEditorControllerChange: handleNvdEditorControllerChange,
         onNvdStyleDraftChange: updateNvdStyleDraft,
         onNvdTextSelectionChange: handleNvdTextSelectionChange,
+        onNvvDocumentActivate: activateNvvDocumentContext,
         onNvvDocumentChange: updateActiveNvvDocument,
         onOpenAssetContextMenu: openAssetContextMenu,
         onOpenFolder: handleOpenFolder,
@@ -1070,15 +1113,16 @@ export function App() {
       inspector={{
         activeNvdStyleRole,
         collapsed: rightPaneCollapsed,
-        documentStatistics: selectedDocumentStatistics,
-        modelInspectorResult: selectedModelInspectorResult,
-        modelTransformOverride: selectedModelTransformOverride,
+        documentStatistics: inspectorDocumentStatistics,
+        modelInspectorResult: inspectorModelInspectorResult,
+        modelTransformOverride: inspectorModelTransformOverride,
         nvdCharacterSpacingPt: nvdStyleDraft?.characterSpacingPt ?? activeNvdCharacterSpacingPt,
+        nvdControlsEnabled: nvdStyleDraft !== null || activeNvdSelectionKind === "text",
         nvdLineHeight: nvdStyleDraft?.lineHeight ?? activeNvdLineHeight,
         nvdSpaceAfterPt: nvdStyleDraft?.spaceAfterPt ?? activeNvdSpaceAfterPt,
         nvdSpaceBeforePt: nvdStyleDraft?.spaceBeforePt ?? activeNvdSpaceBeforePt,
         nvdStyleDefinitions,
-        nvvDocument: activeInspectorNvvDocument,
+        nvvDocument: inspectorNvvDocument,
         onApplyNvdStyle: applyNvdStyle,
         onAssetAddTag: addTagToAsset,
         onAssetKeptTagsChange: updateAssetKeptTags,
@@ -1088,7 +1132,7 @@ export function App() {
         onAssetTagsChange: updateAssetTags,
         onOpenTagBrowser: () => {
           if (isTauriRuntime()) {
-            void openTagLibraryWindow(selectedAsset);
+            void openTagLibraryWindow(inspectorAsset);
             return;
           }
 
@@ -1106,8 +1150,8 @@ export function App() {
         onResizeStart: startRightPaneResize,
         onSelectNvdStyle: selectNvdStyle,
         onToggleCollapsed: () => setRightPaneCollapsed((collapsed) => !collapsed),
-        selectedAsset,
-        tagSuggestions: assetTagSuggestions,
+        selectedAsset: inspectorAsset,
+        tagSuggestions: inspectorTagSuggestions,
       }}
       overlays={{
         addLibraryNodePanel,

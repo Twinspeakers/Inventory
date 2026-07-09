@@ -113,7 +113,7 @@ Current features:
 - Creation, open, save, rename, delete, and explicit document close.
 - Dirty-document prompts for switching, refresh/window close, and explicit close.
 - Optional Ctrl+S save reminder.
-- Pageless and A4 modes over one document-wide Tiptap editor.
+- A4 document editing over one document-wide editor model.
 - A4 uses measured paper-sheet presentation and decoration-only page spacers. Do not go back to one Tiptap instance per page.
 - Shared pagination cache across editor, Inspector, and Workspace previews.
 - Bundled offline fonts, recent fonts, font family, font size, Bold, Italic.
@@ -128,7 +128,7 @@ Current features:
 
 Important NVD contracts:
 
-- Formatting changes must agree across the TypeScript model, Tiptap conversion, Rust serialization, Pageless rendering, A4 pagination, Workspace previews, Inspector statistics, save, reopen, and tests.
+- Formatting changes must agree across the TypeScript model, Tiptap conversion, Rust serialization, A4 pagination, Workspace previews, Inspector statistics, save, reopen, and tests.
 - Font changes affect wrapping and page counts.
 - Toolbar controls must preserve text selection when clicked.
 - Line spacing and paragraph spacing are role/block presentation attributes.

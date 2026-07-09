@@ -462,18 +462,8 @@ textarea {
     box-shadow: none;
   }
 
-  .nvd-editor-pageless-document {
-    @apply mx-auto w-full;
-    min-height: calc(100vh + 4rem);
-  }
-
   .nvd-document-input {
     @apply w-full flex-1 resize-none border-0 bg-transparent text-sm leading-7 text-ink outline-none;
-  }
-
-  .nvd-document-input-pageless {
-    min-height: calc(100vh + 4rem);
-    @apply overflow-hidden p-24;
   }
 
   .nvd-editor-pages {
@@ -525,6 +515,12 @@ textarea {
   .nvd-a4-selection-rect {
     background: rgb(var(--color-brand-blue) / 0.22);
     @apply absolute rounded-[1px];
+  }
+
+  .nvd-a4-block-selection-rect {
+    @apply absolute rounded-sm;
+    background: rgb(var(--color-brand-blue) / 0.08);
+    box-shadow: inset 0 0 0 2px rgb(var(--color-brand-blue) / 0.7);
   }
 
   .nvd-a4-caret-overlay {
@@ -744,12 +740,6 @@ textarea {
     @apply m-0;
   }
 
-  .nvd-rich-text-content-pageless {
-    min-height: calc(100vh + 4rem);
-    max-width: 38rem;
-    @apply mx-auto px-4 pb-24 pt-8;
-  }
-
   .nvd-rich-text-content-a4-continuous {
     @apply relative z-10;
   }
@@ -787,23 +777,6 @@ textarea {
     margin-left: -96px;
     width: 794px;
     @apply pointer-events-none;
-  }
-
-  .nvd-layout-toolbar-toggle {
-    @apply inline-flex h-7 items-center gap-1.5 rounded-sm border border-line bg-surface px-2.5 text-[11px] font-semibold text-muted transition hover:border-steel hover:bg-surface-raised hover:text-ink;
-    box-shadow: none;
-  }
-
-  .nvd-layout-toolbar-toggle-arrow {
-    @apply text-[10px] text-muted;
-  }
-
-  .nvd-layout-toolbar-toggle-target {
-    @apply text-ink/80;
-  }
-
-  .nvd-layout-toolbar-toggle-on {
-    @apply text-ink;
   }
 
   .nvd-thumbnail {
@@ -855,6 +828,37 @@ textarea {
     white-space: pre;
     width: 100%;
     @apply left-0 m-0 text-ink;
+  }
+
+  .nvd-page-fragment-embed {
+    @apply absolute m-0 overflow-hidden rounded-sm border border-line bg-canvas text-left text-ink;
+  }
+
+  .nvd-page-fragment-embed-media {
+    @apply flex w-full items-center justify-center overflow-hidden bg-preview;
+  }
+
+  .nvd-page-fragment-embed-image {
+    @apply block h-full w-full object-contain;
+  }
+
+  .nvd-page-fragment-embed-fallback {
+    @apply flex h-full w-full flex-col items-center justify-center gap-1 px-4 text-center;
+    background:
+      linear-gradient(180deg, rgb(var(--color-surface-raised) / 0.6), rgb(var(--color-preview) / 0.35)),
+      rgb(var(--color-preview));
+  }
+
+  .nvd-page-fragment-embed-label {
+    @apply text-[10px] font-semibold uppercase tracking-normal text-muted;
+  }
+
+  .nvd-page-fragment-embed-name {
+    @apply text-sm font-medium text-ink;
+  }
+
+  .nvd-page-fragment-embed-caption {
+    @apply border-t border-line px-3 py-2 text-xs leading-relaxed text-muted;
   }
 
   .nvd-thumbnail-fragment-view {
@@ -1166,8 +1170,17 @@ textarea {
     @apply pointer-events-auto opacity-100;
   }
 
+  .paragraph-setting-field-disabled:hover .paragraph-setting-spinner,
+  .paragraph-setting-field-disabled:focus-within .paragraph-setting-spinner {
+    @apply pointer-events-none opacity-0;
+  }
+
   .paragraph-setting-spinner-button {
     @apply flex min-h-0 flex-1 items-center justify-center bg-surface transition-colors hover:bg-surface-raised hover:text-ink;
+  }
+
+  .paragraph-setting-spinner-button:disabled {
+    @apply cursor-default text-muted;
   }
 
   .left-pane-view-switcher {

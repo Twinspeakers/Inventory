@@ -30,7 +30,7 @@ export type NvdPageBreak = {
 export { getNvdDocumentText };
 
 export function getNvdLayoutMode(layoutMode: NvdLayoutMode | string | null | undefined): NvdLayoutMode {
-  return layoutMode === "pageless" || layoutMode === "a4" ? layoutMode : DEFAULT_NVD_LAYOUT_MODE;
+  return layoutMode === "a4" ? layoutMode : DEFAULT_NVD_LAYOUT_MODE;
 }
 
 export function paginateNvdDocument(

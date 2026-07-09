@@ -143,7 +143,7 @@ The vector editor edits `.nvv`. Future SVG editing should begin with an explicit
 ## 2026-06-03 - NVD Content Is Independent From Page Layout
 
 Decision:
-NVD documents use Pageless layout by default, with A4 as an optional per-document presentation mode over the same content.
+NVD documents use A4 layout as the single supported presentation mode.
 
 Reason:
 Screen-first drafting and page-aware review are both useful, but switching between them should not rewrite the document.
@@ -160,7 +160,7 @@ Reason:
 Typography affects appearance, wrapping, pagination, previews, and future exports.
 
 Consequences:
-The same effective styles must be used by Pageless, A4, Workspace previews, saving, reopening, and pagination measurement.
+The same effective styles must be used by A4 editing, Workspace previews, saving, reopening, and pagination measurement.
 
 ## 2026-06-03 - Bundle A Curated Offline Font Set
 
@@ -180,7 +180,7 @@ NVD paragraphs are stored as separate blocks, and Left, Center, Right, and Justi
 
 ## 2026-06-04 - NVD Paragraph Spacing Is Additive
 
-Space After on one paragraph and Space Before on the following paragraph are both preserved and added together. Pageless rendering, A4 pagination, Workspace previews, and future exports should use the same additive rule.
+Space After on one paragraph and Space Before on the following paragraph are both preserved and added together. A4 pagination, Workspace previews, and future exports should use the same additive rule.
 
 Line spacing and paragraph gaps are block presentation attributes. Character spacing is an inline text-run attribute so it can preserve mixed formatting and participate truthfully in text-width measurement.
 

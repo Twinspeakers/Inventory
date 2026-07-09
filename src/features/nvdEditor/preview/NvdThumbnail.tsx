@@ -1,27 +1,14 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { NvdDocument, NvdTextRun, OpenedNvdDocument } from "../../inventoryProject";
+import type { NvdDocument, OpenedNvdDocument } from "../../inventoryProject";
 import { getNvdFontCssStack, getNvdFontFamily, useNvdFontsReady } from "../fonts";
 import { getNvdFontSizePt, getNvdFontSizePx } from "../primitives/nvdFontSize";
-import { DEFAULT_NVD_LINE_HEIGHT } from "../primitives/nvdLineHeight";
 import { getNvdPageLayout, getNvdPageLayoutPx } from "../layout/nvdPageLayout";
-import { DEFAULT_NVD_PARAGRAPH_SPACING_PT } from "../primitives/nvdParagraphSpacing";
-import { getNvdLayoutMode, layoutNvdTextRuns } from "../layout/nvdLayout";
+import { layoutNvdDocument } from "../layout/nvdLayout";
 import { NvdPageFragmentView } from "../rendering/NvdPageFragmentView";
 import { getNvdDocumentStyleDefinitions } from "../document/nvdStyles";
-import {
-  getNvdDocumentFontFamilies,
-  getNvdDocumentBlockLayouts,
-  getNvdDocumentRuns,
-  getNvdTextRunCharacterSpacingPt,
-  getNvdTextRunFontFamily,
-  getNvdTextRunFontSizePt,
-  isNvdTextRunBold,
-  isNvdTextRunItalic,
-  splitNvdTextRunsIntoParagraphs,
-  type NvdBlockLayout,
-} from "../document/nvdRichText";
+import { getNvdDocumentFontFamilies } from "../document/nvdRichText";
 
 type NvdThumbnailAsset = {
   name: string;
@@ -48,7 +35,6 @@ export function NvdThumbnail({
   const paragraphStyle = styleDefinitions.p;
   const fontFamily = document ? paragraphStyle.fontFamily : getNvdFontFamily(null);
   const fontSizePt = document ? paragraphStyle.fontSizePt : getNvdFontSizePt(null);
-  const layoutMode = getNvdLayoutMode(document?.layoutMode);
   const pageLayout = getNvdPageLayout(document?.pageLayout);
   const pageLayoutPx = getNvdPageLayoutPx(pageLayout);
   const fontFamilies = useMemo(() => getNvdDocumentFontFamilies(document), [document]);
@@ -60,55 +46,21 @@ export function NvdThumbnail({
     }),
     [fontFamily, fontSizePt, pageLayoutPx.widthPx],
   );
-  const runs = useMemo(() => (document ? getNvdDocumentRuns(document) : []), [document]);
-  const blockLayouts = useMemo(
-    () => (document ? getNvdDocumentBlockLayouts(document) : []),
-    [document],
-  );
   const previewContent = useMemo(
     () => {
-      if (!fontsReady) {
+      if (!fontsReady || !document) {
         return {
-          blockLayouts: [],
           firstPage: null,
-          runs: [],
         };
       }
 
-      if (layoutMode !== "a4") {
-        return {
-          blockLayouts,
-          firstPage: null,
-          runs,
-        };
-      }
-
-      const firstPage = layoutNvdTextRuns(
-        runs,
-        fontFamily,
-        fontSizePt,
-        blockLayouts,
-        pageLayout,
-        styleDefinitions,
-      ).pages[0] ?? null;
+      const firstPage = layoutNvdDocument(document).pages[0] ?? null;
 
       return {
-        blockLayouts:
-          firstPage?.paragraphIndexes.map(
-            (paragraphIndex) =>
-              blockLayouts[paragraphIndex] ?? {
-                kind: "p",
-                lineHeight: DEFAULT_NVD_LINE_HEIGHT,
-                spaceAfterPt: DEFAULT_NVD_PARAGRAPH_SPACING_PT,
-                spaceBeforePt: DEFAULT_NVD_PARAGRAPH_SPACING_PT,
-                textAlign: "left",
-              },
-          ) ?? [],
         firstPage,
-        runs: firstPage?.runs ?? [],
       };
     },
-    [blockLayouts, fontFamily, fontSizePt, fontsReady, layoutMode, pageLayout, runs, styleDefinitions],
+    [document, fontsReady],
   );
 
   useEffect(() => {
@@ -153,12 +105,9 @@ export function NvdThumbnail({
   }
 
   return (
-    <div
-      className={`nvd-thumbnail nvd-thumbnail-${layoutMode}`}
-      style={{ aspectRatio: `${pageLayoutPx.widthPx} / ${pageLayoutPx.heightPx}` }}
-    >
+    <div className="nvd-thumbnail nvd-thumbnail-a4" style={{ aspectRatio: `${pageLayoutPx.widthPx} / ${pageLayoutPx.heightPx}` }}>
       <div
-        className={`nvd-thumbnail-page nvd-thumbnail-page-${layoutMode}`}
+        className="nvd-thumbnail-page nvd-thumbnail-page-a4"
         style={{
           ...fontStyle,
           paddingBottom: `${(pageLayoutPx.marginBottomPx / pageLayoutPx.widthPx) * 100}%`,
@@ -174,105 +123,16 @@ export function NvdThumbnail({
             <span className="block h-1 w-11/12 rounded-sm bg-surface-raised" />
             <span className="block h-1 w-3/4 rounded-sm bg-surface-raised" />
           </div>
-        ) : layoutMode === "a4" && previewContent.firstPage ? (
+        ) : previewContent.firstPage ? (
           <NvdPageFragmentView
             className="nvd-thumbnail-fragment-view"
             defaultFontFamily={fontFamily}
             defaultFontSizePt={fontSizePt}
             page={previewContent.firstPage}
           />
-        ) : previewContent.runs.length > 0 ? (
-          <NvdStyledTextPreview
-            defaultFontFamily={fontFamily}
-            defaultFontSizePt={fontSizePt}
-            pageWidthPx={pageLayoutPx.widthPx}
-            blockLayouts={previewContent.blockLayouts}
-            runs={previewContent.runs}
-          />
         ) : null}
       </div>
     </div>
-  );
-}
-
-function NvdStyledTextPreview({
-  defaultFontFamily,
-  defaultFontSizePt,
-  pageWidthPx,
-  blockLayouts,
-  runs,
-}: {
-  defaultFontFamily: string;
-  defaultFontSizePt: number;
-  pageWidthPx: number;
-  blockLayouts: NvdBlockLayout[];
-  runs: NvdTextRun[];
-}) {
-  const paragraphs = splitNvdTextRunsIntoParagraphs(runs);
-
-  return (
-    <>
-      {paragraphs.map((paragraphRuns, paragraphIndex) => {
-        const layout = blockLayouts[paragraphIndex] ?? {
-          kind: "p",
-          lineHeight: DEFAULT_NVD_LINE_HEIGHT,
-          spaceAfterPt: DEFAULT_NVD_PARAGRAPH_SPACING_PT,
-          spaceBeforePt: DEFAULT_NVD_PARAGRAPH_SPACING_PT,
-          textAlign: "left",
-        };
-
-        return (
-          <p
-            className="nvd-thumbnail-text"
-            key={paragraphIndex}
-            style={{
-              lineHeight: layout.lineHeight,
-              marginBottom: `${layout.spaceAfterPt}pt`,
-              marginTop: `${layout.spaceBeforePt}pt`,
-              textAlign: layout.textAlign,
-            }}
-          >
-            <NvdStyledRuns
-              defaultFontFamily={defaultFontFamily}
-              defaultFontSizePt={defaultFontSizePt}
-              pageWidthPx={pageWidthPx}
-              runs={paragraphRuns}
-            />
-          </p>
-        );
-      })}
-    </>
-  );
-}
-
-function NvdStyledRuns({
-  defaultFontFamily,
-  defaultFontSizePt,
-  pageWidthPx,
-  runs,
-}: {
-  defaultFontFamily: string;
-  defaultFontSizePt: number;
-  pageWidthPx: number;
-  runs: NvdTextRun[];
-}) {
-  return (
-    <>
-      {runs.map((run, runIndex) => (
-        <span
-          key={`${runIndex}-${run.text.length}`}
-          style={{
-            fontFamily: getNvdFontCssStack(getNvdTextRunFontFamily(run, defaultFontFamily)),
-            fontSize: getNvdThumbnailFontSizeCssValue(getNvdTextRunFontSizePt(run, defaultFontSizePt), pageWidthPx),
-            fontStyle: isNvdTextRunItalic(run) ? "italic" : "normal",
-            fontWeight: isNvdTextRunBold(run) ? 700 : 400,
-            letterSpacing: getNvdThumbnailFontSizeCssValue(getNvdTextRunCharacterSpacingPt(run), pageWidthPx),
-          }}
-        >
-          {run.text}
-        </span>
-      ))}
-    </>
   );
 }
 

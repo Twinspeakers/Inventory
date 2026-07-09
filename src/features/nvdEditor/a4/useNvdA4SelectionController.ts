@@ -1,4 +1,9 @@
 import { useState } from "react";
+import {
+  createNvdTextDocumentSelection,
+  isNvdTextDocumentSelection,
+  type NvdDocumentSelection,
+} from "../document/nvdDocumentSelection";
 import type { NvdTextSelection } from "../document/nvdRichText";
 
 export function useNvdA4SelectionController({
@@ -6,18 +11,32 @@ export function useNvdA4SelectionController({
 }: {
   onSelectionChange: (selection: NvdTextSelection) => void;
 }) {
-  const [activeSelection, setActiveSelection] = useState<NvdTextSelection | null>(null);
+  const [activeDocumentSelection, setActiveDocumentSelection] = useState<NvdDocumentSelection | null>(null);
+  const [activeTextSelection, setActiveTextSelection] = useState<NvdTextSelection | null>(null);
   const [bridgeFocusRequestKey, setBridgeFocusRequestKey] = useState(0);
 
-  function handleSelectionRequest(selection: NvdTextSelection) {
-    setActiveSelection(selection);
+  function handleTextSelectionRequest(selection: NvdTextSelection) {
+    setActiveDocumentSelection(createNvdTextDocumentSelection(selection.start, selection.end));
+    setActiveTextSelection(selection);
     setBridgeFocusRequestKey((value) => value + 1);
     onSelectionChange(selection);
   }
 
+  function handleDocumentSelectionRequest(selection: NvdDocumentSelection) {
+    setActiveDocumentSelection(selection);
+    setActiveTextSelection(isNvdTextDocumentSelection(selection) ? selection.text : null);
+    setBridgeFocusRequestKey((value) => value + 1);
+
+    if (isNvdTextDocumentSelection(selection)) {
+      onSelectionChange(selection.text);
+    }
+  }
+
   return {
-    activeSelection,
+    activeDocumentSelection,
+    activeTextSelection,
     bridgeFocusRequestKey,
-    handleSelectionRequest,
+    handleDocumentSelectionRequest,
+    handleTextSelectionRequest,
   };
 }

@@ -58,6 +58,7 @@ export function MainWorkspace({
   onCloseNvdDocument,
   onCloseNvvDocument,
   onNvdDocumentActivate,
+  onNvvDocumentActivate,
   onNvdDocumentChange,
   onNvvDocumentChange,
   onNvdEditorControllerChange,
@@ -110,6 +111,7 @@ export function MainWorkspace({
   onCloseNvdDocument: () => void;
   onCloseNvvDocument: () => void;
   onNvdDocumentActivate: () => void;
+  onNvvDocumentActivate: () => void;
   onNvdDocumentChange: (document: NvdDocument) => void;
   onNvvDocumentChange: (document: NvvDocument) => void;
   onNvdEditorControllerChange: (controller: NvdEditorController | null) => void;
@@ -133,6 +135,8 @@ export function MainWorkspace({
   totalAssetCount: number;
   viewMode: AssetViewMode;
 }) {
+  const showAssetShelf = !isNativeHubView(activeView) || sceneMode !== "preview";
+
   return (
     <section className="workspace-panel flex min-w-0 flex-col overflow-hidden bg-canvas">
       <PreviewStage
@@ -150,6 +154,7 @@ export function MainWorkspace({
         onCloseNvdDocument={onCloseNvdDocument}
         onCloseNvvDocument={onCloseNvvDocument}
         onNvdDocumentActivate={onNvdDocumentActivate}
+        onNvvDocumentActivate={onNvvDocumentActivate}
         onNvdDocumentChange={onNvdDocumentChange}
         onNvdEditorControllerChange={onNvdEditorControllerChange}
         onNvdStyleDraftChange={onNvdStyleDraftChange}
@@ -180,7 +185,7 @@ export function MainWorkspace({
         showNvdSaveReminder={nvdSaveReminderVisible}
         sourcePath={sourceSummary}
       />
-      {!isNativeHubView(activeView) ? (
+      {showAssetShelf ? (
         <AssetShelf
           activeView={activeView}
           activeFolderName={activeFolderName}

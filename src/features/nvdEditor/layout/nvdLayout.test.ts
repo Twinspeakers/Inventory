@@ -26,9 +26,9 @@ function createLayout(overrides: Partial<NvdBlockLayout> = {}): NvdBlockLayout {
 }
 
 describe("NVD A4 pagination", () => {
-  it("preserves both supported layout modes while defaulting invalid values to A4", () => {
+  it("keeps A4 as the only supported layout mode", () => {
     expect(getNvdLayoutMode("a4")).toBe("a4");
-    expect(getNvdLayoutMode("pageless")).toBe("pageless");
+    expect(getNvdLayoutMode("pageless")).toBe("a4");
     expect(getNvdLayoutMode("not-a-mode")).toBe("a4");
     expect(getNvdLayoutMode(null)).toBe("a4");
   });

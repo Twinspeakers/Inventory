@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { Backpack, ChevronDown, ChevronLeft, ChevronRight, Eye, ListTree, Plus, X } from "lucide-react";
 import type { LibraryView } from "../../features/assetShelf";
 import type { NvdDocument } from "../../features/inventoryProject";
-import { getNvdStyleRole, type NvdStyleRole } from "../../features/nvdEditor";
+import { getNvdStyleRole, isNvdTextBlock, type NvdStyleRole } from "../../features/nvdEditor";
 import type { LeftPaneView, NvdOutlineEntry, SourceFolder, StructureNode } from "../appTypes";
 
 export function LibraryStructure({
@@ -285,6 +285,10 @@ export function getNvdOutline(document: NvdDocument | null): NvdOutlineEntry[] {
 
   const outline: NvdOutlineEntry[] = [];
   document.blocks.forEach((block, blockIndex) => {
+    if (!isNvdTextBlock(block)) {
+      return;
+    }
+
     const role = getNvdStyleRole(block.kind);
     const text = block.text.trim();
 

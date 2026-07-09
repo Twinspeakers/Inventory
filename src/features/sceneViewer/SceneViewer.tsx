@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import type {
   NvdDocument,
-  NvdLayoutMode,
   NvdTextAlignment,
   NvvDocument,
   NvvDocumentChangeOptions,
@@ -28,7 +27,6 @@ import type {
 import {
   getNvdFontFamily,
   getNvdFontSizePt,
-  getNvdLayoutMode,
   NvdEditor,
   NvdFontSelector,
   NvdFontSizeSelector,
@@ -105,6 +103,7 @@ export function PreviewStage<TAsset extends SceneViewerAsset>({
   onCreateNvvDocument,
   onCloseNvdDocument,
   onNvdDocumentActivate,
+  onNvvDocumentActivate,
   onNvdDocumentChange,
   onNvdEditorControllerChange,
   onNvdStyleDraftChange,
@@ -137,6 +136,7 @@ export function PreviewStage<TAsset extends SceneViewerAsset>({
   onCreateNvvDocument: () => void;
   onCloseNvdDocument: () => void;
   onNvdDocumentActivate: () => void;
+  onNvvDocumentActivate: () => void;
   onNvdDocumentChange: (document: NvdDocument) => void;
   onNvdEditorControllerChange: (controller: NvdEditorController | null) => void;
   onNvdStyleDraftChange: (style: NvdStyleDefinition) => void;
@@ -247,6 +247,7 @@ export function PreviewStage<TAsset extends SceneViewerAsset>({
           <NvvDocumentMode
             document={nvvDocument.document}
             nvvZoomPercent={nvvZoomPercent}
+            onNvvDocumentActivate={onNvvDocumentActivate}
             onNvvDocumentChange={onNvvDocumentChange}
             onNvvZoomChange={setNvvZoomPercent}
           />
@@ -440,15 +441,6 @@ function SceneToolbar({
       {mode === "nvd-document" && nvdDocument ? (
         <div className="flex items-center gap-1">
           <NvdZoomSelector zoomPercent={nvdZoomPercent} onChange={onNvdZoomChange} />
-          <NvdLayoutToolbarToggle
-            layoutMode={getNvdLayoutMode(nvdDocument.document.layoutMode)}
-            onChange={(layoutMode) =>
-              onNvdDocumentChange({
-                ...nvdDocument.document,
-                layoutMode,
-              })
-            }
-          />
           <button
             aria-label="Close NVD document"
             className="nvd-format-button"
@@ -474,34 +466,6 @@ function SceneToolbar({
         </div>
       ) : null}
     </div>
-  );
-}
-
-function NvdLayoutToolbarToggle({
-  layoutMode,
-  onChange,
-}: {
-  layoutMode: NvdLayoutMode;
-  onChange: (layoutMode: NvdLayoutMode) => void;
-}) {
-  const isPageless = layoutMode === "pageless";
-  const nextLayoutMode = isPageless ? "a4" : "pageless";
-
-  return (
-    <button
-      aria-label={`Switch to ${nextLayoutMode === "a4" ? "A4" : "Pageless"} layout`}
-      aria-pressed={isPageless}
-      className={`nvd-layout-toolbar-toggle ${isPageless ? "nvd-layout-toolbar-toggle-on" : ""}`}
-      title={`Switch to ${nextLayoutMode === "a4" ? "A4" : "Pageless"} layout`}
-      type="button"
-      onClick={() => onChange(nextLayoutMode)}
-    >
-      <span>{isPageless ? "Pageless" : "A4"}</span>
-      <span className="nvd-layout-toolbar-toggle-arrow" aria-hidden="true">
-        →
-      </span>
-      <span className="nvd-layout-toolbar-toggle-target">{nextLayoutMode === "a4" ? "A4" : "Pageless"}</span>
-    </button>
   );
 }
 
@@ -548,11 +512,13 @@ function NvdDocumentMode({
 function NvvDocumentMode({
   document,
   nvvZoomPercent,
+  onNvvDocumentActivate,
   onNvvDocumentChange,
   onNvvZoomChange,
 }: {
   document: NvvDocument;
   nvvZoomPercent: number;
+  onNvvDocumentActivate: () => void;
   onNvvDocumentChange: (document: NvvDocument, options?: NvvDocumentChangeOptions) => void;
   onNvvZoomChange: (zoomPercent: number) => void;
 }) {
@@ -567,7 +533,7 @@ function NvvDocumentMode({
 
   return (
     <div className="h-full" onWheel={handleWheel}>
-      <NvvEditor document={document} onChange={onNvvDocumentChange} zoomPercent={nvvZoomPercent} />
+      <NvvEditor document={document} onActivate={onNvvDocumentActivate} onChange={onNvvDocumentChange} zoomPercent={nvvZoomPercent} />
     </div>
   );
 }

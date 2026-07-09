@@ -2,11 +2,16 @@ import type { NvdPageLayout } from "../../inventoryProject";
 import { NVD_A4_PAGE_GAP_PX } from "../layout/nvdLayout";
 import { getNvdPageLayoutPx } from "../layout/nvdPageLayout";
 import {
+  getNvdBlockSelectionGeometry,
   getNvdCaretGeometry,
   getNvdSelectionGeometry,
   type NvdDocumentLayoutSnapshot,
 } from "../layout/nvdPageLayoutEngine";
-import type { NvdTextSelection } from "../document/nvdRichText";
+import type { NvdDocumentSelection } from "../document/nvdDocumentSelection";
+import {
+  isNvdBlockDocumentSelection,
+  isNvdTextDocumentSelection,
+} from "../document/nvdDocumentSelection";
 
 export function NvdA4SelectionOverlay({
   layout,
@@ -15,19 +20,38 @@ export function NvdA4SelectionOverlay({
 }: {
   layout: NvdDocumentLayoutSnapshot;
   pageLayout: NvdPageLayout;
-  selection: NvdTextSelection | null;
+  selection: NvdDocumentSelection | null;
 }) {
   if (!selection) {
     return null;
   }
 
   const pageLayoutPx = getNvdPageLayoutPx(pageLayout);
-  const hasRange = selection.end > selection.start;
-  const caret = !hasRange ? getNvdCaretGeometry(layout, selection.start) : null;
-  const rects = hasRange ? getNvdSelectionGeometry(layout, selection.start, selection.end) : [];
+  const textSelection = isNvdTextDocumentSelection(selection) ? selection.text : null;
+  const blockSelection = isNvdBlockDocumentSelection(selection)
+    ? getNvdBlockSelectionGeometry(layout, selection.blockId)
+    : null;
+  const hasRange = textSelection ? textSelection.end > textSelection.start : false;
+  const caret =
+    textSelection && !hasRange ? getNvdCaretGeometry(layout, textSelection.start) : null;
+  const rects =
+    textSelection && hasRange
+      ? getNvdSelectionGeometry(layout, textSelection.start, textSelection.end)
+      : [];
 
   return (
     <div className="nvd-a4-selection-overlay" aria-hidden="true">
+      {blockSelection ? (
+        <div
+          className="nvd-a4-block-selection-rect"
+          style={{
+            height: `${blockSelection.heightPx}px`,
+            left: `${pageLayoutPx.marginLeftPx + blockSelection.leftPx}px`,
+            top: `${blockSelection.pageIndex * (pageLayoutPx.heightPx + NVD_A4_PAGE_GAP_PX) + pageLayoutPx.marginTopPx + blockSelection.topPx}px`,
+            width: `${blockSelection.widthPx}px`,
+          }}
+        />
+      ) : null}
       {rects.map((rect) => (
         <div
           className="nvd-a4-selection-rect"

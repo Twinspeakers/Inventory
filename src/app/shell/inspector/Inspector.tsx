@@ -34,6 +34,7 @@ type InspectorProps = {
   nvdStyleDefinitions: Record<NvdStyleRole, NvdStyleDefinition>;
   nvdLineHeight: number | null;
   nvdCharacterSpacingPt: number | null;
+  nvdControlsEnabled: boolean;
   nvdSpaceAfterPt: number | null;
   nvdSpaceBeforePt: number | null;
   nvvDocument: NvvDocument | null;
@@ -70,6 +71,7 @@ export function Inspector({
   nvdStyleDefinitions,
   nvdLineHeight,
   nvdCharacterSpacingPt,
+  nvdControlsEnabled,
   nvdSpaceAfterPt,
   nvdSpaceBeforePt,
   nvvDocument,
@@ -177,6 +179,7 @@ export function Inspector({
           {showNvdSections ? (
             <ParagraphSettings
               characterSpacingPt={nvdCharacterSpacingPt}
+              controlsEnabled={nvdControlsEnabled}
               lineHeight={nvdLineHeight}
               onCharacterSpacingPtChange={onNvdCharacterSpacingPtChange}
               onLineHeightChange={onNvdLineHeightChange}

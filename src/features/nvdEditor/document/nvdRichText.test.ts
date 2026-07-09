@@ -65,6 +65,34 @@ describe("NVD semantic block roles", () => {
     ]);
   });
 
+  it("preserves non-text blocks while rebuilding text paragraphs", () => {
+    const existingBlocks: NvdBlock[] = [
+      { id: "paragraph-1", kind: "p", text: "Before" },
+      {
+        id: "embed-1",
+        kind: "embed",
+        embed: {
+          assetId: 12,
+          assetKind: "image",
+          assetName: "Reference",
+          assetPath: "workspace/reference.png",
+          alignment: "center",
+          caption: "A caption",
+          displayMode: "fit",
+          sourceDocumentKind: "nvv",
+          widthPx: 320,
+        },
+      },
+      { id: "paragraph-2", kind: "p", text: "After" },
+    ];
+
+    expect(createNvdDocumentBlocks([{ text: "Updated before\nUpdated after" }], existingBlocks)).toEqual([
+      { id: "paragraph-1", kind: "p", text: "Updated before", runs: [{ text: "Updated before" }] },
+      existingBlocks[1],
+      { id: "paragraph-2", kind: "p", text: "Updated after", runs: [{ text: "Updated after" }] },
+    ]);
+  });
+
   it("round-trips character spacing through Tiptap text styles", () => {
     const runs = [{ text: "Wide", style: { characterSpacingPt: 2.5, fontFamily: "Inter" } }];
     const content = nvdTextRunsToTiptapContent(runs);
@@ -155,10 +183,10 @@ describe("NVD semantic block roles", () => {
       },
     ]);
     expect(getNvdDocumentBlockLayouts(document)).toEqual([
-      { kind: "p", lineHeight: 2.25, spaceAfterPt: 12, spaceBeforePt: 6, textAlign: "center" },
-      { kind: "p", lineHeight: 2.25, spaceAfterPt: 12, spaceBeforePt: 6, textAlign: "center" },
-      { kind: "h1", lineHeight: 1.15, spaceAfterPt: 12, spaceBeforePt: 24, textAlign: "left" },
-      { kind: "h2", lineHeight: 1.2, spaceAfterPt: 8, spaceBeforePt: 18, textAlign: "left" },
+      createLayout({ kind: "p", lineHeight: 2.25, spaceAfterPt: 12, spaceBeforePt: 6, textAlign: "center" }),
+      createLayout({ kind: "p", lineHeight: 2.25, spaceAfterPt: 12, spaceBeforePt: 6, textAlign: "center" }),
+      createLayout({ kind: "h1", keepLinesTogether: true, keepWithNext: true, lineHeight: 1.15, spaceAfterPt: 12, spaceBeforePt: 24, textAlign: "left" }),
+      createLayout({ kind: "h2", keepLinesTogether: true, keepWithNext: true, lineHeight: 1.2, spaceAfterPt: 8, spaceBeforePt: 18, textAlign: "left" }),
     ]);
   });
 });

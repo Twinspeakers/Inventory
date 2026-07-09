@@ -1,7 +1,7 @@
 import { useMemo, useRef } from "react";
-import type { NvdPageLayout, NvdTextRun } from "../../inventoryProject";
+import type { NvdBlock, NvdPageLayout, NvdTextRun } from "../../inventoryProject";
 import { useNvdFontsReady } from "../fonts";
-import { NVD_A4_PAGE_GAP_PX, layoutNvdTextRuns } from "../layout/nvdLayout";
+import { NVD_A4_PAGE_GAP_PX, layoutNvdDocument } from "../layout/nvdLayout";
 import {
   NvdA4InfrastructureEditor,
   type NvdA4InfrastructureEditorHandle,
@@ -12,7 +12,11 @@ import { NvdA4SelectionOverlay } from "../a4/NvdA4SelectionOverlay";
 import { NvdPageRulers } from "../controls/NvdPageRulers";
 import { getNvdPageLayout, getNvdPageLayoutPx } from "../layout/nvdPageLayout";
 import type { NvdEditorController } from "../adapters/NvdRichTextEditor";
-import type { NvdBlockLayout, NvdTextSelection } from "../document/nvdRichText";
+import {
+  createNvdDocumentBlocks,
+  type NvdBlockLayout,
+  type NvdTextSelection,
+} from "../document/nvdRichText";
 import type { NvdStyleDefinition, NvdStyleRole } from "../document/nvdStyles";
 import { useNvdA4DocumentController } from "../a4/useNvdA4DocumentController";
 import { useNvdA4SelectionController } from "../a4/useNvdA4SelectionController";
@@ -26,8 +30,9 @@ export function NvdA4PageEditorSurface({
   onPageLayoutChange,
   onActivate,
   onControllerChange,
-  onRunsChange,
+  onBlocksChange,
   onSelectionChange,
+  blocks,
   runs,
   blockLayouts,
   styleDefinitions,
@@ -40,8 +45,9 @@ export function NvdA4PageEditorSurface({
   onPageLayoutChange: (pageLayout: ReturnType<typeof getNvdPageLayout>) => void;
   onActivate: () => void;
   onControllerChange: (controller: NvdEditorController) => void;
-  onRunsChange: (runs: NvdTextRun[], blockLayouts?: NvdBlockLayout[]) => void;
+  onBlocksChange: (blocks: NvdBlock[]) => void;
   onSelectionChange: (selection: NvdTextSelection) => void;
+  blocks: NvdBlock[];
   runs: NvdTextRun[];
   blockLayouts: NvdBlockLayout[];
   styleDefinitions: Record<NvdStyleRole, NvdStyleDefinition>;
@@ -50,28 +56,31 @@ export function NvdA4PageEditorSurface({
   const infrastructureEditorRef = useRef<NvdA4InfrastructureEditorHandle | null>(null);
   const pageLayoutPx = getNvdPageLayoutPx(pageLayout);
   const {
-    activeSelection,
+    activeDocumentSelection,
     bridgeFocusRequestKey,
-    handleSelectionRequest,
+    handleDocumentSelectionRequest,
+    handleTextSelectionRequest,
   } = useNvdA4SelectionController({ onSelectionChange });
+  const baseBlocks = useMemo(
+    () => createNvdDocumentBlocks(runs, blocks, blockLayouts),
+    [blockLayouts, blocks, runs],
+  );
   const baseLayoutSnapshot = useMemo(
     () =>
       fontsReady
-        ? layoutNvdTextRuns(
-            runs,
-            defaultFontFamily,
-            defaultFontSizePt,
-            blockLayouts,
+        ? layoutNvdDocument({
+            blocks: baseBlocks,
+            fontFamily: defaultFontFamily,
+            fontSize: `${defaultFontSizePt}pt`,
             pageLayout,
-            styleDefinitions,
-          )
+            styles: styleDefinitions,
+          })
         : null,
-    [blockLayouts, defaultFontFamily, defaultFontSizePt, fontsReady, pageLayout, runs, styleDefinitions],
+    [baseBlocks, defaultFontFamily, defaultFontSizePt, fontsReady, pageLayout, styleDefinitions],
   );
   const {
     displayBlockLayouts,
     displayRuns,
-    displaySelection,
     onBeforeInput,
     onInput,
     onCompositionEnd,
@@ -83,35 +92,38 @@ export function NvdA4PageEditorSurface({
     onPaste,
     selectedText,
   } = useNvdA4DocumentController({
+    blocks,
     blockLayouts,
     defaultFontFamily,
     defaultFontSizePt,
     documentKey: documentPath,
     layoutSnapshot: baseLayoutSnapshot,
+    onBlocksChange,
     onControllerChange,
-    onRunsChange,
-    onSelectionRequest: handleSelectionRequest,
+    onDocumentSelectionRequest: handleDocumentSelectionRequest,
     runs,
-    selection: activeSelection,
+    selection: activeDocumentSelection,
     styleDefinitions,
   });
+  const displayBlocks = useMemo(
+    () => createNvdDocumentBlocks(displayRuns, blocks, displayBlockLayouts),
+    [blocks, displayBlockLayouts, displayRuns],
+  );
   const layoutSnapshot = useMemo(
     () =>
       fontsReady
-        ? layoutNvdTextRuns(
-            displayRuns,
-            defaultFontFamily,
-            defaultFontSizePt,
-            displayBlockLayouts,
+        ? layoutNvdDocument({
+            blocks: displayBlocks,
+            fontFamily: defaultFontFamily,
+            fontSize: `${defaultFontSizePt}pt`,
             pageLayout,
-            styleDefinitions,
-          )
+            styles: styleDefinitions,
+          })
         : null,
     [
+      displayBlocks,
       defaultFontFamily,
       defaultFontSizePt,
-      displayBlockLayouts,
-      displayRuns,
       fontsReady,
       pageLayout,
       styleDefinitions,
@@ -151,10 +163,11 @@ export function NvdA4PageEditorSurface({
       {layoutSnapshot ? (
         <NvdA4PageHostLayer
           layout={layoutSnapshot}
+          onDocumentSelectionRequest={handleDocumentSelectionRequest}
           onPointerInteractionStart={() => {
             infrastructureEditorRef.current?.focusBridge();
           }}
-          onSelectionRequest={handleSelectionRequest}
+          onTextSelectionRequest={handleTextSelectionRequest}
           pageLayout={pageLayout}
           pages={pages}
         />
@@ -171,7 +184,7 @@ export function NvdA4PageEditorSurface({
         <NvdA4SelectionOverlay
           layout={layoutSnapshot}
           pageLayout={pageLayout}
-          selection={activeSelection ? displaySelection : null}
+          selection={activeDocumentSelection}
         />
       ) : null}
       <NvdPageRulers
