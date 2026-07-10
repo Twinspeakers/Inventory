@@ -1,5 +1,5 @@
 export { NvdEditor } from "./surfaces/NvdEditor";
-export type { NvdEditorController } from "./contracts/NvdEditorController";
+export type { NvdEditorController, NvdPageObjectToolMode } from "./contracts/NvdEditorController";
 export {
   DEFAULT_NVD_CHARACTER_SPACING_PT,
   MAX_NVD_CHARACTER_SPACING_PT,
@@ -168,6 +168,16 @@ export {
 } from "./document/nvdDocumentModel";
 export type { NvdDocumentBlockOperationResult } from "./document/nvdDocumentModel";
 export {
+  createNvdPageObjectAsset,
+  createNvdAssetFrameObjectFromDraft,
+  findNvdPageObjectById,
+  insertNvdPageObject,
+  normalizeNvdPageObjects,
+  removeNvdPageObjectById,
+  updateNvdPageObjectById,
+} from "./document/nvdPageObjectModel";
+export type { NvdDraftPageObject } from "./document/nvdPageObjectModel";
+export {
   getNvdTextSelectionForBlockIndex,
   insertNvdAssetAtSelection,
   insertNvdParagraphAtSelection,
@@ -181,11 +191,13 @@ export type { NvdInsertAssetPayload } from "./document/nvdDocumentOperations";
 export {
   createNvdBlockDocumentSelection,
   createNvdInsertionDocumentSelection,
+  createNvdPageObjectDocumentSelection,
   createNvdTextDocumentSelection,
   getNvdDocumentSelectionKind,
   getNvdTextSelectionFromDocumentSelection,
   isNvdBlockDocumentSelection,
   isNvdInsertionDocumentSelection,
+  isNvdPageObjectDocumentSelection,
   isNvdTextDocumentSelection,
 } from "./document/nvdDocumentSelection";
 export type { NvdDocumentSelection } from "./document/nvdDocumentSelection";

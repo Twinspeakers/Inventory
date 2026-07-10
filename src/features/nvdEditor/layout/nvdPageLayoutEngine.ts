@@ -1,4 +1,10 @@
-import type { NvdBlock, NvdDocument, NvdPageLayout, NvdTextRun } from "../../inventoryProject";
+import type {
+  NvdBlock,
+  NvdDocument,
+  NvdPageLayout,
+  NvdPageObject,
+  NvdTextRun,
+} from "../../inventoryProject";
 import { getNvdFontCssStack } from "../fonts";
 import { getNvdFontSizePt, getNvdFontSizePx } from "../primitives/nvdFontSize";
 import { getNvdLineHeight } from "../primitives/nvdLineHeight";
@@ -23,6 +29,7 @@ import {
   sliceNvdTextRuns,
   type NvdBlockLayout,
 } from "../document/nvdRichText";
+import { getNvdPageObjectBounds } from "../document/nvdPageObjectModel";
 
 let textMeasurementContext: CanvasRenderingContext2D | null | undefined;
 const nvdLayoutCache = new Map<string, NvdDocumentLayoutSnapshot>();
@@ -63,12 +70,14 @@ export type NvdLineFragment = {
   index: number;
   isFirstParagraphLine: boolean;
   isLastParagraphLine: boolean;
+  leftPx: number;
   pageIndex: number;
   paragraphIndex: number;
   start: number;
   textHeightPx: number;
   textTopOffsetPx: number;
   topPx: number;
+  widthPx: number;
 };
 
 export type NvdParagraphFragment = {
@@ -124,6 +133,7 @@ export type NvdDocumentLayoutSnapshot = {
   defaultFontFamily: string;
   defaultFontSizePt: number;
   pageLayout: NvdPageLayout;
+  pageObjects: readonly NvdPageObject[];
   pages: NvdPageFragment[];
   runs: NvdTextRun[];
   styleDefinitions?: Record<NvdStyleRole, NvdStyleDefinition>;
@@ -165,7 +175,10 @@ export type NvdInsertionGeometry = {
 };
 
 export function layoutNvdDocument(
-  document: Pick<NvdDocument, "blocks" | "fontFamily" | "fontSize" | "styles" | "pageLayout">,
+  document: Pick<
+    NvdDocument,
+    "blocks" | "fontFamily" | "fontSize" | "styles" | "pageLayout" | "pageObjects"
+  >,
 ) {
   const styleDefinitions = getNvdDocumentStyleDefinitions(document.styles);
   const paragraphStyle = styleDefinitions.p;
@@ -181,6 +194,7 @@ export function layoutNvdDocument(
       document.pageLayout,
       styleDefinitions,
       getNvdTextBlockIndexes(document.blocks),
+      document.pageObjects ?? [],
     );
   }
 
@@ -192,6 +206,7 @@ export function layoutNvdDocument(
     blockLayouts,
     document.pageLayout,
     styleDefinitions,
+    document.pageObjects ?? [],
   );
 }
 
@@ -211,6 +226,7 @@ export function layoutNvdTextRuns(
   pageLayout?: Partial<NvdPageLayout> | null,
   styleDefinitions?: Record<NvdStyleRole, NvdStyleDefinition>,
   textBlockIndexes: readonly number[] = [],
+  pageObjects: readonly NvdPageObject[] = [],
 ) {
   const normalizedRuns = normalizeNvdTextRuns(runs);
   const normalizedDefaultFontSizePt = getNvdFontSizePt(defaultFontSize);
@@ -224,6 +240,7 @@ export function layoutNvdTextRuns(
     normalizedPageLayout,
     styleDefinitions,
     textBlockIndexes,
+    pageObjects,
   ]);
   const cachedLayout = nvdLayoutCache.get(cacheKey);
 
@@ -247,6 +264,7 @@ export function layoutNvdTextRuns(
     blockLayouts,
     normalizedPageLayout,
     styleDefinitions,
+    pageObjects,
   );
   const pages = createPageFragments(
     normalizedRuns,
@@ -261,6 +279,7 @@ export function layoutNvdTextRuns(
     defaultFontFamily: normalizedDefaultFontFamily,
     defaultFontSizePt: normalizedDefaultFontSizePt,
     pageLayout: normalizedPageLayout,
+    pageObjects,
     pages,
     runs: normalizedRuns,
     styleDefinitions,
@@ -407,7 +426,7 @@ export function getNvdCaretGeometry(
 
   return {
     heightPx: Math.max(1, caretMetrics.ascentPx + caretMetrics.descentPx),
-    leftPx,
+    leftPx: line.leftPx + leftPx,
     lineIndex: line.index,
     pageIndex: page.index,
     paragraphIndex: line.paragraphIndex,
@@ -452,7 +471,7 @@ export function getNvdSelectionGeometry(
 
       rects.push({
         heightPx: getLineTextHeightPx(line, blockLayout, layout.defaultFontSizePt),
-        leftPx,
+        leftPx: line.leftPx + leftPx,
         lineIndex: line.index,
         pageIndex: page.index,
         topPx: getLineTextTopPx(line, blockLayout, layout.defaultFontSizePt),
@@ -614,8 +633,9 @@ export function getNvdOffsetAtPagePoint(
     targetLine.end > targetLine.start && layout.text[targetLine.end - 1] === "\n"
       ? targetLine.end - 1
       : targetLine.end;
+  const localLeftPx = leftPx - targetLine.leftPx;
 
-  if (leftPx <= 0) {
+  if (localLeftPx <= 0) {
     return targetLine.start;
   }
 
@@ -625,7 +645,7 @@ export function getNvdOffsetAtPagePoint(
     positionedRuns,
   );
 
-  if (leftPx >= totalLineWidthPx) {
+  if (localLeftPx >= totalLineWidthPx) {
     return lineContentEnd;
   }
 
@@ -636,7 +656,7 @@ export function getNvdOffsetAtPagePoint(
     const middle = Math.floor((low + high) / 2);
     const widthPx = measureTextRangeWidthForRuns(targetLine.start, middle, positionedRuns);
 
-    if (widthPx < leftPx) {
+    if (widthPx < localLeftPx) {
       low = middle + 1;
     } else {
       high = middle;
@@ -647,7 +667,7 @@ export function getNvdOffsetAtPagePoint(
   const previousWidthPx = measureTextRangeWidthForRuns(targetLine.start, previousOffset, positionedRuns);
   const currentWidthPx = measureTextRangeWidthForRuns(targetLine.start, low, positionedRuns);
 
-  return Math.abs(leftPx - previousWidthPx) <= Math.abs(currentWidthPx - leftPx)
+  return Math.abs(localLeftPx - previousWidthPx) <= Math.abs(currentWidthPx - localLeftPx)
     ? previousOffset
     : low;
 }
@@ -720,6 +740,7 @@ function layoutNvdMixedDocument(
   blockLayouts: readonly NvdBlockLayout[],
   pageLayout?: Partial<NvdPageLayout> | null,
   styleDefinitions?: Record<NvdStyleRole, NvdStyleDefinition>,
+  pageObjects: readonly NvdPageObject[] = [],
 ) {
   const normalizedRuns = normalizeNvdTextRuns(runs);
   const normalizedDefaultFontSizePt = getNvdFontSizePt(defaultFontSize);
@@ -766,6 +787,7 @@ function layoutNvdMixedDocument(
     defaultFontFamily: normalizedDefaultFontFamily,
     defaultFontSizePt: normalizedDefaultFontSizePt,
     pageLayout: normalizedPageLayout,
+    pageObjects,
     pages,
     runs: normalizedRuns,
     styleDefinitions,
@@ -957,10 +979,12 @@ function createLineSeedsForMixedTextBlock(
           getParagraphSpacingPx(blockLayout.spaceAfterPt),
         isFirstParagraphLine: true,
         isLastParagraphLine: true,
+        leftPx: 0,
         paragraphIndex: textBlockIndex,
         start: startOffset,
         textHeightPx: lineMetrics.textHeightPx,
         textTopOffsetPx: getParagraphSpacingPx(blockLayout.spaceBeforePt) + lineMetrics.textTopOffsetPx,
+        widthPx: pageLayoutPx.contentWidthPx,
       },
     ] satisfies Array<Omit<NvdLineFragment, "index" | "pageIndex" | "topPx">>;
   }
@@ -994,10 +1018,12 @@ function createLineSeedsForMixedTextBlock(
       heightPx: lineMetrics.lineHeightPx + beforeSpacePx + afterSpacePx,
       isFirstParagraphLine,
       isLastParagraphLine,
+      leftPx: 0,
       paragraphIndex: textBlockIndex,
       start: startOffset + localPosition,
       textHeightPx: lineMetrics.textHeightPx,
       textTopOffsetPx: beforeSpacePx + lineMetrics.textTopOffsetPx,
+      widthPx: pageLayoutPx.contentWidthPx,
     });
 
     localPosition = localEnd;
@@ -1247,6 +1273,21 @@ function measureLineSeedHeights(
   return lineSeeds.slice(0, count).reduce((heightPx, lineSeed) => heightPx + lineSeed.heightPx, 0);
 }
 
+type NvdWrapExclusion = {
+  bottomPx: number;
+  leftPx: number;
+  pageIndex: number;
+  rightPx: number;
+  topPx: number;
+};
+
+type NvdWrappedLineBox = {
+  leftPx: number;
+  pageIndex: number;
+  topPx: number;
+  widthPx: number;
+};
+
 function createLineFragments(
   text: string,
   positionedRuns: PositionedNvdTextRun[],
@@ -1255,8 +1296,10 @@ function createLineFragments(
   blockLayouts: readonly NvdBlockLayout[],
   pageLayout: NvdPageLayout,
   styleDefinitions?: Record<NvdStyleRole, NvdStyleDefinition>,
+  pageObjects: readonly NvdPageObject[] = [],
 ) {
   const pageLayoutPx = getNvdPageLayoutPx(pageLayout);
+  const wrapExclusions = getWrappedPageObjectExclusions(pageObjects, pageLayoutPx);
 
   if (!text) {
     const fallbackStyle = getFallbackParagraphTextStyle(
@@ -1285,6 +1328,7 @@ function createLineFragments(
         index: 0,
         isFirstParagraphLine: true,
         isLastParagraphLine: true,
+        leftPx: 0,
         pageIndex: 0,
         paragraphIndex: 0,
         start: 0,
@@ -1292,8 +1336,22 @@ function createLineFragments(
         textTopOffsetPx:
           getParagraphSpacingPx(blockLayouts[0]?.spaceBeforePt) + lineMetrics.textTopOffsetPx,
         topPx: 0,
+        widthPx: pageLayoutPx.contentWidthPx,
       },
     ] satisfies NvdLineFragment[];
+  }
+
+  if (wrapExclusions.length > 0) {
+    return createWrappedLineFragments(
+      text,
+      positionedRuns,
+      defaultFontFamily,
+      defaultFontSizePt,
+      blockLayouts,
+      pageLayout,
+      styleDefinitions,
+      wrapExclusions,
+    );
   }
 
   const lineSeeds: Omit<NvdLineFragment, "index" | "pageIndex" | "topPx">[] = [];
@@ -1328,10 +1386,12 @@ function createLineFragments(
       heightPx: lineMetrics.lineHeightPx + beforeSpacePx + afterSpacePx,
       isFirstParagraphLine,
       isLastParagraphLine,
+      leftPx: 0,
       paragraphIndex,
       start: position,
       textHeightPx: lineMetrics.textHeightPx,
       textTopOffsetPx: beforeSpacePx + lineMetrics.textTopOffsetPx,
+      widthPx: pageLayoutPx.contentWidthPx,
     });
     if (text.slice(position, end).endsWith("\n")) {
       paragraphIndex += 1;
@@ -1363,10 +1423,12 @@ function createLineFragments(
       heightPx: lineMetrics.lineHeightPx + beforeSpacePx + afterSpacePx,
       isFirstParagraphLine: true,
       isLastParagraphLine: true,
+      leftPx: 0,
       paragraphIndex,
       start: text.length,
       textHeightPx: lineMetrics.textHeightPx,
       textTopOffsetPx: beforeSpacePx + lineMetrics.textTopOffsetPx,
+      widthPx: pageLayoutPx.contentWidthPx,
     });
   }
 
@@ -1435,6 +1497,316 @@ function createLineFragments(
   });
 
   return lines;
+}
+
+function createWrappedLineFragments(
+  text: string,
+  positionedRuns: PositionedNvdTextRun[],
+  defaultFontFamily: string,
+  defaultFontSizePt: number,
+  blockLayouts: readonly NvdBlockLayout[],
+  pageLayout: NvdPageLayout,
+  styleDefinitions: Record<NvdStyleRole, NvdStyleDefinition> | undefined,
+  wrapExclusions: readonly NvdWrapExclusion[],
+) {
+  const pageLayoutPx = getNvdPageLayoutPx(pageLayout);
+  const lines: NvdLineFragment[] = [];
+  let position = 0;
+  let paragraphIndex = 0;
+  let pageIndex = 0;
+  let topPx = 0;
+
+  while (position < text.length) {
+    const blockLayout = blockLayouts[paragraphIndex];
+    const isFirstParagraphLine = position === 0 || text[position - 1] === "\n";
+    const fallbackStyle = getFallbackParagraphTextStyle(
+      paragraphIndex,
+      blockLayouts,
+      defaultFontFamily,
+      defaultFontSizePt,
+      styleDefinitions,
+    );
+    const beforeSpacePx = isFirstParagraphLine
+      ? getParagraphSpacingPx(blockLayout?.spaceBeforePt)
+      : 0;
+    let previewHeightPx = measureTextRangeLineMetrics(
+      position,
+      Math.min(text.length, position + 1),
+      positionedRuns,
+      fallbackStyle,
+      blockLayout?.lineHeight,
+    ).lineHeightPx + beforeSpacePx;
+    let lineBox = resolveWrappedLineBox(
+      pageIndex,
+      topPx,
+      previewHeightPx,
+      pageLayoutPx,
+      wrapExclusions,
+    );
+
+    if (lineBox.pageIndex !== pageIndex || lineBox.topPx !== topPx) {
+      pageIndex = lineBox.pageIndex;
+      topPx = lineBox.topPx;
+      continue;
+    }
+
+    let nextPosition = findVisualLineEnd(text, position, positionedRuns, lineBox.widthPx);
+    let end = Math.max(nextPosition, position + 1);
+    let isLastParagraphLine = end === text.length || text[end - 1] === "\n";
+    let afterSpacePx = isLastParagraphLine
+      ? getParagraphSpacingPx(blockLayout?.spaceAfterPt)
+      : 0;
+    let lineMetrics = measureTextRangeLineMetrics(
+      position,
+      end,
+      positionedRuns,
+      fallbackStyle,
+      blockLayout?.lineHeight,
+    );
+    let lineHeightPx = lineMetrics.lineHeightPx + beforeSpacePx + afterSpacePx;
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const resolvedLineBox = resolveWrappedLineBox(
+        pageIndex,
+        topPx,
+        lineHeightPx,
+        pageLayoutPx,
+        wrapExclusions,
+      );
+
+      if (
+        resolvedLineBox.pageIndex !== pageIndex ||
+        resolvedLineBox.topPx !== topPx
+      ) {
+        pageIndex = resolvedLineBox.pageIndex;
+        topPx = resolvedLineBox.topPx;
+        lineBox = resolvedLineBox;
+        nextPosition = findVisualLineEnd(text, position, positionedRuns, lineBox.widthPx);
+        end = Math.max(nextPosition, position + 1);
+        isLastParagraphLine = end === text.length || text[end - 1] === "\n";
+        afterSpacePx = isLastParagraphLine
+          ? getParagraphSpacingPx(blockLayout?.spaceAfterPt)
+          : 0;
+        lineMetrics = measureTextRangeLineMetrics(
+          position,
+          end,
+          positionedRuns,
+          fallbackStyle,
+          blockLayout?.lineHeight,
+        );
+        lineHeightPx = lineMetrics.lineHeightPx + beforeSpacePx + afterSpacePx;
+        continue;
+      }
+
+      if (resolvedLineBox.widthPx !== lineBox.widthPx || resolvedLineBox.leftPx !== lineBox.leftPx) {
+        lineBox = resolvedLineBox;
+        nextPosition = findVisualLineEnd(text, position, positionedRuns, lineBox.widthPx);
+        end = Math.max(nextPosition, position + 1);
+        isLastParagraphLine = end === text.length || text[end - 1] === "\n";
+        afterSpacePx = isLastParagraphLine
+          ? getParagraphSpacingPx(blockLayout?.spaceAfterPt)
+          : 0;
+        lineMetrics = measureTextRangeLineMetrics(
+          position,
+          end,
+          positionedRuns,
+          fallbackStyle,
+          blockLayout?.lineHeight,
+        );
+        lineHeightPx = lineMetrics.lineHeightPx + beforeSpacePx + afterSpacePx;
+        continue;
+      }
+
+      break;
+    }
+
+    if (topPx + lineHeightPx > pageLayoutPx.contentHeightPx) {
+      pageIndex += 1;
+      topPx = 0;
+      continue;
+    }
+
+    lines.push({
+      baselineOffsetPx: beforeSpacePx + lineMetrics.baselineOffsetPx,
+      end,
+      heightPx: lineHeightPx,
+      index: lines.length,
+      isFirstParagraphLine,
+      isLastParagraphLine,
+      leftPx: lineBox.leftPx,
+      pageIndex,
+      paragraphIndex,
+      start: position,
+      textHeightPx: lineMetrics.textHeightPx,
+      textTopOffsetPx: beforeSpacePx + lineMetrics.textTopOffsetPx,
+      topPx,
+      widthPx: lineBox.widthPx,
+    });
+
+    if (text.slice(position, end).endsWith("\n")) {
+      paragraphIndex += 1;
+    }
+
+    position = end;
+    topPx += lineHeightPx;
+  }
+
+  if (text.endsWith("\n")) {
+    const blockLayout = blockLayouts[paragraphIndex];
+    const fallbackStyle = getFallbackParagraphTextStyle(
+      paragraphIndex,
+      blockLayouts,
+      defaultFontFamily,
+      defaultFontSizePt,
+      styleDefinitions,
+    );
+    const beforeSpacePx = getParagraphSpacingPx(blockLayout?.spaceBeforePt);
+    const afterSpacePx = getParagraphSpacingPx(blockLayout?.spaceAfterPt);
+    const lineMetrics = measureTextRangeLineMetrics(
+      text.length,
+      text.length,
+      positionedRuns,
+      fallbackStyle,
+      blockLayout?.lineHeight,
+    );
+    const lineHeightPx = lineMetrics.lineHeightPx + beforeSpacePx + afterSpacePx;
+    const lineBox = resolveWrappedLineBox(
+      pageIndex,
+      topPx,
+      lineHeightPx,
+      pageLayoutPx,
+      wrapExclusions,
+    );
+
+    lines.push({
+      baselineOffsetPx: beforeSpacePx + lineMetrics.baselineOffsetPx,
+      end: text.length,
+      heightPx: lineHeightPx,
+      index: lines.length,
+      isFirstParagraphLine: true,
+      isLastParagraphLine: true,
+      leftPx: lineBox.leftPx,
+      pageIndex: lineBox.pageIndex,
+      paragraphIndex,
+      start: text.length,
+      textHeightPx: lineMetrics.textHeightPx,
+      textTopOffsetPx: beforeSpacePx + lineMetrics.textTopOffsetPx,
+      topPx: lineBox.topPx,
+      widthPx: lineBox.widthPx,
+    });
+  }
+
+  return lines;
+}
+
+function getWrappedPageObjectExclusions(
+  pageObjects: readonly NvdPageObject[],
+  pageLayoutPx: ReturnType<typeof getNvdPageLayoutPx>,
+) {
+  return pageObjects
+    .filter(
+      (pageObject) =>
+        pageObject.wrapMode === "rectangle" &&
+        (pageObject.zMode ?? "in-front-of-text") !== "behind-text" &&
+        pageObject.widthPx > 0 &&
+        pageObject.heightPx > 0,
+    )
+    .map((pageObject) => {
+      const paddingPx = Math.max(0, Math.floor(pageObject.wrapPaddingPx ?? 0));
+      const bounds = getNvdPageObjectBounds(pageObject);
+
+      return {
+        bottomPx: Math.min(
+          pageLayoutPx.contentHeightPx,
+          bounds.bottomPx + paddingPx,
+        ),
+        leftPx: Math.max(0, bounds.leftPx - paddingPx),
+        pageIndex: pageObject.pageIndex,
+        rightPx: Math.min(
+          pageLayoutPx.contentWidthPx,
+          bounds.rightPx + paddingPx,
+        ),
+        topPx: Math.max(0, bounds.topPx - paddingPx),
+      } satisfies NvdWrapExclusion;
+    });
+}
+
+function resolveWrappedLineBox(
+  initialPageIndex: number,
+  initialTopPx: number,
+  lineHeightPx: number,
+  pageLayoutPx: ReturnType<typeof getNvdPageLayoutPx>,
+  wrapExclusions: readonly NvdWrapExclusion[],
+): NvdWrappedLineBox {
+  let pageIndex = initialPageIndex;
+  let topPx = initialTopPx;
+
+  while (true) {
+    if (topPx + lineHeightPx > pageLayoutPx.contentHeightPx) {
+      pageIndex += 1;
+      topPx = 0;
+      continue;
+    }
+
+    const overlappingExclusions = wrapExclusions.filter(
+      (exclusion) =>
+        exclusion.pageIndex === pageIndex &&
+        topPx < exclusion.bottomPx &&
+        topPx + lineHeightPx > exclusion.topPx,
+    );
+
+    if (overlappingExclusions.length === 0) {
+      return {
+        leftPx: 0,
+        pageIndex,
+        topPx,
+        widthPx: pageLayoutPx.contentWidthPx,
+      };
+    }
+
+    const blockedSegments = overlappingExclusions
+      .map((exclusion) => ({
+        end: clampNumber(exclusion.rightPx, 0, pageLayoutPx.contentWidthPx),
+        start: clampNumber(exclusion.leftPx, 0, pageLayoutPx.contentWidthPx),
+      }))
+      .sort((left, right) => left.start - right.start);
+    const openSegments: Array<{ end: number; start: number }> = [];
+    let cursorPx = 0;
+
+    blockedSegments.forEach((segment) => {
+      if (segment.start > cursorPx) {
+        openSegments.push({ end: segment.start, start: cursorPx });
+      }
+
+      cursorPx = Math.max(cursorPx, segment.end);
+    });
+
+    if (cursorPx < pageLayoutPx.contentWidthPx) {
+      openSegments.push({ end: pageLayoutPx.contentWidthPx, start: cursorPx });
+    }
+
+    const bestSegment = openSegments
+      .map((segment) => ({
+        ...segment,
+        widthPx: segment.end - segment.start,
+      }))
+      .sort((left, right) =>
+        right.widthPx === left.widthPx
+          ? left.start - right.start
+          : right.widthPx - left.widthPx,
+      )[0];
+
+    if (bestSegment && bestSegment.widthPx > 0) {
+      return {
+        leftPx: bestSegment.start,
+        pageIndex,
+        topPx,
+        widthPx: bestSegment.widthPx,
+      };
+    }
+
+    topPx = Math.max(...overlappingExclusions.map((exclusion) => exclusion.bottomPx));
+  }
 }
 
 function moveLineConstrainedParagraphToNextPage(

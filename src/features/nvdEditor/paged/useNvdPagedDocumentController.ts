@@ -5,7 +5,14 @@ import type {
   FormEventHandler,
   KeyboardEventHandler,
 } from "react";
-import type { NvdBlock, NvdTextRun } from "../../inventoryProject";
+import type {
+  NvdBlock,
+  NvdPageObject,
+  NvdPageObjectAsset,
+  NvdPageObjectWrapMode,
+  NvdPageObjectZMode,
+  NvdTextRun,
+} from "../../inventoryProject";
 import { getNvdCharacterSpacingPt } from "../primitives/nvdCharacterSpacing";
 import {
   applyNvdTextEdit,
@@ -26,18 +33,30 @@ import {
   getNvdCaretGeometry,
   getNvdOffsetAtPagePoint,
 } from "../layout/nvdPageLayoutEngine";
-import type { NvdEditorController } from "../contracts/NvdEditorController";
+import type {
+  NvdEditorController,
+  NvdPageObjectToolMode,
+} from "../contracts/NvdEditorController";
 import {
   createNvdBlockDocumentSelection,
   createNvdInsertionDocumentSelection,
+  createNvdPageObjectDocumentSelection,
   createNvdTextDocumentSelection,
   isNvdBlockDocumentSelection,
   isNvdInsertionDocumentSelection,
+  isNvdPageObjectDocumentSelection,
   isNvdTextDocumentSelection,
   type NvdDocumentSelection,
 } from "../document/nvdDocumentSelection";
 import {
-  insertNvdAssetAtSelection,
+  createNvdAssetFrameObjectFromDraft,
+  insertNvdPageObject,
+  normalizeNvdPageObjects,
+  removeNvdPageObjectById,
+  updateNvdPageObjectById,
+  type NvdDraftPageObject,
+} from "../document/nvdPageObjectModel";
+import {
   insertNvdParagraphAtSelection,
   insertNvdParagraphTextAtSelection,
   moveSelectedNvdBlock,
@@ -63,6 +82,7 @@ import type { NvdStyleDefinition, NvdStyleRole } from "../document/nvdStyles";
 
 type NvdHistorySnapshot = {
   blocks: NvdBlock[];
+  pageObjects: NvdPageObject[];
   selection: NvdDocumentSelection | null;
 };
 
@@ -98,6 +118,8 @@ export function useNvdPagedDocumentController({
   onBlocksChange,
   onControllerChange,
   onDocumentSelectionRequest,
+  onPageObjectsChange,
+  pageObjects,
   runs,
   selection,
   styleDefinitions,
@@ -111,6 +133,8 @@ export function useNvdPagedDocumentController({
   onBlocksChange: (blocks: NvdBlock[]) => void;
   onControllerChange: (controller: NvdEditorController) => void;
   onDocumentSelectionRequest: (selection: NvdDocumentSelection) => void;
+  onPageObjectsChange: (pageObjects: NvdPageObject[]) => void;
+  pageObjects: NvdPageObject[];
   runs: NvdTextRun[];
   selection: NvdDocumentSelection | null;
   styleDefinitions: Record<NvdStyleRole, NvdStyleDefinition>;
@@ -119,8 +143,13 @@ export function useNvdPagedDocumentController({
   const hasTextSelection = textSelection !== null;
   const hasBlockSelection = selection ? isNvdBlockDocumentSelection(selection) : false;
   const hasInsertionSelection = selection ? isNvdInsertionDocumentSelection(selection) : false;
+  const hasPageObjectSelection = selection ? isNvdPageObjectDocumentSelection(selection) : false;
   const effectiveSelection = textSelection ?? { start: 0, end: 0 };
   const normalizedRuns = useMemo(() => normalizeNvdTextRuns(runs), [runs]);
+  const normalizedPageObjects = useMemo(
+    () => normalizeNvdPageObjects(pageObjects),
+    [pageObjects],
+  );
   const text = useMemo(() => getNvdTextRunsText(normalizedRuns), [normalizedRuns]);
   const historyRef = useRef<{ documentKey: string; redoStack: NvdHistoryEntry[]; undoStack: NvdHistoryEntry[] }>({
     documentKey,
@@ -129,6 +158,13 @@ export function useNvdPagedDocumentController({
   });
   const typingStyleRef = useRef<NvdResolvedTypingStyle | null>(null);
   const [compositionState, setCompositionState] = useState<NvdCompositionState>(null);
+  const [draftPageObject, setDraftPageObject] = useState<NvdDraftPageObject | null>(null);
+  const [pageObjectToolMode, setPageObjectToolModeState] =
+    useState<NvdPageObjectToolMode>("text");
+  const [pageObjectPreviewState, setPageObjectPreviewState] = useState<{
+    objectId: string;
+    pageObjects: NvdPageObject[];
+  } | null>(null);
   const [, setControllerVersion] = useState(0);
 
   useEffect(() => {
@@ -143,6 +179,9 @@ export function useNvdPagedDocumentController({
     };
     typingStyleRef.current = null;
     setCompositionState(null);
+    setDraftPageObject(null);
+    setPageObjectToolModeState("text");
+    setPageObjectPreviewState(null);
     setControllerVersion((version) => version + 1);
   }, [documentKey]);
 
@@ -185,6 +224,7 @@ export function useNvdPagedDocumentController({
 
   function applySnapshot(snapshot: NvdHistorySnapshot) {
     onBlocksChange(snapshot.blocks);
+    onPageObjectsChange(snapshot.pageObjects);
     if (snapshot.selection) {
       onDocumentSelectionRequest(snapshot.selection);
     }
@@ -200,9 +240,10 @@ export function useNvdPagedDocumentController({
       trackHistory?: boolean;
     },
   ) {
-    const before = createSnapshot(blocks, selection);
+    const before = createSnapshot(blocks, normalizedPageObjects, selection);
     const after = createSnapshot(
       createNvdDocumentBlocks(nextRuns, blocks, nextBlockLayouts),
+      normalizedPageObjects,
       createNvdTextDocumentSelection(nextSelection.start, nextSelection.end),
     );
     const changed = !snapshotsEqual(before, after);
@@ -235,8 +276,8 @@ export function useNvdPagedDocumentController({
       trackHistory?: boolean;
     },
   ) {
-    const before = createSnapshot(blocks, selection);
-    const after = createSnapshot(nextBlocks, nextSelection);
+    const before = createSnapshot(blocks, normalizedPageObjects, selection);
+    const after = createSnapshot(nextBlocks, normalizedPageObjects, nextSelection);
     const changed = !snapshotsEqual(before, after);
 
     if (!changed) {
@@ -274,6 +315,38 @@ export function useNvdPagedDocumentController({
     );
   }
 
+  function commitPageObjectDocumentChange(
+    nextPageObjects: NvdPageObject[],
+    nextSelection: NvdDocumentSelection,
+    options?: {
+      onRedo?: () => void;
+      onUndo?: () => void;
+      trackHistory?: boolean;
+    },
+  ) {
+    const before = createSnapshot(blocks, normalizedPageObjects, selection);
+    const after = createSnapshot(blocks, nextPageObjects, nextSelection);
+    const changed = !snapshotsEqual(before, after);
+
+    if (!changed) {
+      onDocumentSelectionRequest(nextSelection);
+      return;
+    }
+
+    if (options?.trackHistory ?? true) {
+      historyRef.current.undoStack.push({
+        after,
+        before,
+        onRedo: options?.onRedo,
+        onUndo: options?.onUndo,
+      });
+      historyRef.current.redoStack = [];
+    }
+
+    applySnapshot(after);
+    refreshController();
+  }
+
   function updateTypingStyle(
     update: (style: NvdResolvedTypingStyle) => NvdResolvedTypingStyle,
   ) {
@@ -284,6 +357,10 @@ export function useNvdPagedDocumentController({
   function commitInlineStyleChange(
     update: (style: NvdResolvedTypingStyle) => NvdResolvedTypingStyle,
   ) {
+    if (hasPageObjectSelection) {
+      return;
+    }
+
     if (effectiveSelection.start === effectiveSelection.end) {
       updateTypingStyle(update);
       return;
@@ -308,6 +385,10 @@ export function useNvdPagedDocumentController({
   function commitBlockLayoutChange(
     update: (layout: NvdBlockLayout) => NvdBlockLayout,
   ) {
+    if (hasPageObjectSelection) {
+      return;
+    }
+
     const nextBlockLayouts = blockLayouts.map((layout, index) =>
       touchedParagraphIndexes.includes(index) ? update(layout) : layout,
     );
@@ -315,6 +396,10 @@ export function useNvdPagedDocumentController({
   }
 
   function applyStyleToTouchedParagraphs(style: NvdStyleDefinition) {
+    if (hasPageObjectSelection) {
+      return;
+    }
+
     const inlineStyle = getTypingStyleFromDefinition(style);
     const nextRuns =
       effectiveSelection.start === effectiveSelection.end
@@ -383,11 +468,19 @@ export function useNvdPagedDocumentController({
   }
 
   function insertParagraphSelection() {
+    if (hasPageObjectSelection) {
+      return;
+    }
+
     commitDocumentOperation(insertNvdParagraphAtSelection(blocks, selection, styleDefinitions.p));
     typingStyleRef.current = getTypingStyleFromDefinition(styleDefinitions.p);
   }
 
   function insertParagraphBreak() {
+    if (hasPageObjectSelection) {
+      return;
+    }
+
     if (hasBlockSelection || hasInsertionSelection) {
       insertParagraphSelection();
       return;
@@ -425,7 +518,7 @@ export function useNvdPagedDocumentController({
   }
 
   function insertPlainText(insertedText: string) {
-    if (!insertedText) {
+    if (!insertedText || hasPageObjectSelection) {
       return;
     }
 
@@ -458,6 +551,12 @@ export function useNvdPagedDocumentController({
 
   const onBeforeInput = useMemo<FormEventHandler<HTMLTextAreaElement>>(
     () => (event) => {
+      if (hasPageObjectSelection) {
+        event.preventDefault();
+        clearInputBridgeValue(event.currentTarget);
+        return;
+      }
+
       const nativeEvent = event.nativeEvent as InputEvent;
       const inputType = nativeEvent.inputType;
 
@@ -478,11 +577,17 @@ export function useNvdPagedDocumentController({
         clearInputBridgeValue(event.currentTarget);
       }
     },
-    [insertParagraphBreak],
+    [hasPageObjectSelection, insertParagraphBreak],
   );
 
   const onInput = useMemo<FormEventHandler<HTMLTextAreaElement>>(
     () => (event) => {
+      if (hasPageObjectSelection) {
+        event.preventDefault();
+        clearInputBridgeValue(event.currentTarget);
+        return;
+      }
+
       const nativeEvent = event.nativeEvent as InputEvent;
       const inputType = nativeEvent.inputType;
       const insertedText = event.currentTarget.value;
@@ -504,7 +609,7 @@ export function useNvdPagedDocumentController({
       insertPlainText(insertedText);
       clearInputBridgeValue(event.currentTarget);
     },
-    [insertPlainText],
+    [hasPageObjectSelection, insertPlainText],
   );
 
   const onKeyDown = useMemo<KeyboardEventHandler<HTMLTextAreaElement>>(
@@ -529,6 +634,29 @@ export function useNvdPagedDocumentController({
         event.preventDefault();
         commitInlineStyleChange((style) => ({ ...style, italic: !style.italic }));
         return;
+      }
+
+      if (hasPageObjectSelection) {
+        if (event.key === "Backspace" || event.key === "Delete") {
+          event.preventDefault();
+          const selectedObjectId =
+            selection && isNvdPageObjectDocumentSelection(selection) ? selection.objectId : null;
+
+          if (!selectedObjectId) {
+            return;
+          }
+
+          commitPageObjectDocumentChange(
+            removeNvdPageObjectById(normalizedPageObjects, selectedObjectId),
+            createNvdInsertionDocumentSelection(blocks.length),
+          );
+          return;
+        }
+
+        if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key.length === 1) {
+          event.preventDefault();
+          return;
+        }
       }
 
       if (event.key === "Backspace") {
@@ -700,11 +828,34 @@ export function useNvdPagedDocumentController({
         refreshController();
       }
     },
-    [blocks, commitDocumentOperation, compositionState, effectiveSelection, hasBlockSelection, hasInsertionSelection, insertParagraphBreak, insertPlainText, layoutSnapshot, normalizedRuns, onDocumentSelectionRequest, selection, text.length],
+    [
+      blocks,
+      commitDocumentOperation,
+      commitInlineStyleChange,
+      commitPageObjectDocumentChange,
+      compositionState,
+      effectiveSelection,
+      hasBlockSelection,
+      hasInsertionSelection,
+      hasPageObjectSelection,
+      insertParagraphBreak,
+      insertPlainText,
+      layoutSnapshot,
+      normalizedPageObjects,
+      normalizedRuns,
+      onDocumentSelectionRequest,
+      selection,
+      text.length,
+    ],
   );
 
   const onPaste = useMemo<ClipboardEventHandler<HTMLTextAreaElement>>(
     () => (event) => {
+      if (hasPageObjectSelection) {
+        event.preventDefault();
+        return;
+      }
+
       const pastedText = event.clipboardData.getData("text/plain");
 
       if (!pastedText) {
@@ -714,7 +865,7 @@ export function useNvdPagedDocumentController({
       event.preventDefault();
       insertPlainText(pastedText);
     },
-    [insertPlainText],
+    [hasPageObjectSelection, insertPlainText],
   );
 
   const onCopy = useMemo<ClipboardEventHandler<HTMLTextAreaElement>>(
@@ -764,7 +915,12 @@ export function useNvdPagedDocumentController({
 
   const onCompositionStart = useMemo<CompositionEventHandler<HTMLTextAreaElement>>(
     () => () => {
-      if (!hasTextSelection || hasBlockSelection || hasInsertionSelection) {
+      if (
+        !hasTextSelection ||
+        hasBlockSelection ||
+        hasInsertionSelection ||
+        hasPageObjectSelection
+      ) {
         return;
       }
 
@@ -775,7 +931,15 @@ export function useNvdPagedDocumentController({
         text: "",
       });
     },
-    [blockLayouts, effectiveSelection, hasBlockSelection, hasInsertionSelection, hasTextSelection, normalizedRuns],
+    [
+      blockLayouts,
+      effectiveSelection,
+      hasBlockSelection,
+      hasInsertionSelection,
+      hasPageObjectSelection,
+      hasTextSelection,
+      normalizedRuns,
+    ],
   );
 
   const onCompositionUpdate = useMemo<CompositionEventHandler<HTMLTextAreaElement>>(
@@ -817,10 +981,70 @@ export function useNvdPagedDocumentController({
     [activeTypingStyle, commitContentChange],
   );
 
+  function handleDraftPageObjectChange(nextDraftPageObject: NvdDraftPageObject | null) {
+    if (
+      nextDraftPageObject &&
+      selection &&
+      isNvdPageObjectDocumentSelection(selection)
+    ) {
+      onDocumentSelectionRequest(createNvdInsertionDocumentSelection(blocks.length));
+    }
+
+    setDraftPageObject(nextDraftPageObject);
+    refreshController();
+  }
+
+  function handlePageObjectSelectionRequest(objectId: string) {
+    typingStyleRef.current = null;
+    onDocumentSelectionRequest(createNvdPageObjectDocumentSelection(objectId));
+    refreshController();
+  }
+
+  const displayPageObjects = pageObjectPreviewState?.pageObjects ?? normalizedPageObjects;
+  const selectedPageObject =
+    selection && isNvdPageObjectDocumentSelection(selection)
+      ? displayPageObjects.find((pageObject) => pageObject.id === selection.objectId) ?? null
+      : null;
+
+  function handlePageObjectPreviewChange(
+    objectId: string,
+    nextPageObject: NvdPageObject,
+  ) {
+    const basePageObjects = pageObjectPreviewState?.pageObjects ?? displayPageObjects;
+    setPageObjectPreviewState({
+      objectId,
+      pageObjects: updateNvdPageObjectById(basePageObjects, objectId, () => nextPageObject),
+    });
+  }
+
+  function handlePageObjectTransformCommit(
+    objectId: string,
+    nextPageObject: NvdPageObject,
+  ) {
+    const nextPageObjects = updateNvdPageObjectById(
+      pageObjectPreviewState?.pageObjects ?? displayPageObjects,
+      objectId,
+      () => nextPageObject,
+    );
+    setPageObjectPreviewState(null);
+    commitPageObjectDocumentChange(
+      nextPageObjects,
+      createNvdPageObjectDocumentSelection(objectId),
+    );
+    typingStyleRef.current = null;
+  }
+
+  function clearPageObjectPreview() {
+    setPageObjectPreviewState(null);
+  }
+
   const controller = useMemo<NvdEditorController>(() => ({
     canRedo: historyRef.current.redoStack.length > 0,
+    canSaveDraftPageObject:
+      Boolean(draftPageObject) &&
+      (draftPageObject?.widthPx ?? 0) >= 12 &&
+      (draftPageObject?.heightPx ?? 0) >= 12,
     canUndo: historyRef.current.undoStack.length > 0,
-    canInsertAsset: true,
     characterSpacingPt: getUniformInlineValue(
       normalizedRuns,
       effectiveSelection,
@@ -828,17 +1052,57 @@ export function useNvdPagedDocumentController({
       defaultFontSizePt,
       "characterSpacingPt",
     ) as number | null,
+    draftPageObject,
     fontFamily: activeTypingStyle.fontFamily,
     fontSizePt: activeTypingStyle.fontSizePt,
     isBold: activeTypingStyle.bold,
     isItalic: activeTypingStyle.italic,
     lineHeight: getUniformBlockValue(blockLayouts, touchedParagraphIndexes, "lineHeight"),
+    pageObjectToolMode,
+    selectedPageObject,
     selection,
-    selectionKind: hasTextSelection ? "text" : hasBlockSelection ? "block" : hasInsertionSelection ? "insertion" : "none",
+    selectionKind: hasTextSelection
+      ? "text"
+      : hasBlockSelection
+        ? "block"
+        : hasInsertionSelection
+          ? "insertion"
+          : hasPageObjectSelection
+            ? "page-object"
+            : "none",
     spaceAfterPt: getUniformBlockValue(blockLayouts, touchedParagraphIndexes, "spaceAfterPt"),
     spaceBeforePt: getUniformBlockValue(blockLayouts, touchedParagraphIndexes, "spaceBeforePt"),
     textAlign: getUniformBlockValue(blockLayouts, touchedParagraphIndexes, "textAlign"),
     applyStyle: applyStyleToTouchedParagraphs,
+    assignAssetToSelectedPageObject: (asset: NvdPageObjectAsset | null) => {
+      if (!selectedPageObject) {
+        return;
+      }
+
+      commitPageObjectDocumentChange(
+        updateNvdPageObjectById(displayPageObjects, selectedPageObject.id, (pageObject) => ({
+          ...pageObject,
+          asset: asset ? { ...asset } : null,
+        })),
+        createNvdPageObjectDocumentSelection(selectedPageObject.id),
+      );
+      typingStyleRef.current = null;
+    },
+    deleteSelectedPageObject: () => {
+      if (!selection || !isNvdPageObjectDocumentSelection(selection)) {
+        return;
+      }
+
+      commitPageObjectDocumentChange(
+        removeNvdPageObjectById(displayPageObjects, selection.objectId),
+        createNvdInsertionDocumentSelection(blocks.length),
+      );
+      typingStyleRef.current = null;
+    },
+    discardDraftPageObject: () => {
+      setDraftPageObject(null);
+      refreshController();
+    },
     focusBlock: (blockIndex) => {
       const targetBlock = blocks[blockIndex];
 
@@ -862,10 +1126,6 @@ export function useNvdPagedDocumentController({
       typingStyleRef.current = null;
       onDocumentSelectionRequest(createNvdTextDocumentSelection(nextSelection.start, nextSelection.end));
       refreshController();
-    },
-    insertAsset: (asset) => {
-      commitDocumentOperation(insertNvdAssetAtSelection(blocks, selection, asset));
-      typingStyleRef.current = null;
     },
     moveBlock: (fromIndex, toIndex) => {
       const targetBlock = blocks[fromIndex];
@@ -893,7 +1153,24 @@ export function useNvdPagedDocumentController({
       refreshController();
     },
     removeSelectedBlock: () => {
+      if (!hasBlockSelection) {
+        return;
+      }
+
       commitDocumentOperation(removeSelectedNvdBlock(blocks, selection));
+      typingStyleRef.current = null;
+    },
+    saveDraftPageObject: () => {
+      if (!draftPageObject || draftPageObject.widthPx < 12 || draftPageObject.heightPx < 12) {
+        return;
+      }
+
+      const pageObject = createNvdAssetFrameObjectFromDraft(draftPageObject);
+      commitPageObjectDocumentChange(
+        insertNvdPageObject(displayPageObjects, pageObject),
+        createNvdPageObjectDocumentSelection(pageObject.id),
+      );
+      setDraftPageObject(null);
       typingStyleRef.current = null;
     },
     setInsertionPoint: (blockIndex) => {
@@ -901,10 +1178,45 @@ export function useNvdPagedDocumentController({
       onDocumentSelectionRequest(createNvdInsertionDocumentSelection(blockIndex));
       refreshController();
     },
+    setPageObjectToolMode: (mode) => {
+      setPageObjectToolModeState(mode);
+      if (mode === "text") {
+        setDraftPageObject(null);
+      }
+      refreshController();
+    },
     setSelection: (nextSelection) => {
       typingStyleRef.current = null;
       onDocumentSelectionRequest(nextSelection);
       refreshController();
+    },
+    setSelectedPageObjectWrapMode: (wrapMode: NvdPageObjectWrapMode) => {
+      if (!selectedPageObject) {
+        return;
+      }
+
+      commitPageObjectDocumentChange(
+        updateNvdPageObjectById(displayPageObjects, selectedPageObject.id, (pageObject) => ({
+          ...pageObject,
+          wrapMode,
+        })),
+        createNvdPageObjectDocumentSelection(selectedPageObject.id),
+      );
+      typingStyleRef.current = null;
+    },
+    setSelectedPageObjectZMode: (zMode: NvdPageObjectZMode) => {
+      if (!selectedPageObject) {
+        return;
+      }
+
+      commitPageObjectDocumentChange(
+        updateNvdPageObjectById(displayPageObjects, selectedPageObject.id, (pageObject) => ({
+          ...pageObject,
+          zMode,
+        })),
+        createNvdPageObjectDocumentSelection(selectedPageObject.id),
+      );
+      typingStyleRef.current = null;
     },
     setCharacterSpacingPt: (characterSpacingPt) => {
       commitInlineStyleChange((style) => ({
@@ -980,14 +1292,21 @@ export function useNvdPagedDocumentController({
     commitBlockLayoutChange,
     commitDocumentOperation,
     commitInlineStyleChange,
+    commitPageObjectDocumentChange,
     defaultFontFamily,
     defaultFontSizePt,
+    draftPageObject,
     effectiveSelection,
     hasBlockSelection,
     hasInsertionSelection,
+    hasPageObjectSelection,
     hasTextSelection,
     normalizedRuns,
     onDocumentSelectionRequest,
+    pageObjectToolMode,
+    displayPageObjects,
+    normalizedPageObjects,
+    selectedPageObject,
     selection,
     styleDefinitions,
     text,
@@ -1000,9 +1319,16 @@ export function useNvdPagedDocumentController({
   }, [controller, onControllerChange]);
 
   return {
+    clearPageObjectPreview,
+    displayPageObjects,
+    draftPageObject,
     displayBlockLayouts: compositionPreview?.blockLayouts ?? blockLayouts,
     displayRuns: compositionPreview?.runs ?? runs,
     displaySelection: compositionPreview?.selection ?? (hasTextSelection ? effectiveSelection : null),
+    handleDraftPageObjectChange,
+    handlePageObjectPreviewChange,
+    handlePageObjectSelectionRequest,
+    handlePageObjectTransformCommit,
     hasBlockSelection,
     onBeforeInput,
     onInput,
@@ -1013,16 +1339,19 @@ export function useNvdPagedDocumentController({
     onCut,
     onKeyDown,
     onPaste,
+    pageObjectToolMode,
     selectedText,
   };
 }
 
 function createSnapshot(
   blocks: readonly NvdBlock[],
+  pageObjects: readonly NvdPageObject[],
   selection: NvdDocumentSelection | null,
 ): NvdHistorySnapshot {
   return {
     blocks: cloneNvdBlocks(blocks),
+    pageObjects: cloneNvdPageObjects(pageObjects),
     selection: selection ? JSON.parse(JSON.stringify(selection)) : null,
   };
 }
@@ -1033,6 +1362,10 @@ function snapshotsEqual(left: NvdHistorySnapshot, right: NvdHistorySnapshot) {
 
 function cloneNvdBlocks(blocks: readonly NvdBlock[]) {
   return JSON.parse(JSON.stringify(blocks)) as NvdBlock[];
+}
+
+function cloneNvdPageObjects(pageObjects: readonly NvdPageObject[]) {
+  return JSON.parse(JSON.stringify(pageObjects)) as NvdPageObject[];
 }
 
 function createStyledInsertRun(text: string, style: NvdResolvedTypingStyle): NvdTextRun {

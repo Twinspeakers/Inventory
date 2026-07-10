@@ -2,13 +2,20 @@ import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useRef, useState } from "react";
 import type { EditorSaveState } from "../../features/editors";
 import type { PersistedOpenedNvdDocument, NvdHistoryState } from "../appTypes";
+import type {
+  NvdPageObject,
+  NvdPageObjectAsset,
+  NvdPageObjectWrapMode,
+  NvdPageObjectZMode,
+} from "../../features/inventoryProject";
 import {
   DEFAULT_NVD_STYLE_DEFINITIONS,
   getNvdTextSelectionFromDocumentSelection,
   getNvdDocumentStyleDefinitions,
+  type NvdDraftPageObject,
   type NvdDocumentSelection,
   type NvdEditorController,
-  type NvdInsertAssetPayload,
+  type NvdPageObjectToolMode,
   type NvdStyleDefinition,
   type NvdStyleRole,
   type NvdTextSelection,
@@ -31,12 +38,21 @@ export function useNvdStyleControls({
 }) {
   const [activeNvdSelection, setActiveNvdSelection] = useState<NvdDocumentSelection | null>(null);
   const [activeNvdTextSelection, setActiveNvdTextSelection] = useState<NvdTextSelection | null>(null);
+  const [activeNvdDraftPageObject, setActiveNvdDraftPageObject] =
+    useState<NvdDraftPageObject | null>(null);
+  const [activeNvdCanSaveDraftPageObject, setActiveNvdCanSaveDraftPageObject] =
+    useState(false);
+  const [activeNvdPageObjectToolMode, setActiveNvdPageObjectToolMode] =
+    useState<NvdPageObjectToolMode>("text");
+  const [activeNvdSelectedPageObject, setActiveNvdSelectedPageObject] =
+    useState<NvdPageObject | null>(null);
   const [nvdStyleDefinitions, setNvdStyleDefinitions] = useState(() => ({ ...DEFAULT_NVD_STYLE_DEFINITIONS }));
   const [activeNvdStyleRole, setActiveNvdStyleRole] = useState<NvdStyleRole | null>(null);
   const [nvdStyleDraft, setNvdStyleDraft] = useState<NvdStyleDefinition | null>(null);
   const [activeNvdCharacterSpacingPt, setActiveNvdCharacterSpacingPt] = useState<number | null>(null);
   const [activeNvdLineHeight, setActiveNvdLineHeight] = useState<number | null>(null);
-  const [activeNvdSelectionKind, setActiveNvdSelectionKind] = useState<"block" | "insertion" | "none" | "text">("none");
+  const [activeNvdSelectionKind, setActiveNvdSelectionKind] =
+    useState<"block" | "insertion" | "none" | "page-object" | "text">("none");
   const [activeNvdSpaceAfterPt, setActiveNvdSpaceAfterPt] = useState<number | null>(null);
   const [activeNvdSpaceBeforePt, setActiveNvdSpaceBeforePt] = useState<number | null>(null);
   const [pendingNvdStyleResetRole, setPendingNvdStyleResetRole] = useState<NvdStyleRole | null>(null);
@@ -65,8 +81,12 @@ export function useNvdStyleControls({
 
   const handleNvdEditorControllerChange = useCallback((controller: NvdEditorController | null) => {
     nvdEditorControllerRef.current = controller;
+    setActiveNvdCanSaveDraftPageObject(controller?.canSaveDraftPageObject ?? false);
     setActiveNvdCharacterSpacingPt(controller?.characterSpacingPt ?? null);
+    setActiveNvdDraftPageObject(controller?.draftPageObject ?? null);
     setActiveNvdLineHeight(controller?.lineHeight ?? null);
+    setActiveNvdPageObjectToolMode(controller?.pageObjectToolMode ?? "text");
+    setActiveNvdSelectedPageObject(controller?.selectedPageObject ?? null);
     setActiveNvdSelectionKind(controller?.selectionKind ?? "none");
     setActiveNvdSpaceAfterPt(controller?.spaceAfterPt ?? null);
     setActiveNvdSpaceBeforePt(controller?.spaceBeforePt ?? null);
@@ -122,18 +142,6 @@ export function useNvdStyleControls({
 
   function navigateToNvdBlock(blockIndex: number) {
     nvdEditorControllerRef.current?.focusBlock(blockIndex);
-  }
-
-  function insertAssetIntoNvdDocument(asset: NvdInsertAssetPayload) {
-    const controller = nvdEditorControllerRef.current;
-
-    if (!controller) {
-      setStatusMessage("Open an NVD document before inserting an asset.");
-      return;
-    }
-
-    controller.insertAsset(asset);
-    setStatusMessage(`Inserted "${asset.assetName}" into the document.`);
   }
 
   function updateNvdStyleDraft(style: NvdStyleDefinition) {
@@ -321,9 +329,41 @@ export function useNvdStyleControls({
     nvdEditorControllerRef.current?.redo();
   }
 
+  function setNvdPageObjectToolMode(mode: NvdPageObjectToolMode) {
+    nvdEditorControllerRef.current?.setPageObjectToolMode(mode);
+  }
+
+  function saveDraftNvdPageObject() {
+    nvdEditorControllerRef.current?.saveDraftPageObject();
+  }
+
+  function discardDraftNvdPageObject() {
+    nvdEditorControllerRef.current?.discardDraftPageObject();
+  }
+
+  function deleteSelectedNvdPageObject() {
+    nvdEditorControllerRef.current?.deleteSelectedPageObject();
+  }
+
+  function assignAssetToSelectedNvdPageObject(asset: NvdPageObjectAsset | null) {
+    nvdEditorControllerRef.current?.assignAssetToSelectedPageObject(asset);
+  }
+
+  function setSelectedNvdPageObjectWrapMode(wrapMode: NvdPageObjectWrapMode) {
+    nvdEditorControllerRef.current?.setSelectedPageObjectWrapMode(wrapMode);
+  }
+
+  function setSelectedNvdPageObjectZMode(zMode: NvdPageObjectZMode) {
+    nvdEditorControllerRef.current?.setSelectedPageObjectZMode(zMode);
+  }
+
   return {
+    activeNvdCanSaveDraftPageObject,
     activeNvdCharacterSpacingPt,
+    activeNvdDraftPageObject,
     activeNvdLineHeight,
+    activeNvdPageObjectToolMode,
+    activeNvdSelectedPageObject,
     activeNvdSelection,
     activeNvdSelectionKind,
     activeNvdSpaceAfterPt,
@@ -336,6 +376,7 @@ export function useNvdStyleControls({
     pendingNvdStyleResetRole,
     acceptNvdStyleDraft,
     applyNvdStyle,
+    assignAssetToSelectedNvdPageObject,
     changeNvdCharacterSpacingPt,
     changeNvdLineHeight,
     changeNvdSpaceAfterPt,
@@ -343,14 +384,19 @@ export function useNvdStyleControls({
     clearNvdStyleSelection,
     clearNvdSelection,
     confirmNvdStyleReset,
+    deleteSelectedNvdPageObject,
+    discardDraftNvdPageObject,
     handleNvdEditorControllerChange,
     handleNvdSelectionChange,
-    insertAssetIntoNvdDocument,
     loadNvdStyleDefinitions,
     navigateToNvdBlock,
     redoNvd,
     resetNvdStyle,
+    saveDraftNvdPageObject,
     selectNvdStyle,
+    setSelectedNvdPageObjectWrapMode,
+    setSelectedNvdPageObjectZMode,
+    setNvdPageObjectToolMode,
     setHideFutureNvdStyleResetConfirmations,
     setPendingNvdStyleResetRole,
     undoNvd,

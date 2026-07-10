@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_NVD_PAGE_LAYOUT } from "./nvdPageLayout";
+import type { NvdPageLayout } from "../../inventoryProject";
+import { DEFAULT_NVD_PAGE_LAYOUT, getNvdPageLayoutPx } from "./nvdPageLayout";
 import type { NvdBlockLayout } from "../document/nvdRichText";
 import { DEFAULT_NVD_STYLE_DEFINITIONS } from "../document/nvdStyles";
 import {
@@ -484,5 +485,147 @@ describe("NVD page layout engine", () => {
     expect(headingPage).toBeDefined();
     expect(embedPage).toBeDefined();
     expect(embedPage?.index).toBe(headingPage?.index);
+  });
+
+  it("wraps text around rectangular page objects and updates hit testing", () => {
+    const pageLayout: NvdPageLayout = {
+      pageSize: "custom",
+      widthPt: 240,
+      heightPt: 320,
+      marginTopPt: 16,
+      marginRightPt: 16,
+      marginBottomPt: 16,
+      marginLeftPt: 16,
+    };
+    const contentWidthPx = getNvdPageLayoutPx(pageLayout).contentWidthPx;
+    const layout = layoutNvdDocument({
+      blocks: [
+        {
+          id: "body",
+          kind: "paragraph",
+          text:
+            "This paragraph should wrap around the frame object instead of running straight beneath it. " +
+            "The wrapped lines need to shift sideways while the lower lines return to the full column width.",
+        },
+      ],
+      fontFamily: "Inter",
+      fontSize: "12pt",
+      pageLayout,
+      pageObjects: [
+        {
+          heightPx: 110,
+          id: "frame-1",
+          kind: "asset-frame",
+          pageIndex: 0,
+          widthPx: 120,
+          wrapMode: "rectangle",
+          wrapPaddingPx: 12,
+          xPx: 0,
+          yPx: 14,
+          zMode: "in-front-of-text",
+        },
+      ],
+      styles: DEFAULT_NVD_STYLE_DEFINITIONS,
+    });
+
+    const wrappedLines = layout.pages[0].lines.filter(
+      (line) => line.topPx < 136 && line.topPx + line.heightPx > 14,
+    );
+    const fullWidthLine = layout.pages[0].lines.find((line) => line.topPx >= 136);
+
+    expect(wrappedLines.length).toBeGreaterThan(0);
+    expect(wrappedLines.some((line) => line.leftPx > 0)).toBe(true);
+    expect(wrappedLines.every((line) => line.widthPx < contentWidthPx)).toBe(true);
+    expect(fullWidthLine?.leftPx).toBe(0);
+    expect(fullWidthLine?.widthPx).toBe(contentWidthPx);
+
+    const targetWrappedLine = wrappedLines[0];
+    const beforeWrappedText = getNvdOffsetAtPagePoint(
+      layout,
+      0,
+      targetWrappedLine.leftPx - 4,
+      targetWrappedLine.topPx + targetWrappedLine.heightPx / 2,
+    );
+    const insideWrappedText = getNvdOffsetAtPagePoint(
+      layout,
+      0,
+      targetWrappedLine.leftPx + 24,
+      targetWrappedLine.topPx + targetWrappedLine.heightPx / 2,
+    );
+
+    expect(beforeWrappedText).toBe(targetWrappedLine.start);
+    expect(insideWrappedText).toBeGreaterThanOrEqual(targetWrappedLine.start);
+  });
+
+  it("uses rotated page object bounds for rectangular wrapping", () => {
+    const pageLayout: NvdPageLayout = {
+      pageSize: "custom",
+      widthPt: 240,
+      heightPt: 320,
+      marginTopPt: 16,
+      marginRightPt: 16,
+      marginBottomPt: 16,
+      marginLeftPt: 16,
+    };
+    const baseDocument = {
+      blocks: [
+        {
+          id: "body",
+          kind: "paragraph",
+          text:
+            "Rotation should widen the exclusion area enough that the wrapped lines shift farther away " +
+            "than they do for the same unrotated frame.",
+        },
+      ],
+      fontFamily: "Inter",
+      fontSize: "12pt",
+      pageLayout,
+      styles: DEFAULT_NVD_STYLE_DEFINITIONS,
+    };
+    const unrotatedLayout = layoutNvdDocument({
+      ...baseDocument,
+      pageObjects: [
+        {
+          heightPx: 90,
+          id: "frame-1",
+          kind: "asset-frame",
+          pageIndex: 0,
+          rotationDeg: 0,
+          widthPx: 90,
+          wrapMode: "rectangle",
+          wrapPaddingPx: 8,
+          xPx: 0,
+          yPx: 18,
+          zMode: "in-front-of-text",
+        },
+      ],
+    });
+    const rotatedLayout = layoutNvdDocument({
+      ...baseDocument,
+      pageObjects: [
+        {
+          heightPx: 90,
+          id: "frame-1",
+          kind: "asset-frame",
+          pageIndex: 0,
+          rotationDeg: 45,
+          widthPx: 90,
+          wrapMode: "rectangle",
+          wrapPaddingPx: 8,
+          xPx: 0,
+          yPx: 18,
+          zMode: "in-front-of-text",
+        },
+      ],
+    });
+
+    const unrotatedWrappedLeftPx = Math.max(
+      ...unrotatedLayout.pages[0].lines.map((line) => line.leftPx),
+    );
+    const rotatedWrappedLeftPx = Math.max(
+      ...rotatedLayout.pages[0].lines.map((line) => line.leftPx),
+    );
+
+    expect(rotatedWrappedLeftPx).toBeGreaterThan(unrotatedWrappedLeftPx);
   });
 });

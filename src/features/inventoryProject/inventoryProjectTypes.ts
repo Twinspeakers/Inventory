@@ -61,6 +61,10 @@ export type NvdEmbedAlignment = "left" | "center" | "right";
 
 export type NvdEmbedDisplayMode = "fit" | "actual" | "custom";
 
+export type NvdPageObjectWrapMode = "none" | "rectangle";
+
+export type NvdPageObjectZMode = "behind-text" | "in-front-of-text";
+
 export type NvdAssetEmbed = {
   assetId: number;
   assetKind: "image" | string;
@@ -73,6 +77,31 @@ export type NvdAssetEmbed = {
   sourceDocumentKind?: "nvv" | string;
   widthPx?: number;
 };
+
+export type NvdPageObjectAsset = {
+  assetId: number;
+  assetKind: "image" | string;
+  assetName: string;
+  assetPath: string;
+  sourceDocumentKind?: "nvv" | string;
+};
+
+export type NvdAssetFrameObject = {
+  id: string;
+  kind: "asset-frame";
+  pageIndex: number;
+  xPx: number;
+  yPx: number;
+  widthPx: number;
+  heightPx: number;
+  rotationDeg?: number;
+  wrapMode?: NvdPageObjectWrapMode;
+  zMode?: NvdPageObjectZMode;
+  wrapPaddingPx?: number;
+  asset?: NvdPageObjectAsset | null;
+};
+
+export type NvdPageObject = NvdAssetFrameObject;
 
 export type NvdTextBlock = {
   id: string;
@@ -153,6 +182,7 @@ export type NvdDocument = {
   layoutMode: NvdLayoutMode;
   pageLayout?: NvdPageLayout;
   blocks: NvdBlock[];
+  pageObjects?: NvdPageObject[];
   styles?: Record<string, NvdDocumentStyleDefinition>;
 };
 

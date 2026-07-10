@@ -1,30 +1,48 @@
-import type { NvdAssetEmbed, NvdTextAlignment } from "../../inventoryProject";
+import type {
+  NvdAssetEmbed,
+  NvdPageObject,
+  NvdPageObjectAsset,
+  NvdPageObjectWrapMode,
+  NvdPageObjectZMode,
+  NvdTextAlignment,
+} from "../../inventoryProject";
 import type { NvdDocumentSelection } from "../document/nvdDocumentSelection";
+import type { NvdDraftPageObject } from "../document/nvdPageObjectModel";
 import type { NvdStyleDefinition } from "../document/nvdStyles";
-import type { NvdInsertAssetPayload } from "../document/nvdDocumentOperations";
+
+export type NvdPageObjectToolMode = "frame" | "text";
 
 export type NvdEditorController = {
   canRedo: boolean;
   canUndo: boolean;
-  canInsertAsset: boolean;
+  canSaveDraftPageObject: boolean;
   characterSpacingPt: number | null;
+  draftPageObject: NvdDraftPageObject | null;
   fontFamily: string;
   fontSizePt: number;
   isBold: boolean;
   isItalic: boolean;
   lineHeight: number | null;
+  pageObjectToolMode: NvdPageObjectToolMode;
+  selectedPageObject: NvdPageObject | null;
   selection: NvdDocumentSelection | null;
-  selectionKind: "block" | "insertion" | "none" | "text";
+  selectionKind: "block" | "insertion" | "none" | "page-object" | "text";
   spaceAfterPt: number | null;
   spaceBeforePt: number | null;
   textAlign: NvdTextAlignment | null;
   applyStyle: (style: NvdStyleDefinition) => void;
+  assignAssetToSelectedPageObject: (asset: NvdPageObjectAsset | null) => void;
+  deleteSelectedPageObject: () => void;
+  discardDraftPageObject: () => void;
   focusBlock: (blockIndex: number) => void;
-  insertAsset: (asset: NvdInsertAssetPayload) => void;
   moveBlock: (fromIndex: number, toIndex: number) => void;
   removeSelectedBlock: () => void;
+  saveDraftPageObject: () => void;
   setInsertionPoint: (blockIndex: number) => void;
+  setPageObjectToolMode: (mode: NvdPageObjectToolMode) => void;
   setSelection: (selection: NvdDocumentSelection) => void;
+  setSelectedPageObjectWrapMode: (wrapMode: NvdPageObjectWrapMode) => void;
+  setSelectedPageObjectZMode: (zMode: NvdPageObjectZMode) => void;
   setFontFamily: (fontFamily: string) => void;
   setFontSizePt: (fontSizePt: number) => void;
   setCharacterSpacingPt: (characterSpacingPt: number) => void;

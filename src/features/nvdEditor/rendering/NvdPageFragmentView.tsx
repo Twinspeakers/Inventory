@@ -44,8 +44,10 @@ export function NvdPageFragmentView({
             className="nvd-page-fragment-line"
             key={`${line.pageIndex}-${line.index}-${line.start}-${line.end}`}
             style={{
+              left: `${line.leftPx}px`,
               textAlign: paragraphAlignments.get(line.paragraphIndex) ?? "left",
               top: `${line.topPx + line.textTopOffsetPx}px`,
+              width: `${line.widthPx}px`,
             }}
           >
             {runs.map((run, runIndex) => (

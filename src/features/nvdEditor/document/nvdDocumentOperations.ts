@@ -5,6 +5,7 @@ import {
   createNvdTextDocumentSelection,
   isNvdBlockDocumentSelection,
   isNvdInsertionDocumentSelection,
+  isNvdPageObjectDocumentSelection,
   isNvdTextDocumentSelection,
   type NvdDocumentSelection,
 } from "./nvdDocumentSelection";
@@ -45,6 +46,10 @@ export function normalizeNvdDocumentSelection(
     return findNvdBlockIndexById(blocks, selection.blockId) >= 0
       ? selection
       : createNvdInsertionDocumentSelection(blocks.length);
+  }
+
+  if (isNvdPageObjectDocumentSelection(selection)) {
+    return createNvdInsertionDocumentSelection(blocks.length);
   }
 
   return createNvdTextDocumentSelection(selection.text.start, selection.text.end);

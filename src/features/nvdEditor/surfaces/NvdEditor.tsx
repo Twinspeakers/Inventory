@@ -2,6 +2,7 @@ import { FileText } from "lucide-react";
 import type {
   NvdBlock,
   NvdDocument,
+  NvdPageObject,
   NvdTextRun,
   OpenedNvdDocument,
 } from "../../inventoryProject";
@@ -50,6 +51,7 @@ export function NvdEditor({
   const blockLayouts = getNvdDocumentBlockLayouts(document);
   const fontFamilies = getNvdDocumentFontFamilies(document);
   const pageLayout = getNvdPageLayout(document.pageLayout);
+  const pageObjects = document.pageObjects ?? [];
 
   function updateBlocks(nextBlocks: NvdBlock[]) {
     onDocumentChange({
@@ -71,6 +73,16 @@ export function NvdEditor({
     });
   }
 
+  function updatePageObjects(nextPageObjects: NvdPageObject[]) {
+    onDocumentChange({
+      ...document,
+      fontFamily,
+      fontSize: `${fontSizePt}pt`,
+      layoutMode: "paged",
+      pageObjects: nextPageObjects,
+    });
+  }
+
   return (
     <div className="nvd-editor-stage">
       <div className="nvd-editor-layout" style={{ zoom: `${zoomPercent}%` }}>
@@ -84,8 +96,10 @@ export function NvdEditor({
           onActivate={onActivate}
           onControllerChange={onControllerChange}
           onBlocksChange={updateBlocks}
+          onPageObjectsChange={updatePageObjects}
           onSelectionChange={onSelectionChange}
           blocks={document.blocks}
+          pageObjects={pageObjects}
           runs={runs}
           blockLayouts={blockLayouts}
           styleDefinitions={styleDefinitions}
@@ -105,8 +119,10 @@ function NvdDocumentSurface({
   onActivate,
   onControllerChange,
   onBlocksChange,
+  onPageObjectsChange,
   onSelectionChange,
   blocks,
+  pageObjects,
   runs,
   blockLayouts,
   styleDefinitions,
@@ -120,8 +136,10 @@ function NvdDocumentSurface({
   onActivate: () => void;
   onControllerChange: (controller: NvdEditorController) => void;
   onBlocksChange: (blocks: NvdBlock[]) => void;
+  onPageObjectsChange: (pageObjects: NvdPageObject[]) => void;
   onSelectionChange: (selection: NvdDocumentSelection | null) => void;
   blocks: NvdBlock[];
+  pageObjects: NvdPageObject[];
   runs: NvdTextRun[];
   blockLayouts: NvdBlockLayout[];
   styleDefinitions: ReturnType<typeof getNvdDocumentStyleDefinitions>;
@@ -137,8 +155,10 @@ function NvdDocumentSurface({
       onActivate={onActivate}
       onControllerChange={onControllerChange}
       onBlocksChange={onBlocksChange}
+      onPageObjectsChange={onPageObjectsChange}
       onSelectionChange={onSelectionChange}
       blocks={blocks}
+      pageObjects={pageObjects}
       runs={runs}
       blockLayouts={blockLayouts}
       styleDefinitions={styleDefinitions}

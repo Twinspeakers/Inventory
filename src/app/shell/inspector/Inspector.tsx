@@ -10,15 +10,25 @@ import {
   type ModelTransform,
 } from "../../../sceneReaders/threeModelReader";
 import type { DocumentStatistics } from "../../../features/editors";
-import type { NvvDocument } from "../../../features/inventoryProject";
+import type {
+  NvdPageObject,
+  NvdPageObjectAsset,
+  NvdPageObjectWrapMode,
+  NvdPageObjectZMode,
+  NvvDocument,
+} from "../../../features/inventoryProject";
 import {
+  type NvdDraftPageObject,
+  type NvdPageObjectToolMode,
   type NvdStyleDefinition,
   type NvdStyleRole,
 } from "../../../features/nvdEditor";
+import type { Asset } from "../../appTypes";
 import type { InspectorAsset } from "./inspectorTypes";
 import { AssetTagEditor } from "./asset/AssetTagEditor";
 import { NotesSection } from "./asset/NotesSection";
 import { ModelInspector } from "./model/ModelInspector";
+import { NvdPageObjectsSection } from "./nvd/NvdPageObjectsSection";
 import { NvdStylesSection } from "./nvd/NvdStylesSection";
 import { ParagraphSettings } from "./nvd/ParagraphSettings";
 import { WordCountSection } from "./nvd/WordCountSection";
@@ -31,7 +41,12 @@ type InspectorProps = {
   documentStatistics: DocumentStatistics | null;
   modelInspectorResult: ModelInspectorResult | null;
   modelTransformOverride?: ModelTransform;
+  nvdDraftPageObject: NvdDraftPageObject | null;
+  nvdCanSaveDraftPageObject: boolean;
+  nvdSelectedPageObject: NvdPageObject | null;
   nvdStyleDefinitions: Record<NvdStyleRole, NvdStyleDefinition>;
+  nvdPageObjectToolMode: NvdPageObjectToolMode;
+  nvdSelectionKind: "block" | "insertion" | "none" | "page-object" | "text";
   nvdLineHeight: number | null;
   nvdCharacterSpacingPt: number | null;
   nvdControlsEnabled: boolean;
@@ -46,11 +61,18 @@ type InspectorProps = {
   onAssetRecentTagRemove: (tag: string) => void;
   onAssetReanalyze: (assetId: number) => void;
   onAssetTagsChange: (assetId: number, tags: string[]) => void;
+  onAssignAssetToSelectedNvdPageObject: (asset: NvdPageObjectAsset | null) => void;
   onOpenTagBrowser: () => void;
   onModelTransformChange: (transform: ModelTransform) => void;
   onModelTransformReset: () => void;
+  onDeleteSelectedNvdPageObject: () => void;
+  onDiscardDraftNvdPageObject: () => void;
   onNvdLineHeightChange: (lineHeight: number, finalizeStyle?: boolean) => void;
   onNvdCharacterSpacingPtChange: (characterSpacingPt: number, finalizeStyle?: boolean) => void;
+  onNvdPageObjectToolModeChange: (mode: NvdPageObjectToolMode) => void;
+  onNvdSelectedPageObjectWrapModeChange: (wrapMode: NvdPageObjectWrapMode) => void;
+  onNvdSelectedPageObjectZModeChange: (zMode: NvdPageObjectZMode) => void;
+  onSaveDraftNvdPageObject: () => void;
   onNvdSpaceAfterPtChange: (spaceAfterPt: number, finalizeStyle?: boolean) => void;
   onNvdSpaceBeforePtChange: (spaceBeforePt: number, finalizeStyle?: boolean) => void;
   onNvvDocumentChange: (document: NvvDocument) => void;
@@ -62,6 +84,7 @@ type InspectorProps = {
   onToggleCollapsed: () => void;
   selectedAsset: InspectorAsset | null;
   tagSuggestions: string[];
+  workspaceSelectedAsset: Asset | null;
 };
 
 export function Inspector({
@@ -70,6 +93,11 @@ export function Inspector({
   documentStatistics,
   modelInspectorResult,
   modelTransformOverride,
+  nvdDraftPageObject,
+  nvdCanSaveDraftPageObject,
+  nvdPageObjectToolMode,
+  nvdSelectedPageObject,
+  nvdSelectionKind,
   nvdStyleDefinitions,
   nvdLineHeight,
   nvdCharacterSpacingPt,
@@ -85,11 +113,18 @@ export function Inspector({
   onAssetRecentTagRemove,
   onAssetReanalyze,
   onAssetTagsChange,
+  onAssignAssetToSelectedNvdPageObject,
   onOpenTagBrowser,
   onModelTransformChange,
   onModelTransformReset,
+  onDeleteSelectedNvdPageObject,
+  onDiscardDraftNvdPageObject,
   onNvdLineHeightChange,
   onNvdCharacterSpacingPtChange,
+  onNvdPageObjectToolModeChange,
+  onNvdSelectedPageObjectWrapModeChange,
+  onNvdSelectedPageObjectZModeChange,
+  onSaveDraftNvdPageObject,
   onNvdSpaceAfterPtChange,
   onNvdSpaceBeforePtChange,
   onNvvDocumentChange,
@@ -101,6 +136,7 @@ export function Inspector({
   onToggleCollapsed,
   selectedAsset,
   tagSuggestions,
+  workspaceSelectedAsset,
 }: InspectorProps) {
   const isNvvDocumentOpen = Boolean(nvvDocument);
   const isModelAssetSelected = selectedAsset?.type === "3D";
@@ -181,6 +217,23 @@ export function Inspector({
 
           {documentStatistics && isWordCountVisible ? (
             <WordCountSection statistics={documentStatistics} onClose={onWordCountClose} />
+          ) : null}
+          {showNvdSections ? (
+            <NvdPageObjectsSection
+              canSaveDraft={nvdCanSaveDraftPageObject}
+              draftPageObject={nvdDraftPageObject}
+              pageObjectToolMode={nvdPageObjectToolMode}
+              selectedPageObject={nvdSelectedPageObject}
+              selectionKind={nvdSelectionKind}
+              workspaceSelectedAsset={workspaceSelectedAsset}
+              onAssignAsset={onAssignAssetToSelectedNvdPageObject}
+              onDeleteSelectedPageObject={onDeleteSelectedNvdPageObject}
+              onDiscardDraft={onDiscardDraftNvdPageObject}
+              onSetWrapMode={onNvdSelectedPageObjectWrapModeChange}
+              onSetZMode={onNvdSelectedPageObjectZModeChange}
+              onSaveDraft={onSaveDraftNvdPageObject}
+              onToolModeChange={onNvdPageObjectToolModeChange}
+            />
           ) : null}
           {showNvdSections ? (
             <ParagraphSettings

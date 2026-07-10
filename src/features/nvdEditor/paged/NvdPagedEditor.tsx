@@ -7,6 +7,7 @@ import {
   type NvdPagedInfrastructureEditorHandle,
 } from "./NvdPagedInfrastructureEditor";
 import { NvdPagedHostLayer } from "./NvdPagedHostLayer";
+import { NvdPagedObjectLayer } from "./NvdPagedObjectLayer";
 import { NvdPagedTextLayer } from "./NvdPagedTextLayer";
 import { NvdPagedSelectionOverlay } from "./NvdPagedSelectionOverlay";
 import { NvdPageRulers } from "../controls/NvdPageRulers";
@@ -20,6 +21,10 @@ import {
 import type { NvdStyleDefinition, NvdStyleRole } from "../document/nvdStyles";
 import { useNvdPagedDocumentController } from "./useNvdPagedDocumentController";
 import { useNvdPagedSelectionController } from "./useNvdPagedSelectionController";
+import {
+  isNvdPageObjectDocumentSelection,
+} from "../document/nvdDocumentSelection";
+import type { NvdPageObject } from "../../inventoryProject";
 
 export function NvdPagedEditor({
   defaultFontFamily,
@@ -31,8 +36,10 @@ export function NvdPagedEditor({
   onActivate,
   onControllerChange,
   onBlocksChange,
+  onPageObjectsChange,
   onSelectionChange,
   blocks,
+  pageObjects,
   runs,
   blockLayouts,
   styleDefinitions,
@@ -46,8 +53,10 @@ export function NvdPagedEditor({
   onActivate: () => void;
   onControllerChange: (controller: NvdEditorController) => void;
   onBlocksChange: (blocks: NvdBlock[]) => void;
+  onPageObjectsChange: (pageObjects: NvdPageObject[]) => void;
   onSelectionChange: (selection: NvdDocumentSelection | null) => void;
   blocks: NvdBlock[];
+  pageObjects: NvdPageObject[];
   runs: NvdTextRun[];
   blockLayouts: NvdBlockLayout[];
   styleDefinitions: Record<NvdStyleRole, NvdStyleDefinition>;
@@ -72,6 +81,7 @@ export function NvdPagedEditor({
             blocks: baseBlocks,
             fontFamily: defaultFontFamily,
             fontSize: `${defaultFontSizePt}pt`,
+            pageObjects,
             pageLayout,
             styles: styleDefinitions,
           })
@@ -79,8 +89,14 @@ export function NvdPagedEditor({
     [baseBlocks, defaultFontFamily, defaultFontSizePt, fontsReady, pageLayout, styleDefinitions],
   );
   const {
+    clearPageObjectPreview,
+    displayPageObjects,
     displayBlockLayouts,
     displayRuns,
+    handleDraftPageObjectChange,
+    handlePageObjectPreviewChange,
+    handlePageObjectSelectionRequest,
+    handlePageObjectTransformCommit,
     onBeforeInput,
     onInput,
     onCompositionEnd,
@@ -88,8 +104,10 @@ export function NvdPagedEditor({
     onCompositionUpdate,
     onCopy,
     onCut,
+    draftPageObject,
     onKeyDown,
     onPaste,
+    pageObjectToolMode,
     selectedText,
   } = useNvdPagedDocumentController({
     blocks,
@@ -101,6 +119,8 @@ export function NvdPagedEditor({
     onBlocksChange,
     onControllerChange,
     onDocumentSelectionRequest: handleDocumentSelectionRequest,
+    onPageObjectsChange,
+    pageObjects,
     runs,
     selection: activeDocumentSelection,
     styleDefinitions,
@@ -116,12 +136,14 @@ export function NvdPagedEditor({
             blocks: displayBlocks,
             fontFamily: defaultFontFamily,
             fontSize: `${defaultFontSizePt}pt`,
+            pageObjects: displayPageObjects,
             pageLayout,
             styles: styleDefinitions,
           })
         : null,
     [
       displayBlocks,
+      displayPageObjects,
       defaultFontFamily,
       defaultFontSizePt,
       fontsReady,
@@ -130,6 +152,10 @@ export function NvdPagedEditor({
     ],
   );
   const pages = layoutSnapshot?.pages ?? [];
+  const selectedPageObjectId =
+    activeDocumentSelection && isNvdPageObjectDocumentSelection(activeDocumentSelection)
+      ? activeDocumentSelection.objectId
+      : null;
 
   return (
     <article
@@ -162,16 +188,32 @@ export function NvdPagedEditor({
       </div>
       {layoutSnapshot ? (
         <NvdPagedHostLayer
+          draftPageObject={draftPageObject}
           layout={layoutSnapshot}
           onDocumentSelectionRequest={handleDocumentSelectionRequest}
+          onDraftPageObjectChange={handleDraftPageObjectChange}
+          onPageObjectPreviewChange={handlePageObjectPreviewChange}
+          onPageObjectSelectionRequest={handlePageObjectSelectionRequest}
+          onPageObjectTransformCancel={clearPageObjectPreview}
+          onPageObjectTransformCommit={handlePageObjectTransformCommit}
           onPointerInteractionStart={() => {
             infrastructureEditorRef.current?.focusBridge();
           }}
           onTextSelectionRequest={handleTextSelectionRequest}
+          pageObjects={displayPageObjects}
+          pageObjectToolMode={pageObjectToolMode}
           pageLayout={pageLayout}
           pages={pages}
+          selectedPageObjectId={selectedPageObjectId}
         />
       ) : null}
+      <NvdPagedObjectLayer
+        draftPageObject={null}
+        pageLayout={pageLayout}
+        pageObjects={displayPageObjects}
+        selectedPageObjectId={selectedPageObjectId}
+        zMode="behind-text"
+      />
       {pages.length > 0 ? (
         <NvdPagedTextLayer
           defaultFontFamily={defaultFontFamily}
@@ -180,6 +222,13 @@ export function NvdPagedEditor({
           pages={pages}
         />
       ) : null}
+      <NvdPagedObjectLayer
+        draftPageObject={draftPageObject}
+        pageLayout={pageLayout}
+        pageObjects={displayPageObjects}
+        selectedPageObjectId={selectedPageObjectId}
+        zMode="in-front-of-text"
+      />
       {layoutSnapshot ? (
         <NvdPagedSelectionOverlay
           layout={layoutSnapshot}

@@ -199,8 +199,12 @@ export function App() {
     updateThemeColor,
   } = useAppSettings({ setStatusMessage });
   const {
+    activeNvdCanSaveDraftPageObject,
     activeNvdCharacterSpacingPt,
+    activeNvdDraftPageObject,
     activeNvdLineHeight,
+    activeNvdPageObjectToolMode,
+    activeNvdSelectedPageObject,
     activeNvdSelection,
     activeNvdSelectionKind,
     activeNvdSpaceAfterPt,
@@ -212,6 +216,7 @@ export function App() {
     pendingNvdStyleResetRole,
     acceptNvdStyleDraft,
     applyNvdStyle,
+    assignAssetToSelectedNvdPageObject,
     changeNvdCharacterSpacingPt,
     changeNvdLineHeight,
     changeNvdSpaceAfterPt,
@@ -219,14 +224,19 @@ export function App() {
     clearNvdStyleSelection,
     clearNvdSelection,
     confirmNvdStyleReset,
+    deleteSelectedNvdPageObject,
+    discardDraftNvdPageObject,
     handleNvdEditorControllerChange,
     handleNvdSelectionChange,
-    insertAssetIntoNvdDocument,
     loadNvdStyleDefinitions,
     navigateToNvdBlock,
     redoNvd,
     resetNvdStyle,
+    saveDraftNvdPageObject,
     selectNvdStyle,
+    setSelectedNvdPageObjectWrapMode,
+    setSelectedNvdPageObjectZMode,
+    setNvdPageObjectToolMode,
     setHideFutureNvdStyleResetConfirmations,
     setPendingNvdStyleResetRole,
     undoNvd,
@@ -773,21 +783,6 @@ export function App() {
     });
   }
 
-  function insertSelectedAssetIntoActiveNvdDocument() {
-    if (!selectedAsset) {
-      setStatusMessage("Select an asset before inserting it into the document.");
-      return;
-    }
-
-    insertAssetIntoNvdDocument({
-      assetId: selectedAsset.id,
-      assetKind: getNvdEmbedAssetKind(selectedAsset),
-      assetName: selectedAsset.name,
-      assetPath: selectedAsset.path,
-      ...(selectedAsset.extension.toLowerCase() === "nvv" ? { sourceDocumentKind: "nvv" } : {}),
-    });
-  }
-
   function updateSelectedModelTransform(transform: ModelTransform) {
     updateModelTransformOverride(inspectorModelKey, transform);
   }
@@ -1119,7 +1114,6 @@ export function App() {
           setDetailsColumnWidths((widths) => ({ ...widths, [columnKey]: width }));
         },
         onDismissNvdSaveReminder: dismissNvdSaveReminder,
-        onInsertSelectedAssetIntoNvdDocument: insertSelectedAssetIntoActiveNvdDocument,
         onModelInspectorResult: handleModelInspectorResult,
         onNvdDocumentActivate: activateNvdDocumentContext,
         onNvdDocumentChange: updateActiveNvdDocument,
@@ -1152,9 +1146,14 @@ export function App() {
         isWordCountVisible,
         modelInspectorResult: inspectorModelInspectorResult,
         modelTransformOverride: inspectorModelTransformOverride,
+        nvdCanSaveDraftPageObject: activeNvdCanSaveDraftPageObject,
         nvdCharacterSpacingPt: nvdStyleDraft?.characterSpacingPt ?? activeNvdCharacterSpacingPt,
         nvdControlsEnabled: nvdStyleDraft !== null || activeNvdSelectionKind === "text",
+        nvdDraftPageObject: activeNvdDraftPageObject,
         nvdLineHeight: nvdStyleDraft?.lineHeight ?? activeNvdLineHeight,
+        nvdPageObjectToolMode: activeNvdPageObjectToolMode,
+        nvdSelectedPageObject: activeNvdSelectedPageObject,
+        nvdSelectionKind: activeNvdSelectionKind,
         nvdSpaceAfterPt: nvdStyleDraft?.spaceAfterPt ?? activeNvdSpaceAfterPt,
         nvdSpaceBeforePt: nvdStyleDraft?.spaceBeforePt ?? activeNvdSpaceBeforePt,
         nvdStyleDefinitions,
@@ -1174,10 +1173,17 @@ export function App() {
 
           setIsTagBrowserOpen(true);
         },
+        onAssignAssetToSelectedNvdPageObject: assignAssetToSelectedNvdPageObject,
+        onDeleteSelectedNvdPageObject: deleteSelectedNvdPageObject,
+        onDiscardDraftNvdPageObject: discardDraftNvdPageObject,
         onModelTransformChange: updateSelectedModelTransform,
         onModelTransformReset: resetSelectedModelTransform,
         onNvdCharacterSpacingPtChange: changeNvdCharacterSpacingPt,
         onNvdLineHeightChange: changeNvdLineHeight,
+        onNvdPageObjectToolModeChange: setNvdPageObjectToolMode,
+        onNvdSelectedPageObjectWrapModeChange: setSelectedNvdPageObjectWrapMode,
+        onNvdSelectedPageObjectZModeChange: setSelectedNvdPageObjectZMode,
+        onSaveDraftNvdPageObject: saveDraftNvdPageObject,
         onNvdSpaceAfterPtChange: changeNvdSpaceAfterPt,
         onNvdSpaceBeforePtChange: changeNvdSpaceBeforePt,
         onNvvDocumentChange: updateActiveNvvDocument,
@@ -1189,6 +1195,8 @@ export function App() {
         onToggleCollapsed: () => setRightPaneCollapsed((collapsed) => !collapsed),
         selectedAsset: inspectorAsset,
         tagSuggestions: inspectorTagSuggestions,
+        workspaceSelectedAsset:
+          selectedAsset && selectedAsset.id !== activeNvdDocument?.entry.assetId ? selectedAsset : null,
       }}
       overlays={{
         addLibraryNodePanel,
@@ -1268,25 +1276,5 @@ export function App() {
       }}
     />
   );
-}
-
-function getNvdEmbedAssetKind(asset: Asset) {
-  if (asset.type === "Image") {
-    return "image";
-  }
-
-  if (asset.type === "3D") {
-    return "3d";
-  }
-
-  if (asset.type === "Audio") {
-    return "audio";
-  }
-
-  if (asset.type === "Archive") {
-    return "archive";
-  }
-
-  return "document";
 }
 

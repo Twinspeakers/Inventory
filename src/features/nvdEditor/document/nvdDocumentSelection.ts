@@ -12,6 +12,10 @@ export type NvdDocumentSelection =
   | {
       kind: "insertion";
       blockIndex: number;
+    }
+  | {
+      kind: "page-object";
+      objectId: string;
     };
 
 export function createNvdTextDocumentSelection(start: number, end: number): NvdDocumentSelection {
@@ -38,6 +42,13 @@ export function createNvdInsertionDocumentSelection(blockIndex: number): NvdDocu
   };
 }
 
+export function createNvdPageObjectDocumentSelection(objectId: string): NvdDocumentSelection {
+  return {
+    kind: "page-object",
+    objectId,
+  };
+}
+
 export function isNvdTextDocumentSelection(
   selection: NvdDocumentSelection,
 ): selection is Extract<NvdDocumentSelection, { kind: "text" }> {
@@ -54,6 +65,12 @@ export function isNvdInsertionDocumentSelection(
   selection: NvdDocumentSelection,
 ): selection is Extract<NvdDocumentSelection, { kind: "insertion" }> {
   return selection.kind === "insertion";
+}
+
+export function isNvdPageObjectDocumentSelection(
+  selection: NvdDocumentSelection,
+): selection is Extract<NvdDocumentSelection, { kind: "page-object" }> {
+  return selection.kind === "page-object";
 }
 
 export function getNvdDocumentSelectionKind(

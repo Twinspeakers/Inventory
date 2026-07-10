@@ -12,6 +12,7 @@ import {
   FileText,
   FolderOpen,
   FolderSearch,
+  Square,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -105,7 +106,6 @@ export function PreviewStage<TAsset extends SceneViewerAsset>({
   onNvvDocumentActivate,
   onNvdDocumentChange,
   onNvdEditorControllerChange,
-  onInsertSelectedAssetIntoNvdDocument,
   onNvdStyleDraftChange,
   onNvdSelectionChange,
   onCloseNvvDocument,
@@ -139,7 +139,6 @@ export function PreviewStage<TAsset extends SceneViewerAsset>({
   onNvvDocumentActivate: () => void;
   onNvdDocumentChange: (document: NvdDocument) => void;
   onNvdEditorControllerChange: (controller: NvdEditorController | null) => void;
-  onInsertSelectedAssetIntoNvdDocument: () => void;
   onNvdStyleDraftChange: (style: NvdStyleDefinition) => void;
   onNvdSelectionChange: (selection: NvdDocumentSelection | null) => void;
   onCloseNvvDocument: () => void;
@@ -199,7 +198,6 @@ export function PreviewStage<TAsset extends SceneViewerAsset>({
         nvdEditorController={nvdEditorController}
         nvdStyleDraft={nvdStyleDraft}
         nvvDocument={nvvDocument}
-        onInsertSelectedAssetIntoNvdDocument={onInsertSelectedAssetIntoNvdDocument}
         onNvdDocumentChange={onNvdDocumentChange}
         onCloseNvdDocument={onCloseNvdDocument}
         onCloseNvvDocument={onCloseNvvDocument}
@@ -307,7 +305,6 @@ function SceneToolbar({
   nvdEditorController,
   nvdStyleDraft,
   nvvDocument,
-  onInsertSelectedAssetIntoNvdDocument,
   onCloseNvdDocument,
   onCloseNvvDocument,
   onNvdDocumentChange,
@@ -323,7 +320,6 @@ function SceneToolbar({
   nvdEditorController: NvdEditorController | null;
   nvdStyleDraft: NvdStyleDefinition | null;
   nvvDocument: OpenedNvvDocument | null;
-  onInsertSelectedAssetIntoNvdDocument: () => void;
   onCloseNvdDocument: () => void;
   onCloseNvvDocument: () => void;
   onNvdDocumentChange: (document: NvdDocument) => void;
@@ -334,16 +330,12 @@ function SceneToolbar({
   nvvZoomPercent: number;
 }) {
   const formattingEnabled = Boolean(nvdEditorController || nvdStyleDraft);
-  const canInsertSelectedAsset =
-    mode === "nvd-document" &&
-    Boolean(asset) &&
-    asset?.id !== nvdDocument?.entry.assetId &&
-    Boolean(nvdEditorController?.canInsertAsset);
   const fontFamily = nvdStyleDraft?.fontFamily ?? nvdEditorController?.fontFamily ?? getNvdFontFamily(nvdDocument?.document.fontFamily);
   const fontSizePt = nvdStyleDraft?.fontSizePt ?? nvdEditorController?.fontSizePt ?? getNvdFontSizePt(nvdDocument?.document.fontSize);
   const isBold = nvdStyleDraft?.bold ?? nvdEditorController?.isBold ?? false;
   const isItalic = nvdStyleDraft?.italic ?? nvdEditorController?.isItalic ?? false;
   const activeTextAlign = nvdStyleDraft?.textAlign ?? nvdEditorController?.textAlign;
+  const isFrameToolActive = nvdEditorController?.pageObjectToolMode === "frame";
 
   return (
     <div className="scene-toolbar">
@@ -421,18 +413,20 @@ function SceneToolbar({
                 <AlignmentIcon size={15} aria-hidden="true" />
               </button>
             ))}
-            {canInsertSelectedAsset ? (
-              <button
-                aria-label={`Insert ${asset?.name}`}
-                className="nvd-format-button"
-                title={`Insert ${asset?.name}`}
-                type="button"
-                onClick={onInsertSelectedAssetIntoNvdDocument}
-                onMouseDown={(event) => event.preventDefault()}
-              >
-                <FilePlus2 size={15} aria-hidden="true" />
-              </button>
-            ) : null}
+            <button
+              aria-label={isFrameToolActive ? "Switch to text tool" : "Switch to frame tool"}
+              aria-pressed={isFrameToolActive}
+              className={`nvd-format-button ${isFrameToolActive ? "nvd-format-button-active" : ""}`}
+              disabled={!nvdEditorController}
+              title={isFrameToolActive ? "Switch to text tool" : "Switch to frame tool"}
+              type="button"
+              onClick={() =>
+                nvdEditorController?.setPageObjectToolMode(isFrameToolActive ? "text" : "frame")
+              }
+              onMouseDown={(event) => event.preventDefault()}
+            >
+              <Square size={15} aria-hidden="true" />
+            </button>
           </>
         ) : null}
       </div>

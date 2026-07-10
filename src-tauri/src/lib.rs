@@ -330,6 +330,44 @@ struct NvdAssetEmbed {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct NvdPageObjectAsset {
+    asset_id: usize,
+    asset_kind: String,
+    asset_name: String,
+    asset_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source_document_kind: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NvdPageObject {
+    id: String,
+    kind: String,
+    #[serde(default)]
+    page_index: usize,
+    #[serde(default)]
+    x_px: f64,
+    #[serde(default)]
+    y_px: f64,
+    #[serde(default = "default_nvd_page_object_extent_px")]
+    width_px: f64,
+    #[serde(default = "default_nvd_page_object_extent_px")]
+    height_px: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rotation_deg: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    wrap_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    z_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    wrap_padding_px: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    asset: Option<NvdPageObjectAsset>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct NvdTextRun {
     text: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -408,6 +446,8 @@ struct NvdDocument {
     #[serde(default = "default_nvd_page_layout")]
     page_layout: NvdPageLayout,
     blocks: Vec<NvdBlock>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    page_objects: Vec<NvdPageObject>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     styles: BTreeMap<String, NvdStyleDefinition>,
 }
@@ -893,6 +933,7 @@ fn create_nvd_document(
             embed: None,
             widow_line_count: None,
         }],
+        page_objects: Vec::new(),
         styles: BTreeMap::new(),
     };
 
@@ -2623,6 +2664,11 @@ fn normalize_nvd_document(mut document: NvdDocument) -> NvdDocument {
         .into_iter()
         .map(normalize_nvd_block)
         .collect();
+    document.page_objects = document
+        .page_objects
+        .into_iter()
+        .map(normalize_nvd_page_object)
+        .collect();
     document.styles = document
         .styles
         .into_iter()
@@ -2695,6 +2741,55 @@ fn normalize_nvd_asset_embed(mut embed: NvdAssetEmbed) -> NvdAssetEmbed {
     embed
 }
 
+fn normalize_nvd_page_object(mut page_object: NvdPageObject) -> NvdPageObject {
+    page_object.id = normalize_nvd_page_object_id(page_object.id);
+    page_object.kind = normalize_nvd_page_object_kind(&page_object.kind);
+    page_object.x_px = normalize_nvd_page_object_coordinate_px(page_object.x_px);
+    page_object.y_px = normalize_nvd_page_object_coordinate_px(page_object.y_px);
+    page_object.width_px = normalize_nvd_page_object_extent_px(page_object.width_px);
+    page_object.height_px = normalize_nvd_page_object_extent_px(page_object.height_px);
+    page_object.rotation_deg = Some(normalize_nvd_page_object_rotation_deg(
+        page_object.rotation_deg,
+    ));
+    page_object.wrap_mode = Some(normalize_nvd_page_object_wrap_mode(
+        page_object.wrap_mode.as_deref(),
+    ));
+    page_object.z_mode = Some(normalize_nvd_page_object_z_mode(
+        page_object.z_mode.as_deref(),
+    ));
+    page_object.wrap_padding_px = normalize_nvd_page_object_padding_px(page_object.wrap_padding_px);
+    page_object.asset = page_object.asset.map(normalize_nvd_page_object_asset);
+    page_object
+}
+
+fn normalize_nvd_page_object_asset(mut asset: NvdPageObjectAsset) -> NvdPageObjectAsset {
+    let trimmed_kind = asset.asset_kind.trim();
+    asset.asset_kind = if trimmed_kind.is_empty() {
+        "image".to_string()
+    } else {
+        trimmed_kind.to_string()
+    };
+
+    let trimmed_path = asset.asset_path.trim().to_string();
+    asset.asset_path = trimmed_path.clone();
+
+    let trimmed_name = asset.asset_name.trim();
+    asset.asset_name = if trimmed_name.is_empty() {
+        Path::new(&trimmed_path)
+            .file_name()
+            .and_then(|value| value.to_str())
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or("Placed Asset")
+            .to_string()
+    } else {
+        trimmed_name.to_string()
+    };
+
+    asset.source_document_kind = normalize_nvd_optional_trimmed_string(asset.source_document_kind)
+        .map(|kind| kind.to_lowercase());
+    asset
+}
+
 fn normalize_nvd_embed_alignment(alignment: Option<&str>) -> String {
     match alignment.map(str::trim) {
         Some("left") => "left".to_string(),
@@ -2715,6 +2810,77 @@ fn normalize_nvd_embed_display_mode(display_mode: Option<&str>) -> String {
 
 fn normalize_nvd_embed_extent_px(value: Option<f64>) -> Option<f64> {
     value.filter(|extent| extent.is_finite() && *extent > 0.0)
+}
+
+fn default_nvd_page_object_extent_px() -> f64 {
+    1.0
+}
+
+fn normalize_nvd_page_object_id(id: String) -> String {
+    let trimmed = id.trim();
+    if trimmed.is_empty() {
+        format!("object-{}", unix_now())
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn normalize_nvd_page_object_kind(kind: &str) -> String {
+    match kind.trim() {
+        "" => "asset-frame".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn normalize_nvd_page_object_wrap_mode(wrap_mode: Option<&str>) -> String {
+    match wrap_mode.map(str::trim) {
+        Some("rectangle") => "rectangle".to_string(),
+        _ => "none".to_string(),
+    }
+}
+
+fn normalize_nvd_page_object_z_mode(z_mode: Option<&str>) -> String {
+    match z_mode.map(str::trim) {
+        Some("behind-text") => "behind-text".to_string(),
+        _ => "in-front-of-text".to_string(),
+    }
+}
+
+fn normalize_nvd_page_object_coordinate_px(value: f64) -> f64 {
+    if value.is_finite() && value >= 0.0 {
+        value.floor()
+    } else {
+        0.0
+    }
+}
+
+fn normalize_nvd_page_object_extent_px(value: f64) -> f64 {
+    if value.is_finite() && value > 0.0 {
+        value.floor().max(1.0)
+    } else {
+        default_nvd_page_object_extent_px()
+    }
+}
+
+fn normalize_nvd_page_object_padding_px(value: Option<f64>) -> Option<f64> {
+    value.and_then(|padding| {
+        if padding.is_finite() && padding >= 0.0 {
+            Some(padding.floor())
+        } else {
+            None
+        }
+    })
+}
+
+fn normalize_nvd_page_object_rotation_deg(value: Option<f64>) -> f64 {
+    let rotation_deg = value.filter(|value| value.is_finite()).unwrap_or(0.0);
+    let normalized_rotation = ((rotation_deg % 360.0) + 360.0) % 360.0;
+
+    if normalized_rotation > 180.0 {
+        normalized_rotation - 360.0
+    } else {
+        normalized_rotation
+    }
 }
 
 fn normalize_nvd_line_constraint(value: Option<u32>) -> Option<u32> {
@@ -3207,6 +3373,130 @@ mod tests {
     }
 
     #[test]
+    fn preserves_nvd_page_objects_on_read() {
+        let unique_suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after the Unix epoch")
+            .as_nanos();
+        let document_path = std::env::temp_dir().join(format!(
+            "inventory-page-object-nvd-test-{}-{unique_suffix}.nvd",
+            std::process::id()
+        ));
+        let contents = serde_json::json!({
+            "schemaVersion": NVD_SCHEMA_VERSION,
+            "kind": NVD_DOCUMENT_KIND,
+            "title": "Placed Asset",
+            "createdAtUnix": 10,
+            "updatedAtUnix": 20,
+            "blocks": [],
+            "pageObjects": [
+                {
+                    "id": " frame-1 ",
+                    "kind": "asset-frame",
+                    "pageIndex": 0,
+                    "xPx": 320.8,
+                    "yPx": 140.2,
+                    "widthPx": 300.9,
+                    "heightPx": 240.1,
+                    "rotationDeg": 372.4,
+                    "wrapMode": "rectangle",
+                    "zMode": "behind-text",
+                    "wrapPaddingPx": 12.6,
+                    "asset": {
+                        "assetId": 42,
+                        "assetKind": " ",
+                        "assetName": " ",
+                        "assetPath": " workspace/horse.jpg ",
+                        "sourceDocumentKind": " NVV "
+                    }
+                }
+            ]
+        });
+        fs::write(
+            &document_path,
+            serde_json::to_string_pretty(&contents).expect("page-object NVD should serialize"),
+        )
+        .expect("page-object NVD should be written");
+
+        let document = read_nvd_document(&document_path).expect("page-object NVD should open");
+
+        assert_eq!(document.page_objects.len(), 1);
+        assert_eq!(document.page_objects[0].id, "frame-1");
+        assert_eq!(document.page_objects[0].kind, "asset-frame");
+        assert_eq!(document.page_objects[0].x_px, 320.0);
+        assert_eq!(document.page_objects[0].y_px, 140.0);
+        assert_eq!(document.page_objects[0].width_px, 300.0);
+        assert_eq!(document.page_objects[0].height_px, 240.0);
+        assert!(
+            document.page_objects[0]
+                .rotation_deg
+                .map(|rotation| (rotation - 12.4).abs() < 0.001)
+                .unwrap_or(false)
+        );
+        assert_eq!(
+            document.page_objects[0].wrap_mode.as_deref(),
+            Some("rectangle")
+        );
+        assert_eq!(
+            document.page_objects[0].z_mode.as_deref(),
+            Some("behind-text")
+        );
+        assert_eq!(document.page_objects[0].wrap_padding_px, Some(12.0));
+        assert_eq!(
+            document.page_objects[0]
+                .asset
+                .as_ref()
+                .map(|asset| asset.asset_kind.as_str()),
+            Some("image")
+        );
+        assert_eq!(
+            document.page_objects[0]
+                .asset
+                .as_ref()
+                .map(|asset| asset.asset_name.as_str()),
+            Some("horse.jpg")
+        );
+        assert_eq!(
+            document.page_objects[0]
+                .asset
+                .as_ref()
+                .map(|asset| asset.asset_path.as_str()),
+            Some("workspace/horse.jpg")
+        );
+        assert_eq!(
+            document.page_objects[0]
+                .asset
+                .as_ref()
+                .and_then(|asset| asset.source_document_kind.as_deref()),
+            Some("nvv")
+        );
+
+        write_nvd_document(&document_path, &document)
+            .expect("page-object NVD should be writable after normalization");
+        let written_contents = fs::read_to_string(&document_path)
+            .expect("page-object NVD should still be readable from disk");
+        assert!(written_contents.contains("pageObjects"));
+        let reopened_document =
+            read_nvd_document(&document_path).expect("page-object NVD should reopen after write");
+        assert_eq!(reopened_document.page_objects.len(), 1);
+        assert!(
+            reopened_document.page_objects[0]
+                .rotation_deg
+                .map(|rotation| (rotation - 12.4).abs() < 0.001)
+                .unwrap_or(false)
+        );
+        assert_eq!(
+            reopened_document.page_objects[0]
+                .asset
+                .as_ref()
+                .map(|asset| asset.asset_name.as_str()),
+            Some("horse.jpg")
+        );
+
+        let _ = fs::remove_file(document_path);
+    }
+
+    #[test]
     fn preserves_nvd_document_style_definitions() {
         let document = serde_json::from_value::<NvdDocument>(serde_json::json!({
             "schemaVersion": NVD_SCHEMA_VERSION,
@@ -3592,6 +3882,7 @@ mod tests {
                     widow_line_count: None,
                 },
             ],
+            page_objects: Vec::new(),
             styles: BTreeMap::new(),
         };
         write_nvd_document(&original_document_path, &document)
@@ -3803,6 +4094,7 @@ mod tests {
             layout_mode: default_nvd_layout_mode(),
             page_layout: default_nvd_page_layout(),
             blocks: Vec::new(),
+            page_objects: Vec::new(),
             styles: BTreeMap::new(),
         };
         write_nvd_document(&source_document_path, &document)
@@ -3876,6 +4168,7 @@ mod tests {
             layout_mode: default_nvd_layout_mode(),
             page_layout: default_nvd_page_layout(),
             blocks: Vec::new(),
+            page_objects: Vec::new(),
             styles: BTreeMap::new(),
         };
         write_nvd_document(&valid_document_path, &valid_document)

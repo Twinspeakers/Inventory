@@ -3,6 +3,7 @@ export type { InspectorAsset, InspectorAssetType } from "./inspectorTypes";
 export { AssetTagEditor } from "./asset/AssetTagEditor";
 export { NotesSection } from "./asset/NotesSection";
 export { ModelInspector } from "./model/ModelInspector";
+export { NvdPageObjectsSection } from "./nvd/NvdPageObjectsSection";
 export { NvdStylesSection } from "./nvd/NvdStylesSection";
 export { ParagraphSettings } from "./nvd/ParagraphSettings";
 export { WordCountSection } from "./nvd/WordCountSection";
