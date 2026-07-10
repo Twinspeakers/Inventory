@@ -80,6 +80,7 @@ export function useInventorySession({
   setSelectedFolderId,
   setSelectedId,
   setHiddenDefaultLibraryViews,
+  setIsWordCountVisible,
   setSourceFolderContextMenu,
   setSourceFolders,
   setStatusMessage,
@@ -114,6 +115,7 @@ export function useInventorySession({
   setSelectedFolderId: Dispatch<SetStateAction<string | null>>;
   setSelectedId: Dispatch<SetStateAction<number | null>>;
   setHiddenDefaultLibraryViews: Dispatch<SetStateAction<LibraryView[]>>;
+  setIsWordCountVisible: Dispatch<SetStateAction<boolean>>;
   setSourceFolderContextMenu: Dispatch<SetStateAction<SourceFolderContextMenuState | null>>;
   setSourceFolders: Dispatch<SetStateAction<SourceFolder[]>>;
   setStatusMessage: (message: string) => void;
@@ -184,6 +186,7 @@ export function useInventorySession({
     const nextSceneMode = isSceneMode(workspaceState?.sceneMode) ? workspaceState.sceneMode : "preview";
     setSceneMode(nextSceneMode);
     setHiddenDefaultLibraryViews(nextHiddenDefaultLibraryViews);
+    setIsWordCountVisible(workspaceState?.isWordCountVisible ?? true);
     setLeftPaneView(
       nextSceneMode === "nvd-document"
         ? isLeftPaneView(workspaceState?.leftPaneView)

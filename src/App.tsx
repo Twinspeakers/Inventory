@@ -118,6 +118,7 @@ export function App() {
   const [recentUserTagIds, setRecentUserTagIds] = useState<string[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [hiddenDefaultLibraryViews, setHiddenDefaultLibraryViews] = useState<LibraryView[]>([]);
+  const [isWordCountVisible, setIsWordCountVisible] = useState(true);
   const [inspectorFocusMode, setInspectorFocusMode] = useState<InspectorFocusMode>("selection");
   const [editingLibraryAssetId, setEditingLibraryAssetId] = useState<number | null>(null);
   const [editingLibraryFolderId, setEditingLibraryFolderId] = useState<string | null>(null);
@@ -270,6 +271,7 @@ export function App() {
     scanResult,
     sceneMode,
     hiddenDefaultLibraryViews,
+    isWordCountVisible,
     selectedFolderId,
     selectedId,
     sourceFolders,
@@ -429,6 +431,7 @@ export function App() {
     setSelectedFolderId,
     setSelectedId,
     setHiddenDefaultLibraryViews,
+    setIsWordCountVisible,
     setSourceFolderContextMenu,
     setSourceFolders,
     setStatusMessage,
@@ -850,6 +853,19 @@ export function App() {
     setStatusMessage(`Restored ${defaultLibrarySectionLabels[view as keyof typeof defaultLibrarySectionLabels]}.`);
   }
 
+  function hideWordCount() {
+    setIsWordCountVisible(false);
+    setStatusMessage("Word Count hidden.");
+  }
+
+  function toggleWordCount() {
+    setIsWordCountVisible((currentValue) => {
+      const nextValue = !currentValue;
+      setStatusMessage(nextValue ? "Word Count shown." : "Word Count hidden.");
+      return nextValue;
+    });
+  }
+
   function createProjectTagGroup(label: string) {
     const trimmedLabel = label.trim();
 
@@ -993,6 +1009,7 @@ export function App() {
         canUndo,
         canOpenFolder: Boolean(activeInventory),
         canSaveFile,
+        isWordCountVisible,
         onCloseInventory: handleCloseInventory,
         onNewInventory: handleNewInventory,
         onNewNvdDocument: handleNewNvdDocument,
@@ -1000,6 +1017,7 @@ export function App() {
         onOpenFolder: handleOpenFolder,
         onOpenInventory: handleOpenInventory,
         onOpenSettings: () => setIsSettingsOpen(true),
+        onToggleWordCount: toggleWordCount,
         onRedo: redoActiveContext,
         onSaveFile: handleSaveFileCommand,
         onUndo: undoActiveContext,
@@ -1131,6 +1149,7 @@ export function App() {
         activeNvdStyleRole,
         collapsed: rightPaneCollapsed,
         documentStatistics: inspectorDocumentStatistics,
+        isWordCountVisible,
         modelInspectorResult: inspectorModelInspectorResult,
         modelTransformOverride: inspectorModelTransformOverride,
         nvdCharacterSpacingPt: nvdStyleDraft?.characterSpacingPt ?? activeNvdCharacterSpacingPt,
@@ -1162,6 +1181,7 @@ export function App() {
         onNvdSpaceAfterPtChange: changeNvdSpaceAfterPt,
         onNvdSpaceBeforePtChange: changeNvdSpaceBeforePt,
         onNvvDocumentChange: updateActiveNvvDocument,
+        onWordCountClose: hideWordCount,
         onResetNvdStyle: resetNvdStyle,
         onResetWidth: () => setRightPaneWidth(DEFAULT_RIGHT_PANE_WIDTH),
         onResizeStart: startRightPaneResize,

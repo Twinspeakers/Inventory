@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Check,
   Database,
   FileImage,
   FileText,
@@ -13,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 
-const menuItems = ["Library", "Asset", "Board", "Window", "Help"];
+const menuItems = ["Library", "Asset", "Board", "Help"];
 
 export function MenuBar({
   activeInventoryName,
@@ -21,6 +22,7 @@ export function MenuBar({
   canRedo,
   canSaveFile,
   canUndo,
+  isWordCountVisible,
   onCloseInventory,
   onNewInventory,
   onNewNvdDocument,
@@ -28,6 +30,7 @@ export function MenuBar({
   onOpenFolder,
   onOpenInventory,
   onOpenSettings,
+  onToggleWordCount,
   onRedo,
   onSaveFile,
   onUndo,
@@ -39,6 +42,7 @@ export function MenuBar({
   canRedo: boolean;
   canSaveFile: boolean;
   canUndo: boolean;
+  isWordCountVisible: boolean;
   onCloseInventory: () => void;
   onNewInventory: () => void;
   onNewNvdDocument: () => void;
@@ -46,13 +50,14 @@ export function MenuBar({
   onOpenFolder: () => void;
   onOpenInventory: () => void;
   onOpenSettings: () => void;
+  onToggleWordCount: () => void;
   onRedo: () => void;
   onSaveFile: () => void;
   onUndo: () => void;
   redoLabel: string;
   undoLabel: string;
 }) {
-  const [openMenu, setOpenMenu] = useState<"edit" | "file" | "view" | null>(null);
+  const [openMenu, setOpenMenu] = useState<"edit" | "file" | "view" | "window" | null>(null);
 
   function handleNewInventory() {
     setOpenMenu(null);
@@ -102,6 +107,11 @@ export function MenuBar({
   function handleRedo() {
     setOpenMenu(null);
     onRedo();
+  }
+
+  function handleToggleWordCount() {
+    setOpenMenu(null);
+    onToggleWordCount();
   }
 
   return (
@@ -189,6 +199,26 @@ export function MenuBar({
                 <button className="file-menu-item" onClick={handleOpenSettings}>
                   <Settings size={14} aria-hidden="true" />
                   <span>Settings</span>
+                </button>
+              </div>
+            ) : null}
+          </div>
+          <div className="relative flex h-full">
+            <button
+              className={`menu-item ${openMenu === "window" ? "menu-item-active" : ""}`}
+              onClick={() => setOpenMenu((menu) => (menu === "window" ? null : "window"))}
+            >
+              Window
+            </button>
+            {openMenu === "window" ? (
+              <div className="file-menu">
+                <button className="file-menu-item" onClick={handleToggleWordCount}>
+                  <span>Word Count</span>
+                  <Check
+                    size={14}
+                    aria-hidden="true"
+                    className={`ml-auto ${isWordCountVisible ? "opacity-100" : "opacity-0"}`}
+                  />
                 </button>
               </div>
             ) : null}

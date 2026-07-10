@@ -6,7 +6,6 @@ import {
   AlignRight,
   Archive,
   Box,
-  Eye,
   FileAudio,
   FileImage,
   FilePlus2,
@@ -195,9 +194,6 @@ export function PreviewStage<TAsset extends SceneViewerAsset>({
     <section className="relative flex min-h-[310px] flex-1 flex-col overflow-hidden border-b border-line bg-preview">
       <SceneToolbar
         asset={asset}
-        pendingPreviewName={
-          sceneMode === "nvd-document" && asset && asset.id !== nvdDocument?.entry.assetId ? asset.name : null
-        }
         mode={sceneMode}
         nvdDocument={nvdDocument}
         nvdEditorController={nvdEditorController}
@@ -210,10 +206,8 @@ export function PreviewStage<TAsset extends SceneViewerAsset>({
         onNvdStyleDraftChange={onNvdStyleDraftChange}
         onNvdZoomChange={setNvdZoomPercent}
         onNvvZoomChange={setNvvZoomPercent}
-        onSceneModeChange={onSceneModeChange}
         nvdZoomPercent={nvdZoomPercent}
         nvvZoomPercent={nvvZoomPercent}
-        previewModeLabel={nativeHub ? "" : "Asset Preview"}
       />
       {sceneMode === "preview" && !nativeHub ? (
         <div className="preview-stage-label">
@@ -320,9 +314,6 @@ function SceneToolbar({
   onNvdStyleDraftChange,
   onNvdZoomChange,
   onNvvZoomChange,
-  onSceneModeChange,
-  pendingPreviewName,
-  previewModeLabel,
   nvdZoomPercent,
   nvvZoomPercent,
 }: {
@@ -339,14 +330,9 @@ function SceneToolbar({
   onNvdStyleDraftChange: (style: NvdStyleDefinition) => void;
   onNvdZoomChange: (zoomPercent: number) => void;
   onNvvZoomChange: (zoomPercent: number) => void;
-  onSceneModeChange: (mode: SceneMode) => void;
-  pendingPreviewName: string | null;
-  previewModeLabel: string;
   nvdZoomPercent: number;
   nvvZoomPercent: number;
 }) {
-  const previewHasAttention = Boolean(pendingPreviewName);
-  const previewLabel = previewHasAttention ? `Asset Preview: ${pendingPreviewName} selected` : previewModeLabel;
   const formattingEnabled = Boolean(nvdEditorController || nvdStyleDraft);
   const canInsertSelectedAsset =
     mode === "nvd-document" &&
@@ -362,19 +348,6 @@ function SceneToolbar({
   return (
     <div className="scene-toolbar">
       <div className="flex min-w-0 items-center gap-1">
-        <button
-          aria-label={previewLabel}
-          aria-pressed={mode === "preview"}
-          className={`scene-toolbar-button ${mode === "preview" ? "scene-toolbar-button-active" : ""} ${
-            previewHasAttention ? "scene-toolbar-button-attention" : ""
-          }`}
-          title={previewLabel}
-          type="button"
-          onClick={() => onSceneModeChange("preview")}
-        >
-          <Eye size={18} aria-hidden="true" />
-        </button>
-        {mode === "preview" && previewModeLabel ? <div className="scene-toolbar-readout">{previewModeLabel}</div> : null}
         {mode === "nvd-document" && nvdDocument ? (
           <>
             <NvdFontSelector

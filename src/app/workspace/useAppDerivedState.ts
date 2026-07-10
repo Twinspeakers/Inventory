@@ -62,6 +62,7 @@ export function useAppDerivedState({
   scanResult,
   sceneMode,
   hiddenDefaultLibraryViews,
+  isWordCountVisible,
   selectedFolderId,
   selectedId,
   sourceFolders,
@@ -86,6 +87,7 @@ export function useAppDerivedState({
   scanResult: ScanResult | null;
   sceneMode: SceneMode;
   hiddenDefaultLibraryViews: LibraryView[];
+  isWordCountVisible: boolean;
   selectedFolderId: string | null;
   selectedId: number | null;
   sourceFolders: PersistedLibraryState["sourceFolders"];
@@ -218,6 +220,7 @@ export function useAppDerivedState({
         selectedAssetId: selectedAsset?.id ?? selectedId,
         selectedFolderId,
         hiddenDefaultLibraryViews,
+        isWordCountVisible,
         treeOpenNodeIds: [...treeOpenNodeIds],
         assetSortKey,
         assetSortDirection,
@@ -236,6 +239,7 @@ export function useAppDerivedState({
       assetViewMode,
       detailsColumnWidths,
       hiddenDefaultLibraryViews,
+      isWordCountVisible,
       leftPaneView,
       modelTransformOverrides,
       sceneMode,

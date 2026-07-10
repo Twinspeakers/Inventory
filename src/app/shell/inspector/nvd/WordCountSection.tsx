@@ -1,8 +1,14 @@
 import type { DocumentStatistics } from "../../../../features/editors";
 import { useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, X } from "lucide-react";
 
-export function WordCountSection({ statistics }: { statistics: DocumentStatistics }) {
+export function WordCountSection({
+  statistics,
+  onClose,
+}: {
+  statistics: DocumentStatistics;
+  onClose: () => void;
+}) {
   const [isOpen, setIsOpen] = useState(true);
   const title = statistics.scope === "selection" ? "Selection Count" : "Word Count";
   const rows = [
@@ -14,15 +20,26 @@ export function WordCountSection({ statistics }: { statistics: DocumentStatistic
 
   return (
     <section className="mt-3">
-      <button
-        aria-expanded={isOpen}
-        className="model-section-toggle"
-        type="button"
-        onClick={() => setIsOpen((open) => !open)}
-      >
-        {isOpen ? <ChevronDown size={13} aria-hidden="true" /> : <ChevronRight size={13} aria-hidden="true" />}
-        <span>{title}</span>
-      </button>
+      <div className="word-count-section-header">
+        <button
+          aria-expanded={isOpen}
+          className="model-section-toggle min-w-0 flex-1"
+          type="button"
+          onClick={() => setIsOpen((open) => !open)}
+        >
+          {isOpen ? <ChevronDown size={13} aria-hidden="true" /> : <ChevronRight size={13} aria-hidden="true" />}
+          <span>{title}</span>
+        </button>
+        <button
+          aria-label={`Hide ${title}`}
+          className="word-count-close-button"
+          title={`Hide ${title}`}
+          type="button"
+          onClick={onClose}
+        >
+          <X size={13} aria-hidden="true" />
+        </button>
+      </div>
       {isOpen ? (
         <dl className="mt-1">
           {rows.map(([label, value]) => (

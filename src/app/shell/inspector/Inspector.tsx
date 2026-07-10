@@ -38,6 +38,7 @@ type InspectorProps = {
   nvdSpaceAfterPt: number | null;
   nvdSpaceBeforePt: number | null;
   nvvDocument: NvvDocument | null;
+  isWordCountVisible: boolean;
   onApplyNvdStyle: (role: NvdStyleRole) => void;
   onAssetAddTag: (assetId: number, tag: string) => void;
   onAssetKeptTagsChange: (assetId: number, tags: string[]) => void;
@@ -53,6 +54,7 @@ type InspectorProps = {
   onNvdSpaceAfterPtChange: (spaceAfterPt: number, finalizeStyle?: boolean) => void;
   onNvdSpaceBeforePtChange: (spaceBeforePt: number, finalizeStyle?: boolean) => void;
   onNvvDocumentChange: (document: NvvDocument) => void;
+  onWordCountClose: () => void;
   onResizeStart: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onResetWidth: () => void;
   onResetNvdStyle: (role: NvdStyleRole) => void;
@@ -75,6 +77,7 @@ export function Inspector({
   nvdSpaceAfterPt,
   nvdSpaceBeforePt,
   nvvDocument,
+  isWordCountVisible,
   onApplyNvdStyle,
   onAssetAddTag,
   onAssetKeptTagsChange,
@@ -90,6 +93,7 @@ export function Inspector({
   onNvdSpaceAfterPtChange,
   onNvdSpaceBeforePtChange,
   onNvvDocumentChange,
+  onWordCountClose,
   onResizeStart,
   onResetWidth,
   onResetNvdStyle,
@@ -175,7 +179,9 @@ export function Inspector({
 
           {nvvDocument ? <NvvCanvasSettings document={nvvDocument} onChange={onNvvDocumentChange} /> : null}
 
-          {documentStatistics ? <WordCountSection statistics={documentStatistics} /> : null}
+          {documentStatistics && isWordCountVisible ? (
+            <WordCountSection statistics={documentStatistics} onClose={onWordCountClose} />
+          ) : null}
           {showNvdSections ? (
             <ParagraphSettings
               characterSpacingPt={nvdCharacterSpacingPt}

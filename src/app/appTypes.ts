@@ -114,6 +114,7 @@ export type PersistedWorkspaceState = {
   selectedAssetId: number | null;
   selectedFolderId: string | null;
   hiddenDefaultLibraryViews?: LibraryView[];
+  isWordCountVisible?: boolean;
   treeOpenNodeIds: string[];
   assetSortKey: AssetSortKey;
   assetSortDirection: SortDirection;

@@ -95,7 +95,7 @@ textarea {
   }
 
   .file-menu {
-    @apply absolute left-0 top-full z-20 w-56 rounded-sm border border-line bg-graphite py-1 text-sm text-ink;
+    @apply absolute left-0 top-full z-40 w-56 rounded-sm border border-line bg-graphite py-1 text-sm text-ink;
   }
 
   .file-menu-item {
@@ -142,32 +142,6 @@ textarea {
 
   .scene-toolbar {
     @apply relative z-30 flex h-9 shrink-0 items-center justify-between border-b border-line bg-command-bar px-2;
-  }
-
-  .scene-toolbar-button {
-    @apply -ml-1 inline-flex h-9 w-9 items-center justify-center rounded-sm border-0 bg-transparent text-muted transition hover:bg-surface-raised hover:text-ink;
-  }
-
-  .scene-toolbar-button-active {
-    @apply bg-surface-raised text-ink;
-    box-shadow: inset 0 -2px 0 rgb(var(--color-steel));
-  }
-
-  .scene-toolbar-button-attention {
-    color: rgb(var(--color-brand-lime));
-  }
-
-  .scene-toolbar-button-attention:hover {
-    color: rgb(var(--color-brand-lime));
-  }
-
-  .scene-toolbar-button-attention svg {
-    transform-origin: center;
-    animation: preview-eye-attention 1.6s ease-in-out infinite;
-  }
-
-  .scene-toolbar-readout {
-    @apply truncate px-2 text-[11px] font-semibold uppercase tracking-normal text-muted;
   }
 
   .nvv-editor {
@@ -1925,6 +1899,14 @@ textarea {
     @apply grid grid-cols-[minmax(0,1fr)_minmax(72px,auto)] items-center gap-2 py-[3px];
   }
 
+  .word-count-section-header {
+    @apply flex items-center justify-between gap-2;
+  }
+
+  .word-count-close-button {
+    @apply inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-muted transition hover:bg-surface hover:text-ink;
+  }
+
   .model-import-section {
     @apply mt-2;
   }
@@ -2246,22 +2228,8 @@ body.is-resizing-tag-library-nesw * {
   }
 }
 
-@keyframes preview-eye-attention {
-  0%,
-  100% {
-    opacity: 0.62;
-    transform: scale(1);
-  }
-
-  50% {
-    opacity: 1;
-    transform: scale(1.14);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .left-pane-view-button-attention::after,
-  .scene-toolbar-button-attention svg {
+  .left-pane-view-button-attention::after {
     animation: none;
   }
 }

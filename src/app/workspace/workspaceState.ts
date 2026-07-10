@@ -63,6 +63,7 @@ export function createDefaultWorkspaceState(): PersistedWorkspaceState {
     selectedAssetId: null,
     selectedFolderId: null,
     hiddenDefaultLibraryViews: [],
+    isWordCountVisible: true,
     treeOpenNodeIds: [...defaultTreeOpenNodeIds],
     assetSortKey: "name",
     assetSortDirection: "asc",
