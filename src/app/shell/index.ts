@@ -2,8 +2,10 @@ export { AppOverlays } from "./AppOverlays";
 export { AppShell } from "./AppShell";
 export {
   LibraryNodeContextMenu,
+  NvdPageObjectContextMenu,
   SourceFolderContextMenu,
   type LibraryNodeContextMenuState,
+  type NvdPageObjectContextMenuState,
   type SourceFolderContextMenuState,
 } from "./ContextMenus";
 export { Inspector } from "./inspector";

@@ -1,16 +1,18 @@
-import { ChevronDown, ChevronRight, ImagePlus, Layers2, Square, X } from "lucide-react";
+import { ChevronDown, ChevronRight, ImagePlus, Square, X } from "lucide-react";
 import { useState } from "react";
 import type {
   NvdPageObject,
   NvdPageObjectAsset,
-  NvdPageObjectZMode,
 } from "../../../../features/inventoryProject";
 import type {
   NvdDraftPageObject,
   NvdPageObjectToolMode,
 } from "../../../../features/nvdEditor";
-import { createNvdPageObjectAsset as createAssetFrameBinding } from "../../../../features/nvdEditor";
 import type { Asset } from "../../../appTypes";
+import {
+  canAssignWorkspaceAssetToNvdPageObject,
+  createNvdPageObjectAssetFromWorkspaceAsset,
+} from "../../../workspace/nvdPageObjectAssets";
 
 export function NvdPageObjectsSection({
   canSaveDraft,
@@ -22,8 +24,6 @@ export function NvdPageObjectsSection({
   onAssignAsset,
   onDeleteSelectedPageObject,
   onDiscardDraft,
-  onSetWrapMode,
-  onSetZMode,
   onSaveDraft,
   onToolModeChange,
 }: {
@@ -36,8 +36,6 @@ export function NvdPageObjectsSection({
   onAssignAsset: (asset: NvdPageObjectAsset | null) => void;
   onDeleteSelectedPageObject: () => void;
   onDiscardDraft: () => void;
-  onSetWrapMode: (wrapMode: "none" | "rectangle") => void;
-  onSetZMode: (zMode: NvdPageObjectZMode) => void;
   onSaveDraft: () => void;
   onToolModeChange: (mode: NvdPageObjectToolMode) => void;
 }) {
@@ -46,10 +44,8 @@ export function NvdPageObjectsSection({
   const hasSelectedPageObject = selectionKind === "page-object";
   const selectedPageObjectAsset = selectedPageObject?.asset ?? null;
   const canAssignWorkspaceAsset = Boolean(
-    workspaceSelectedAsset && isAssignableWorkspaceAsset(workspaceSelectedAsset),
+    workspaceSelectedAsset && canAssignWorkspaceAssetToNvdPageObject(workspaceSelectedAsset),
   );
-  const layerMode = selectedPageObject?.zMode ?? "in-front-of-text";
-  const wrapMode = selectedPageObject?.wrapMode ?? "none";
 
   return (
     <section className="mt-3">
@@ -114,8 +110,8 @@ export function NvdPageObjectsSection({
                   disabled={!canAssignWorkspaceAsset}
                   type="button"
                   onClick={() =>
-                    workspaceSelectedAsset && isAssignableWorkspaceAsset(workspaceSelectedAsset)
-                      ? onAssignAsset(createPageObjectAssetFromWorkspaceAsset(workspaceSelectedAsset))
+                    workspaceSelectedAsset && canAssignWorkspaceAssetToNvdPageObject(workspaceSelectedAsset)
+                      ? onAssignAsset(createNvdPageObjectAssetFromWorkspaceAsset(workspaceSelectedAsset))
                       : undefined
                   }
                 >
@@ -135,67 +131,10 @@ export function NvdPageObjectsSection({
 
               <div className="nvd-frame-assignment-note">
                 {workspaceSelectedAsset
-                  ? isAssignableWorkspaceAsset(workspaceSelectedAsset)
+                  ? canAssignWorkspaceAssetToNvdPageObject(workspaceSelectedAsset)
                     ? `Selected in workspace: ${workspaceSelectedAsset.name}`
                     : `Selected in workspace: ${workspaceSelectedAsset.name} cannot be placed in a frame yet.`
                   : "Select an image, vector, 3D asset, or document in the workspace to assign it here."}
-              </div>
-
-              <div className="nvd-frame-option-group">
-                <div className="nvd-frame-option-label">
-                  <Layers2 size={13} aria-hidden="true" />
-                  <span>Layer</span>
-                </div>
-                <div className="nvd-frame-section-actions">
-                  <button
-                    aria-pressed={layerMode === "in-front-of-text"}
-                    className={`command-button ${
-                      layerMode === "in-front-of-text" ? "nvd-frame-option-active" : ""
-                    }`}
-                    type="button"
-                    onClick={() => onSetZMode("in-front-of-text")}
-                  >
-                    In Front
-                  </button>
-                  <button
-                    aria-pressed={layerMode === "behind-text"}
-                    className={`command-button ${
-                      layerMode === "behind-text" ? "nvd-frame-option-active" : ""
-                    }`}
-                    type="button"
-                    onClick={() => onSetZMode("behind-text")}
-                  >
-                    Behind Text
-                  </button>
-                </div>
-              </div>
-
-              <div className="nvd-frame-option-group">
-                <div className="nvd-frame-option-label">
-                  <span>Text Wrap</span>
-                </div>
-                <div className="nvd-frame-section-actions">
-                  <button
-                    aria-pressed={wrapMode === "none"}
-                    className={`command-button ${
-                      wrapMode === "none" ? "nvd-frame-option-active" : ""
-                    }`}
-                    type="button"
-                    onClick={() => onSetWrapMode("none")}
-                  >
-                    None
-                  </button>
-                  <button
-                    aria-pressed={wrapMode === "rectangle"}
-                    className={`command-button ${
-                      wrapMode === "rectangle" ? "nvd-frame-option-active" : ""
-                    }`}
-                    type="button"
-                    onClick={() => onSetWrapMode("rectangle")}
-                  >
-                    Rectangle
-                  </button>
-                </div>
               </div>
 
               <button className="command-button" type="button" onClick={onDeleteSelectedPageObject}>
@@ -213,23 +152,4 @@ export function NvdPageObjectsSection({
       ) : null}
     </section>
   );
-}
-
-function isAssignableWorkspaceAsset(asset: Asset) {
-  return asset.type !== "Audio" && asset.type !== "Archive";
-}
-
-function createPageObjectAssetFromWorkspaceAsset(asset: Asset) {
-  return createAssetFrameBinding({
-    assetId: asset.id,
-    assetKind: asset.type === "Image" ? "image" : asset.type.toLowerCase(),
-    assetName: asset.name,
-    assetPath: asset.path,
-    sourceDocumentKind:
-      asset.extension.toLowerCase() === "nvv"
-        ? "nvv"
-        : asset.extension.toLowerCase() === "nvd"
-          ? "nvd"
-          : undefined,
-  });
 }

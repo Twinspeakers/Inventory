@@ -13,8 +13,6 @@ import type { DocumentStatistics } from "../../../features/editors";
 import type {
   NvdPageObject,
   NvdPageObjectAsset,
-  NvdPageObjectWrapMode,
-  NvdPageObjectZMode,
   NvvDocument,
 } from "../../../features/inventoryProject";
 import {
@@ -70,8 +68,6 @@ type InspectorProps = {
   onNvdLineHeightChange: (lineHeight: number, finalizeStyle?: boolean) => void;
   onNvdCharacterSpacingPtChange: (characterSpacingPt: number, finalizeStyle?: boolean) => void;
   onNvdPageObjectToolModeChange: (mode: NvdPageObjectToolMode) => void;
-  onNvdSelectedPageObjectWrapModeChange: (wrapMode: NvdPageObjectWrapMode) => void;
-  onNvdSelectedPageObjectZModeChange: (zMode: NvdPageObjectZMode) => void;
   onSaveDraftNvdPageObject: () => void;
   onNvdSpaceAfterPtChange: (spaceAfterPt: number, finalizeStyle?: boolean) => void;
   onNvdSpaceBeforePtChange: (spaceBeforePt: number, finalizeStyle?: boolean) => void;
@@ -122,8 +118,6 @@ export function Inspector({
   onNvdLineHeightChange,
   onNvdCharacterSpacingPtChange,
   onNvdPageObjectToolModeChange,
-  onNvdSelectedPageObjectWrapModeChange,
-  onNvdSelectedPageObjectZModeChange,
   onSaveDraftNvdPageObject,
   onNvdSpaceAfterPtChange,
   onNvdSpaceBeforePtChange,
@@ -229,8 +223,6 @@ export function Inspector({
               onAssignAsset={onAssignAssetToSelectedNvdPageObject}
               onDeleteSelectedPageObject={onDeleteSelectedNvdPageObject}
               onDiscardDraft={onDiscardDraftNvdPageObject}
-              onSetWrapMode={onNvdSelectedPageObjectWrapModeChange}
-              onSetZMode={onNvdSelectedPageObjectZModeChange}
               onSaveDraft={onSaveDraftNvdPageObject}
               onToolModeChange={onNvdPageObjectToolModeChange}
             />

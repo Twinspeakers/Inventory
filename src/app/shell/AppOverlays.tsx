@@ -5,8 +5,10 @@ import {
 } from "../../libraryCatalog";
 import {
   LibraryNodeContextMenu,
+  NvdPageObjectContextMenu,
   SourceFolderContextMenu,
   type LibraryNodeContextMenuState,
+  type NvdPageObjectContextMenuState,
   type SourceFolderContextMenuState,
 } from "../shell/ContextMenus";
 import type {
@@ -35,6 +37,7 @@ export function AppOverlays({
   isTagBrowserOpen,
   libraryNodeContextMenu,
   masterLibraryAssets,
+  nvdPageObjectContextMenu,
   nvdSaveReminderEnabled,
   nvdSaveState,
   nvdStyleResetConfirmationEnabled,
@@ -59,6 +62,8 @@ export function AppOverlays({
   onDeleteTheme,
   onAssetPlacementSuggestionAccept,
   onLibraryNodeContextMenuClose,
+  onNvdPageObjectContextMenuClose,
+  onOpenNvdPageObjectProperties,
   onRemoveAssetFromLibraryNode,
   onNvdSaveReminderEnabledChange,
   onNvdStyleResetConfirmationEnabledChange,
@@ -94,6 +99,7 @@ export function AppOverlays({
   isTagBrowserOpen: boolean;
   libraryNodeContextMenu: LibraryNodeContextMenuState | null;
   masterLibraryAssets: Asset[];
+  nvdPageObjectContextMenu: NvdPageObjectContextMenuState | null;
   nvdSaveReminderEnabled: boolean;
   nvdSaveState: "idle" | "dirty" | "saving" | "saved" | "error";
   nvdStyleResetConfirmationEnabled: boolean;
@@ -118,6 +124,8 @@ export function AppOverlays({
   onDeleteTheme: () => void;
   onAssetPlacementSuggestionAccept: (suggestion: AssetPlacementSuggestion) => void;
   onLibraryNodeContextMenuClose: () => void;
+  onNvdPageObjectContextMenuClose: () => void;
+  onOpenNvdPageObjectProperties: () => void;
   onRemoveAssetFromLibraryNode: (assetId: number, folderId: string) => void;
   onNvdSaveReminderEnabledChange: (enabled: boolean) => void;
   onNvdStyleResetConfirmationEnabledChange: (enabled: boolean) => void;
@@ -331,6 +339,13 @@ export function AppOverlays({
             onSourceFolderContextMenuClose();
             onRemoveSourceFolder(sourceId);
           }}
+        />
+      ) : null}
+      {nvdPageObjectContextMenu ? (
+        <NvdPageObjectContextMenu
+          menu={nvdPageObjectContextMenu}
+          onClose={onNvdPageObjectContextMenuClose}
+          onOpenProperties={onOpenNvdPageObjectProperties}
         />
       ) : null}
       {addLibraryNodePanel ? (

@@ -4,7 +4,9 @@ import type { EditorSaveState } from "../../features/editors";
 import type { PersistedOpenedNvdDocument, NvdHistoryState } from "../appTypes";
 import type {
   NvdPageObject,
+  NvdPageObjectAssetDisplayUpdate,
   NvdPageObjectAsset,
+  NvdPageObjectFrameUpdate,
   NvdPageObjectWrapMode,
   NvdPageObjectZMode,
 } from "../../features/inventoryProject";
@@ -15,6 +17,7 @@ import {
   type NvdDraftPageObject,
   type NvdDocumentSelection,
   type NvdEditorController,
+  type NvdPageObjectDisplayMode,
   type NvdPageObjectToolMode,
   type NvdStyleDefinition,
   type NvdStyleRole,
@@ -349,6 +352,36 @@ export function useNvdStyleControls({
     nvdEditorControllerRef.current?.assignAssetToSelectedPageObject(asset);
   }
 
+  function assignAssetToNvdPageObject(objectId: string, asset: NvdPageObjectAsset | null) {
+    nvdEditorControllerRef.current?.assignAssetToPageObject(objectId, asset);
+  }
+
+  function setNvdPageObjectWrapMode(objectId: string, wrapMode: NvdPageObjectWrapMode) {
+    nvdEditorControllerRef.current?.setPageObjectWrapMode(objectId, wrapMode);
+  }
+
+  function setNvdPageObjectDisplayMode(objectId: string, mode: NvdPageObjectDisplayMode) {
+    nvdEditorControllerRef.current?.setPageObjectDisplayMode(objectId, mode);
+  }
+
+  function updateNvdPageObjectAssetDisplay(
+    objectId: string,
+    updates: NvdPageObjectAssetDisplayUpdate,
+  ) {
+    nvdEditorControllerRef.current?.updatePageObjectAssetDisplay(objectId, updates);
+  }
+
+  function updateNvdPageObjectFrame(
+    objectId: string,
+    updates: NvdPageObjectFrameUpdate,
+  ) {
+    nvdEditorControllerRef.current?.updatePageObjectFrame(objectId, updates);
+  }
+
+  function setNvdPageObjectZMode(objectId: string, zMode: NvdPageObjectZMode) {
+    nvdEditorControllerRef.current?.setPageObjectZMode(objectId, zMode);
+  }
+
   function setSelectedNvdPageObjectWrapMode(wrapMode: NvdPageObjectWrapMode) {
     nvdEditorControllerRef.current?.setSelectedPageObjectWrapMode(wrapMode);
   }
@@ -376,6 +409,7 @@ export function useNvdStyleControls({
     pendingNvdStyleResetRole,
     acceptNvdStyleDraft,
     applyNvdStyle,
+    assignAssetToNvdPageObject,
     assignAssetToSelectedNvdPageObject,
     changeNvdCharacterSpacingPt,
     changeNvdLineHeight,
@@ -394,6 +428,11 @@ export function useNvdStyleControls({
     resetNvdStyle,
     saveDraftNvdPageObject,
     selectNvdStyle,
+    setNvdPageObjectDisplayMode,
+    updateNvdPageObjectAssetDisplay,
+    updateNvdPageObjectFrame,
+    setNvdPageObjectWrapMode,
+    setNvdPageObjectZMode,
     setSelectedNvdPageObjectWrapMode,
     setSelectedNvdPageObjectZMode,
     setNvdPageObjectToolMode,

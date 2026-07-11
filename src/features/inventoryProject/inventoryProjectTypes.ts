@@ -65,6 +65,10 @@ export type NvdPageObjectWrapMode = "none" | "rectangle";
 
 export type NvdPageObjectZMode = "behind-text" | "in-front-of-text";
 
+export type NvdPageObjectAssetFitMode = "contain" | "cover" | "stretch" | "tile";
+
+export type NvdPageObjectAssetAlignment = "center" | "top-left";
+
 export type NvdAssetEmbed = {
   assetId: number;
   assetKind: "image" | string;
@@ -87,6 +91,12 @@ export type NvdPageObjectAsset = {
 };
 
 export type NvdAssetFrameObject = {
+  assetAlignment?: NvdPageObjectAssetAlignment;
+  assetFitMode?: NvdPageObjectAssetFitMode;
+  assetOffsetXPx?: number;
+  assetOffsetYPx?: number;
+  assetScale?: number;
+  framePaddingPx?: number;
   id: string;
   kind: "asset-frame";
   pageIndex: number;
@@ -100,6 +110,20 @@ export type NvdAssetFrameObject = {
   wrapPaddingPx?: number;
   asset?: NvdPageObjectAsset | null;
 };
+
+export type NvdPageObjectAssetDisplayUpdate = Partial<
+  Pick<
+    NvdAssetFrameObject,
+    "assetAlignment" | "assetFitMode" | "assetOffsetXPx" | "assetOffsetYPx" | "assetScale"
+  >
+>;
+
+export type NvdPageObjectFrameUpdate = Partial<
+  Pick<
+    NvdAssetFrameObject,
+    "framePaddingPx" | "heightPx" | "pageIndex" | "rotationDeg" | "widthPx" | "wrapPaddingPx"
+  >
+>;
 
 export type NvdPageObject = NvdAssetFrameObject;
 

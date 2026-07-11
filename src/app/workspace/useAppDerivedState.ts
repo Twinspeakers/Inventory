@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useRef } from "react";
+import { useMemo, useRef } from "react";
 import { clamp } from "../workspace/appLayout";
 import type {
   Asset,
@@ -20,11 +20,9 @@ import type {
   SortDirection,
 } from "../../features/assetShelf";
 import {
-  getNvdDocumentFontFamilies,
   getNvdDocumentText,
   getNvdTextSelectionFromDocumentSelection,
   paginateNvdDocument,
-  useNvdFontsReady,
   type NvdDocumentSelection,
 } from "../../features/nvdEditor";
 import { getDocumentStatistics } from "../../features/editors";
@@ -249,15 +247,13 @@ export function useAppDerivedState({
       treeOpenNodeIds,
     ],
   );
-  const selectedDocumentFontsReady = useNvdFontsReady(getNvdDocumentFontFamilies(activeNvdDocument?.document));
-  const deferredActiveNvdDocument = useDeferredValue(activeNvdDocument);
-  const deferredDocumentPageCount = useMemo(() => {
-    if (!deferredActiveNvdDocument || !selectedDocumentFontsReady) {
+  const activeNvdDocumentPageCount = useMemo(() => {
+    if (!activeNvdDocument) {
       return null;
     }
 
-    return paginateNvdDocument(deferredActiveNvdDocument.document).length;
-  }, [deferredActiveNvdDocument, selectedDocumentFontsReady]);
+    return paginateNvdDocument(activeNvdDocument.document).length;
+  }, [activeNvdDocument]);
   const activeNvdDocumentStatistics = useMemo(() => {
     if (!activeNvdDocument) {
       return null;
@@ -265,18 +261,17 @@ export function useAppDerivedState({
 
     const document = activeNvdDocument.document;
     const text = getNvdDocumentText(document);
+    const pages = activeNvdDocumentPageCount;
     const activeNvdTextSelection = getNvdTextSelectionFromDocumentSelection(activeNvdSelection);
     const selectionStart = clamp(activeNvdTextSelection?.start ?? 0, 0, text.length);
     const selectionEnd = clamp(activeNvdTextSelection?.end ?? selectionStart, selectionStart, text.length);
 
     if (selectionEnd > selectionStart) {
-      return getDocumentStatistics(text.slice(selectionStart, selectionEnd), null, "selection");
+      return getDocumentStatistics(text.slice(selectionStart, selectionEnd), pages, "selection");
     }
 
-    const pages = deferredDocumentPageCount;
-
     return getDocumentStatistics(text, pages);
-  }, [activeNvdDocument, activeNvdSelection, deferredDocumentPageCount]);
+  }, [activeNvdDocument, activeNvdSelection, activeNvdDocumentPageCount]);
   const structure = useMemo(
     () =>
       buildStructure(

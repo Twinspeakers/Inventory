@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { ArrowDown, ChevronRight, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowDown, ChevronRight, Pencil, Plus, RefreshCw, SlidersHorizontal, Trash2 } from "lucide-react";
 import type { AssetPlacementSuggestion } from "../appTypes";
 
 export type LibraryNodeContextMenuState = {
@@ -23,6 +23,13 @@ export type SourceFolderContextMenuState = {
   sourceId: string;
   label: string;
   path: string;
+};
+
+export type NvdPageObjectContextMenuState = {
+  label: string;
+  objectId: string;
+  x: number;
+  y: number;
 };
 
 export function LibraryNodeContextMenu({
@@ -274,6 +281,55 @@ export function SourceFolderContextMenu({
       <button className="library-context-menu-item library-context-menu-item-danger" type="button" onClick={onRemove}>
         <Trash2 size={14} aria-hidden="true" />
         <span>Remove</span>
+      </button>
+    </div>
+  );
+}
+
+export function NvdPageObjectContextMenu({
+  menu,
+  onClose,
+  onOpenProperties,
+}: {
+  menu: NvdPageObjectContextMenuState;
+  onClose: () => void;
+  onOpenProperties: () => void;
+}) {
+  const left = typeof window === "undefined" ? menu.x : Math.min(menu.x, window.innerWidth - 220);
+  const top = typeof window === "undefined" ? menu.y : Math.min(menu.y, window.innerHeight - 96);
+
+  useEffect(() => {
+    function handleClose() {
+      onClose();
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    window.addEventListener("click", handleClose);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("click", handleClose);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="library-context-menu"
+      style={{ left, top }}
+      onClick={(event) => event.stopPropagation()}
+      onContextMenu={(event) => event.preventDefault()}
+    >
+      <div className="border-b border-line px-3 py-2 text-[11px] font-semibold uppercase text-muted">
+        {menu.label}
+      </div>
+      <button className="library-context-menu-item" type="button" onClick={onOpenProperties}>
+        <SlidersHorizontal size={14} aria-hidden="true" />
+        <span>Properties</span>
       </button>
     </div>
   );

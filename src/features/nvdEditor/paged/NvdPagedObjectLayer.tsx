@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { NvdPageObject, NvdPageLayout } from "../../inventoryProject";
 import { NVD_PAGE_GAP_PX } from "../layout/nvdLayout";
 import { getNvdPageLayoutPx } from "../layout/nvdPageLayout";
@@ -7,14 +8,22 @@ import {
   type NvdDraftPageObject,
 } from "../document/nvdPageObjectModel";
 import { getAssetFileUrl } from "../../../sceneReaders/previewIo";
+import {
+  getNvdPageObjectAssetPreviewStyle,
+  getNvdPageObjectAssetPreviewViewportStyle,
+  isSupportedPageObjectAssetPreviewPath,
+  type NvdPageObjectAssetNaturalSize,
+} from "./nvdPageObjectAssetPreview";
 
 export function NvdPagedObjectLayer({
+  dropTargetPageObjectId,
   draftPageObject,
   pageLayout,
   pageObjects,
   selectedPageObjectId,
   zMode,
 }: {
+  dropTargetPageObjectId: string | null;
   draftPageObject: NvdDraftPageObject | null;
   pageLayout: NvdPageLayout;
   pageObjects: readonly NvdPageObject[];
@@ -44,6 +53,8 @@ export function NvdPagedObjectLayer({
         <div
           className={`nvd-paged-object-frame ${
             pageObject.id === selectedPageObjectId ? "nvd-paged-object-frame-selected" : ""
+          } ${
+            pageObject.id === dropTargetPageObjectId ? "nvd-paged-object-frame-drop-target" : ""
           }`}
           key={pageObject.id}
           style={getObjectStyle(pageObject, pageLayoutPx)}
@@ -53,11 +64,9 @@ export function NvdPagedObjectLayer({
             style={getObjectBodyStyle(pageObject)}
           >
             {shouldRenderObjectAssetPreview(pageObject) ? (
-              <img
-                alt=""
-                className="nvd-paged-object-frame-preview"
-                draggable={false}
-                src={getAssetFileUrl(pageObject.asset!.assetPath)}
+              <FrameAssetPreview
+                pageObject={pageObject}
+                selected={pageObject.id === selectedPageObjectId}
               />
             ) : null}
             <div className="nvd-paged-object-frame-badge">
@@ -99,6 +108,65 @@ export function NvdPagedObjectLayer({
   );
 }
 
+function FrameAssetPreview({
+  pageObject,
+  selected,
+}: {
+  pageObject: NvdPageObject;
+  selected: boolean;
+}) {
+  const assetPath = pageObject.asset?.assetPath;
+  const assetUrl = assetPath ? getAssetFileUrl(assetPath) : null;
+  const [naturalSize, setNaturalSize] = useState<NvdPageObjectAssetNaturalSize | null>(null);
+
+  useEffect(() => {
+    if (!assetUrl) {
+      setNaturalSize(null);
+      return;
+    }
+
+    let cancelled = false;
+    const image = new Image();
+    image.onload = () => {
+      if (!cancelled) {
+        setNaturalSize({
+          heightPx: image.naturalHeight || 0,
+          widthPx: image.naturalWidth || 0,
+        });
+      }
+    };
+    image.onerror = () => {
+      if (!cancelled) {
+        setNaturalSize(null);
+      }
+    };
+    image.src = assetUrl;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [assetUrl]);
+
+  if (!assetUrl) {
+    return null;
+  }
+
+  return (
+    <div className="nvd-paged-object-frame-preview">
+      <div
+        className="nvd-paged-object-frame-preview-image"
+        style={getNvdPageObjectAssetPreviewStyle(pageObject, assetUrl, naturalSize)}
+      />
+      {selected ? (
+        <div
+          className="nvd-paged-object-frame-padding-guide"
+          style={getNvdPageObjectAssetPreviewViewportStyle(pageObject)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function getObjectStyle(
   pageObject: Pick<NvdPageObject, "heightPx" | "pageIndex" | "rotationDeg" | "widthPx" | "xPx" | "yPx">,
   pageLayoutPx: ReturnType<typeof getNvdPageLayoutPx>,
@@ -132,20 +200,5 @@ function getObjectBodyStyle(
 }
 
 function shouldRenderObjectAssetPreview(pageObject: NvdPageObject) {
-  const assetPath = pageObject.asset?.assetPath;
-
-  if (!assetPath) {
-    return false;
-  }
-
-  return ["avif", "gif", "jpg", "jpeg", "png", "svg", "webp"].includes(
-    getPathExtension(assetPath),
-  );
-}
-
-function getPathExtension(path: string) {
-  const segments = path.split(/[\\/]/);
-  const fileName = segments[segments.length - 1] ?? "";
-  const extension = fileName.split(".").pop() ?? "";
-  return extension.toLowerCase();
+  return isSupportedPageObjectAssetPreviewPath(pageObject.asset?.assetPath);
 }

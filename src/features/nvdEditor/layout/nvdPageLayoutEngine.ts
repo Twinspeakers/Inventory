@@ -29,7 +29,10 @@ import {
   sliceNvdTextRuns,
   type NvdBlockLayout,
 } from "../document/nvdRichText";
-import { getNvdPageObjectBounds } from "../document/nvdPageObjectModel";
+import {
+  getNvdPageObjectBounds,
+  getNvdPageObjectWrapPaddingPx,
+} from "../document/nvdPageObjectModel";
 
 let textMeasurementContext: CanvasRenderingContext2D | null | undefined;
 const nvdLayoutCache = new Map<string, NvdDocumentLayoutSnapshot>();
@@ -1712,7 +1715,7 @@ function getWrappedPageObjectExclusions(
         pageObject.heightPx > 0,
     )
     .map((pageObject) => {
-      const paddingPx = Math.max(0, Math.floor(pageObject.wrapPaddingPx ?? 0));
+      const paddingPx = getNvdPageObjectWrapPaddingPx(pageObject);
       const bounds = getNvdPageObjectBounds(pageObject);
 
       return {

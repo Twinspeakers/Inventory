@@ -1,7 +1,9 @@
 import type {
   NvdAssetEmbed,
   NvdPageObject,
+  NvdPageObjectAssetDisplayUpdate,
   NvdPageObjectAsset,
+  NvdPageObjectFrameUpdate,
   NvdPageObjectWrapMode,
   NvdPageObjectZMode,
   NvdTextAlignment,
@@ -11,6 +13,7 @@ import type { NvdDraftPageObject } from "../document/nvdPageObjectModel";
 import type { NvdStyleDefinition } from "../document/nvdStyles";
 
 export type NvdPageObjectToolMode = "frame" | "text";
+export type NvdPageObjectDisplayMode = "behind-text" | "in-front-of-text" | "text-wrap";
 
 export type NvdEditorController = {
   canRedo: boolean;
@@ -31,6 +34,7 @@ export type NvdEditorController = {
   spaceBeforePt: number | null;
   textAlign: NvdTextAlignment | null;
   applyStyle: (style: NvdStyleDefinition) => void;
+  assignAssetToPageObject: (objectId: string, asset: NvdPageObjectAsset | null) => void;
   assignAssetToSelectedPageObject: (asset: NvdPageObjectAsset | null) => void;
   deleteSelectedPageObject: () => void;
   discardDraftPageObject: () => void;
@@ -39,7 +43,12 @@ export type NvdEditorController = {
   removeSelectedBlock: () => void;
   saveDraftPageObject: () => void;
   setInsertionPoint: (blockIndex: number) => void;
+  updatePageObjectAssetDisplay: (objectId: string, updates: NvdPageObjectAssetDisplayUpdate) => void;
+  updatePageObjectFrame: (objectId: string, updates: NvdPageObjectFrameUpdate) => void;
+  setPageObjectDisplayMode: (objectId: string, mode: NvdPageObjectDisplayMode) => void;
   setPageObjectToolMode: (mode: NvdPageObjectToolMode) => void;
+  setPageObjectWrapMode: (objectId: string, wrapMode: NvdPageObjectWrapMode) => void;
+  setPageObjectZMode: (objectId: string, zMode: NvdPageObjectZMode) => void;
   setSelection: (selection: NvdDocumentSelection) => void;
   setSelectedPageObjectWrapMode: (wrapMode: NvdPageObjectWrapMode) => void;
   setSelectedPageObjectZMode: (zMode: NvdPageObjectZMode) => void;

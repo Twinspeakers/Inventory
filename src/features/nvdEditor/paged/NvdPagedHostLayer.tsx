@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { NVD_PAGE_GAP_PX } from "../layout/nvdLayout";
 import { getNvdPageLayoutPx } from "../layout/nvdPageLayout";
 import type { NvdPageLayout, NvdPageObject } from "../../inventoryProject";
@@ -15,6 +15,7 @@ import {
   createNvdInsertionDocumentSelection,
   type NvdDocumentSelection,
 } from "../document/nvdDocumentSelection";
+import type { NvdPageObjectAssetPointerDragController } from "../document/nvdPageObjectAssetBinding";
 import type { NvdPageObjectToolMode } from "../contracts/NvdEditorController";
 import {
   getNvdPageObjectRotationDeg,
@@ -85,10 +86,13 @@ const NVD_PAGE_OBJECT_ROTATION_HANDLE_OFFSET_PX = 36;
 const NVD_PAGE_OBJECT_ROTATION_HANDLE_RADIUS_PX = 8;
 
 export function NvdPagedHostLayer({
+  assetPointerDragController,
   draftPageObject,
   layout,
+  onAssetPointerDragTargetChange,
   onDocumentSelectionRequest,
   onDraftPageObjectChange,
+  onPageObjectContextMenu,
   onPageObjectPreviewChange,
   onPageObjectSelectionRequest,
   onPageObjectTransformCancel,
@@ -101,10 +105,13 @@ export function NvdPagedHostLayer({
   pages,
   selectedPageObjectId,
 }: {
+  assetPointerDragController: NvdPageObjectAssetPointerDragController;
   draftPageObject: NvdDraftPageObject | null;
   layout: NvdDocumentLayoutSnapshot;
+  onAssetPointerDragTargetChange: (objectId: string | null) => void;
   onDocumentSelectionRequest: (selection: NvdDocumentSelection) => void;
   onDraftPageObjectChange: (draft: NvdDraftPageObject | null) => void;
+  onPageObjectContextMenu: (payload: { objectId: string; x: number; y: number; label: string }) => void;
   onPageObjectPreviewChange: (objectId: string, pageObject: NvdPageObject) => void;
   onPageObjectSelectionRequest: (objectId: string) => void;
   onPageObjectTransformCancel: () => void;
@@ -117,6 +124,11 @@ export function NvdPagedHostLayer({
   pages: readonly NvdPageFragment[];
   selectedPageObjectId: string | null;
 }) {
+  const assetPointerDrag = useSyncExternalStore(
+    assetPointerDragController.subscribe,
+    assetPointerDragController.getSnapshot,
+    assetPointerDragController.getSnapshot,
+  );
   const pageLayoutPx = getNvdPageLayoutPx(pageLayout);
   const dragAnimationFrameRef = useRef<number | null>(null);
   const dragAnimationTimestampRef = useRef<number | null>(null);
@@ -135,14 +147,16 @@ export function NvdPagedHostLayer({
     startY: number;
   } | null>(null);
   const pageObjectInteractionRef = useRef<NvdPageObjectInteraction | null>(null);
+  const hostElementRef = useRef<HTMLDivElement | null>(null);
   const [pointerCursor, setPointerCursor] = useState("auto");
   const [snapGuides, setSnapGuides] = useState<NvdSnapGuide[]>([]);
 
   useEffect(() => {
     return () => {
       stopAutoScroll();
+      onAssetPointerDragTargetChange(null);
     };
-  }, []);
+  }, [onAssetPointerDragTargetChange]);
 
   function getSelectionFromPointerEvent(
     clientX: number,
@@ -576,6 +590,19 @@ export function NvdPagedHostLayer({
     return null;
   }
 
+  function findDropTargetPageObjectId(localPoint: { x: number; y: number }) {
+    for (let index = pageObjects.length - 1; index >= 0; index -= 1) {
+      const pageObject = pageObjects[index];
+      const pagePoint = getPagePointForLocalPoint(localPoint, pageObject.pageIndex);
+
+      if (isPointInsidePageObject(pageObject, pagePoint)) {
+        return pageObject.id;
+      }
+    }
+
+    return null;
+  }
+
   function getCursorForResizeHandle(handle: NvdPageObjectResizeHandle | null) {
     if (handle === "n" || handle === "s") return "ns-resize";
     if (handle === "e" || handle === "w") return "ew-resize";
@@ -941,10 +968,55 @@ export function NvdPagedHostLayer({
     });
   }
 
+  useEffect(() => {
+    const hostElement = hostElementRef.current;
+
+    if (!assetPointerDrag || !hostElement) {
+      onAssetPointerDragTargetChange(null);
+      return;
+    }
+
+    const bounds = hostElement.getBoundingClientRect();
+    const isInsideHost =
+      assetPointerDrag.clientX >= bounds.left &&
+      assetPointerDrag.clientX <= bounds.right &&
+      assetPointerDrag.clientY >= bounds.top &&
+      assetPointerDrag.clientY <= bounds.bottom;
+
+    if (!isInsideHost) {
+      onAssetPointerDragTargetChange(null);
+      return;
+    }
+
+    onAssetPointerDragTargetChange(
+      findDropTargetPageObjectId(
+        getLocalPoint(assetPointerDrag.clientX, assetPointerDrag.clientY, hostElement),
+      ),
+    );
+  }, [assetPointerDrag, onAssetPointerDragTargetChange, pageObjects]);
+
   return (
     <div
       className="nvd-paged-host-layer"
+      ref={hostElementRef}
       style={{ cursor: pageObjectToolMode === "frame" ? "crosshair" : pointerCursor }}
+      onContextMenu={(event) => {
+        const localPoint = getLocalPoint(event.clientX, event.clientY, event.currentTarget);
+        const pageObjectHit = findPageObjectHit(localPoint);
+
+        if (!pageObjectHit) {
+          return;
+        }
+
+        event.preventDefault();
+        onPageObjectSelectionRequest(pageObjectHit.pageObject.id);
+        onPageObjectContextMenu({
+          label: pageObjectHit.pageObject.asset?.assetName?.trim() || "Frame",
+          objectId: pageObjectHit.pageObject.id,
+          x: event.clientX,
+          y: event.clientY,
+        });
+      }}
       onPointerDown={(event) => {
         const pointerPoint = getClampedDraftPoint(
           event.clientX,

@@ -8,7 +8,9 @@ import type {
 import type {
   NvdBlock,
   NvdPageObject,
+  NvdPageObjectAssetDisplayUpdate,
   NvdPageObjectAsset,
+  NvdPageObjectFrameUpdate,
   NvdPageObjectWrapMode,
   NvdPageObjectZMode,
   NvdTextRun,
@@ -35,6 +37,7 @@ import {
 } from "../layout/nvdPageLayoutEngine";
 import type {
   NvdEditorController,
+  NvdPageObjectDisplayMode,
   NvdPageObjectToolMode,
 } from "../contracts/NvdEditorController";
 import {
@@ -49,6 +52,8 @@ import {
   type NvdDocumentSelection,
 } from "../document/nvdDocumentSelection";
 import {
+  applyNvdPageObjectAssetDisplayUpdate,
+  applyNvdPageObjectFrameUpdate,
   createNvdAssetFrameObjectFromDraft,
   insertNvdPageObject,
   normalizeNvdPageObjects,
@@ -217,6 +222,128 @@ export function useNvdPagedDocumentController({
       selection: result.selection,
     };
   }, [activeTypingStyle, compositionState]);
+
+  function handlePageObjectAssetAssignment(
+    objectId: string,
+    asset: NvdPageObjectAsset | null,
+  ) {
+    const pageObjectExists = displayPageObjects.some((pageObject) => pageObject.id === objectId);
+
+    if (!pageObjectExists) {
+      return;
+    }
+
+    commitPageObjectDocumentChange(
+      updateNvdPageObjectById(displayPageObjects, objectId, (pageObject) => ({
+        ...pageObject,
+        asset: asset ? { ...asset } : null,
+      })),
+      createNvdPageObjectDocumentSelection(objectId),
+    );
+    typingStyleRef.current = null;
+  }
+
+  function handlePageObjectWrapModeChange(
+    objectId: string,
+    wrapMode: NvdPageObjectWrapMode,
+  ) {
+    const pageObjectExists = displayPageObjects.some((pageObject) => pageObject.id === objectId);
+
+    if (!pageObjectExists) {
+      return;
+    }
+
+    commitPageObjectDocumentChange(
+      updateNvdPageObjectById(displayPageObjects, objectId, (pageObject) => ({
+        ...pageObject,
+        wrapMode,
+      })),
+      createNvdPageObjectDocumentSelection(objectId),
+    );
+    typingStyleRef.current = null;
+  }
+
+  function handlePageObjectDisplayModeChange(
+    objectId: string,
+    mode: NvdPageObjectDisplayMode,
+  ) {
+    const pageObjectExists = displayPageObjects.some((pageObject) => pageObject.id === objectId);
+
+    if (!pageObjectExists) {
+      return;
+    }
+
+    const wrapMode: NvdPageObjectWrapMode = mode === "text-wrap" ? "rectangle" : "none";
+    const zMode: NvdPageObjectZMode = mode === "behind-text" ? "behind-text" : "in-front-of-text";
+
+    commitPageObjectDocumentChange(
+      updateNvdPageObjectById(displayPageObjects, objectId, (pageObject) => ({
+        ...pageObject,
+        wrapMode,
+        zMode,
+      })),
+      createNvdPageObjectDocumentSelection(objectId),
+    );
+    typingStyleRef.current = null;
+  }
+
+  function handlePageObjectAssetDisplayChange(
+    objectId: string,
+    updates: NvdPageObjectAssetDisplayUpdate,
+  ) {
+    const pageObjectExists = displayPageObjects.some((pageObject) => pageObject.id === objectId);
+
+    if (!pageObjectExists) {
+      return;
+    }
+
+    commitPageObjectDocumentChange(
+      updateNvdPageObjectById(displayPageObjects, objectId, (pageObject) =>
+        applyNvdPageObjectAssetDisplayUpdate(pageObject, updates),
+      ),
+      createNvdPageObjectDocumentSelection(objectId),
+    );
+    typingStyleRef.current = null;
+  }
+
+  function handlePageObjectFrameChange(
+    objectId: string,
+    updates: NvdPageObjectFrameUpdate,
+  ) {
+    const pageObjectExists = displayPageObjects.some((pageObject) => pageObject.id === objectId);
+
+    if (!pageObjectExists) {
+      return;
+    }
+
+    commitPageObjectDocumentChange(
+      updateNvdPageObjectById(displayPageObjects, objectId, (pageObject) =>
+        applyNvdPageObjectFrameUpdate(pageObject, updates),
+      ),
+      createNvdPageObjectDocumentSelection(objectId),
+    );
+    typingStyleRef.current = null;
+  }
+
+  function handlePageObjectZModeChange(
+    objectId: string,
+    zMode: NvdPageObjectZMode,
+  ) {
+    const pageObjectExists = displayPageObjects.some((pageObject) => pageObject.id === objectId);
+
+    if (!pageObjectExists) {
+      return;
+    }
+
+    commitPageObjectDocumentChange(
+      updateNvdPageObjectById(displayPageObjects, objectId, (pageObject) => ({
+        ...pageObject,
+        zMode,
+      })),
+      createNvdPageObjectDocumentSelection(objectId),
+    );
+    typingStyleRef.current = null;
+  }
 
   function refreshController() {
     setControllerVersion((version) => version + 1);
@@ -1074,19 +1201,13 @@ export function useNvdPagedDocumentController({
     spaceBeforePt: getUniformBlockValue(blockLayouts, touchedParagraphIndexes, "spaceBeforePt"),
     textAlign: getUniformBlockValue(blockLayouts, touchedParagraphIndexes, "textAlign"),
     applyStyle: applyStyleToTouchedParagraphs,
+    assignAssetToPageObject: handlePageObjectAssetAssignment,
     assignAssetToSelectedPageObject: (asset: NvdPageObjectAsset | null) => {
       if (!selectedPageObject) {
         return;
       }
 
-      commitPageObjectDocumentChange(
-        updateNvdPageObjectById(displayPageObjects, selectedPageObject.id, (pageObject) => ({
-          ...pageObject,
-          asset: asset ? { ...asset } : null,
-        })),
-        createNvdPageObjectDocumentSelection(selectedPageObject.id),
-      );
-      typingStyleRef.current = null;
+      handlePageObjectAssetAssignment(selectedPageObject.id, asset);
     },
     deleteSelectedPageObject: () => {
       if (!selection || !isNvdPageObjectDocumentSelection(selection)) {
@@ -1185,6 +1306,11 @@ export function useNvdPagedDocumentController({
       }
       refreshController();
     },
+    updatePageObjectAssetDisplay: handlePageObjectAssetDisplayChange,
+    updatePageObjectFrame: handlePageObjectFrameChange,
+    setPageObjectDisplayMode: handlePageObjectDisplayModeChange,
+    setPageObjectWrapMode: handlePageObjectWrapModeChange,
+    setPageObjectZMode: handlePageObjectZModeChange,
     setSelection: (nextSelection) => {
       typingStyleRef.current = null;
       onDocumentSelectionRequest(nextSelection);
@@ -1195,28 +1321,14 @@ export function useNvdPagedDocumentController({
         return;
       }
 
-      commitPageObjectDocumentChange(
-        updateNvdPageObjectById(displayPageObjects, selectedPageObject.id, (pageObject) => ({
-          ...pageObject,
-          wrapMode,
-        })),
-        createNvdPageObjectDocumentSelection(selectedPageObject.id),
-      );
-      typingStyleRef.current = null;
+      handlePageObjectWrapModeChange(selectedPageObject.id, wrapMode);
     },
     setSelectedPageObjectZMode: (zMode: NvdPageObjectZMode) => {
       if (!selectedPageObject) {
         return;
       }
 
-      commitPageObjectDocumentChange(
-        updateNvdPageObjectById(displayPageObjects, selectedPageObject.id, (pageObject) => ({
-          ...pageObject,
-          zMode,
-        })),
-        createNvdPageObjectDocumentSelection(selectedPageObject.id),
-      );
-      typingStyleRef.current = null;
+      handlePageObjectZModeChange(selectedPageObject.id, zMode);
     },
     setCharacterSpacingPt: (characterSpacingPt) => {
       commitInlineStyleChange((style) => ({
@@ -1305,6 +1417,8 @@ export function useNvdPagedDocumentController({
     onDocumentSelectionRequest,
     pageObjectToolMode,
     displayPageObjects,
+    handlePageObjectAssetDisplayChange,
+    handlePageObjectFrameChange,
     normalizedPageObjects,
     selectedPageObject,
     selection,

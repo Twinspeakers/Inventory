@@ -34,6 +34,7 @@ import {
   DEFAULT_NVD_ZOOM_PERCENT,
   stepNvdZoomPercent,
   type NvdDocumentSelection,
+  type NvdPageObjectAssetPointerDragController,
   type NvdStyleDefinition,
 } from "../nvdEditor";
 import type { NvdEditorController } from "../nvdEditor/contracts/NvdEditorController";
@@ -102,6 +103,8 @@ export function PreviewStage<TAsset extends SceneViewerAsset>({
   onCreateNvdDocument,
   onCreateNvvDocument,
   onCloseNvdDocument,
+  onNvdAssetPointerDragTargetChange,
+  onNvdPageObjectContextMenu,
   onNvdDocumentActivate,
   onNvvDocumentActivate,
   onNvdDocumentChange,
@@ -122,6 +125,8 @@ export function PreviewStage<TAsset extends SceneViewerAsset>({
   showNvdDocumentPrompt,
   nativeHub,
   nativeHubAssets,
+  nvdAssetPointerDragController,
+  nvdAssetPointerDropTargetId,
   showNvdSaveReminder,
   sourcePath,
 }: {
@@ -135,6 +140,8 @@ export function PreviewStage<TAsset extends SceneViewerAsset>({
   onCreateNvdDocument: () => void;
   onCreateNvvDocument: () => void;
   onCloseNvdDocument: () => void;
+  onNvdAssetPointerDragTargetChange: (objectId: string | null) => void;
+  onNvdPageObjectContextMenu: (payload: { objectId: string; x: number; y: number; label: string }) => void;
   onNvdDocumentActivate: () => void;
   onNvvDocumentActivate: () => void;
   onNvdDocumentChange: (document: NvdDocument) => void;
@@ -155,6 +162,8 @@ export function PreviewStage<TAsset extends SceneViewerAsset>({
   showNvdDocumentPrompt: boolean;
   nativeHub: { inventoryName: string; view: NativeHubView } | null;
   nativeHubAssets: NativeHubAsset[];
+  nvdAssetPointerDragController: NvdPageObjectAssetPointerDragController;
+  nvdAssetPointerDropTargetId: string | null;
   showNvdSaveReminder: boolean;
   sourcePath: string | null;
 }) {
@@ -232,6 +241,10 @@ export function PreviewStage<TAsset extends SceneViewerAsset>({
         {sceneMode === "nvd-document" ? (
           <NvdDocumentMode
             nvdDocument={nvdDocument}
+            nvdAssetPointerDragController={nvdAssetPointerDragController}
+            nvdAssetPointerDropTargetId={nvdAssetPointerDropTargetId}
+            onNvdAssetPointerDragTargetChange={onNvdAssetPointerDragTargetChange}
+            onNvdPageObjectContextMenu={onNvdPageObjectContextMenu}
             onNvdDocumentActivate={onNvdDocumentActivate}
             onNvdEditorControllerChange={handleNvdEditorControllerChange}
             onNvdDocumentChange={onNvdDocumentChange}
@@ -463,6 +476,10 @@ function SceneToolbar({
 
 function NvdDocumentMode({
   nvdDocument,
+  nvdAssetPointerDragController,
+  nvdAssetPointerDropTargetId,
+  onNvdAssetPointerDragTargetChange,
+  onNvdPageObjectContextMenu,
   onNvdDocumentActivate,
   onNvdEditorControllerChange,
   onNvdDocumentChange,
@@ -471,6 +488,10 @@ function NvdDocumentMode({
   nvdZoomPercent,
 }: {
   nvdDocument: OpenedNvdDocument | null;
+  nvdAssetPointerDragController: NvdPageObjectAssetPointerDragController;
+  nvdAssetPointerDropTargetId: string | null;
+  onNvdAssetPointerDragTargetChange: (objectId: string | null) => void;
+  onNvdPageObjectContextMenu: (payload: { objectId: string; x: number; y: number; label: string }) => void;
   onNvdDocumentActivate: () => void;
   onNvdEditorControllerChange: (controller: NvdEditorController) => void;
   onNvdDocumentChange: (document: NvdDocument) => void;
@@ -494,7 +515,11 @@ function NvdDocumentMode({
         onActivate={onNvdDocumentActivate}
         onControllerChange={onNvdEditorControllerChange}
         onDocumentChange={onNvdDocumentChange}
+        onPageObjectAssetPointerDragTargetChange={onNvdAssetPointerDragTargetChange}
+        onPageObjectContextMenu={onNvdPageObjectContextMenu}
         onSelectionChange={onNvdSelectionChange}
+        pageObjectAssetPointerDragController={nvdAssetPointerDragController}
+        pageObjectAssetPointerDropTargetId={nvdAssetPointerDropTargetId}
         zoomPercent={nvdZoomPercent}
       />
     </div>

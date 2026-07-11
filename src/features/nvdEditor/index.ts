@@ -1,5 +1,31 @@
 export { NvdEditor } from "./surfaces/NvdEditor";
-export type { NvdEditorController, NvdPageObjectToolMode } from "./contracts/NvdEditorController";
+export type {
+  NvdEditorController,
+  NvdPageObjectDisplayMode,
+  NvdPageObjectToolMode,
+} from "./contracts/NvdEditorController";
+export {
+  buildNvdFramePropertiesWindowUrl,
+  isNvdFramePropertiesWindowRoute,
+  NVD_FRAME_PROPERTIES_WINDOW_LABEL,
+  NVD_FRAME_PROPERTIES_WINDOW_READY_EVENT,
+  NVD_FRAME_PROPERTIES_WINDOW_SET_DISPLAY_MODE_EVENT,
+  NVD_FRAME_PROPERTIES_WINDOW_UPDATE_DIMENSIONS_EVENT,
+  NVD_FRAME_PROPERTIES_WINDOW_UPDATE_IMAGE_FIT_EVENT,
+  NVD_FRAME_PROPERTIES_WINDOW_SET_WRAP_MODE_EVENT,
+  NVD_FRAME_PROPERTIES_WINDOW_SET_Z_MODE_EVENT,
+  NVD_FRAME_PROPERTIES_WINDOW_STATE_EVENT,
+} from "./nvdFramePropertiesWindowBridge";
+export type {
+  NvdFramePropertiesWindowDisplayMode,
+  NvdFramePropertiesWindowFrameSnapshot,
+  NvdFramePropertiesWindowSetDisplayModePayload,
+  NvdFramePropertiesWindowUpdateDimensionsPayload,
+  NvdFramePropertiesWindowUpdateImageFitPayload,
+  NvdFramePropertiesWindowSetWrapModePayload,
+  NvdFramePropertiesWindowSetZModePayload,
+  NvdFramePropertiesWindowStatePayload,
+} from "./nvdFramePropertiesWindowBridge";
 export {
   DEFAULT_NVD_CHARACTER_SPACING_PT,
   MAX_NVD_CHARACTER_SPACING_PT,
@@ -168,9 +194,24 @@ export {
 } from "./document/nvdDocumentModel";
 export type { NvdDocumentBlockOperationResult } from "./document/nvdDocumentModel";
 export {
+  createNvdPageObjectAssetFromSource,
+} from "./document/nvdPageObjectAssetBinding";
+export type {
+  NvdPageObjectAssetPointerDrag,
+  NvdPageObjectAssetPointerDragController,
+  NvdPageObjectAssetSourceDescriptor,
+} from "./document/nvdPageObjectAssetBinding";
+export {
   createNvdPageObjectAsset,
   createNvdAssetFrameObjectFromDraft,
   findNvdPageObjectById,
+  getNvdPageObjectFramePaddingPx,
+  getNvdPageObjectAssetAlignment,
+  getNvdPageObjectAssetFitMode,
+  getNvdPageObjectAssetOffsetXPx,
+  getNvdPageObjectAssetOffsetYPx,
+  getNvdPageObjectAssetScale,
+  getNvdPageObjectWrapPaddingPx,
   insertNvdPageObject,
   normalizeNvdPageObjects,
   removeNvdPageObjectById,

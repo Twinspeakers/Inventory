@@ -4,7 +4,8 @@
   "description": "Default desktop permissions for Inventory.",
   "windows": [
     "main",
-    "tag-library"
+    "tag-library",
+    "nvd-frame-properties"
   ],
   "permissions": [
     "core:default",

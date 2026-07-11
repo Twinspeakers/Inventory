@@ -12,6 +12,7 @@ import { getNvdDocumentStyleDefinitions } from "../document/nvdStyles";
 import { NvdPagedEditor } from "../paged/NvdPagedEditor";
 import { clampNvdPageLayout, getNvdPageLayout } from "../layout/nvdPageLayout";
 import type { NvdEditorController } from "../contracts/NvdEditorController";
+import type { NvdPageObjectAssetPointerDragController } from "../document/nvdPageObjectAssetBinding";
 import type { NvdDocumentSelection } from "../document/nvdDocumentSelection";
 import { getNvdDocumentBlockLayouts, getNvdDocumentFontFamilies, getNvdDocumentRuns, type NvdBlockLayout, type NvdTextSelection } from "../document/nvdRichText";
 
@@ -20,14 +21,22 @@ export function NvdEditor({
   onActivate,
   onControllerChange,
   onDocumentChange,
+  onPageObjectAssetPointerDragTargetChange,
+  onPageObjectContextMenu,
   onSelectionChange,
+  pageObjectAssetPointerDragController,
+  pageObjectAssetPointerDropTargetId,
   zoomPercent,
 }: {
   openedDocument: OpenedNvdDocument | null;
   onActivate: () => void;
   onControllerChange: (controller: NvdEditorController) => void;
   onDocumentChange: (document: NvdDocument) => void;
+  onPageObjectAssetPointerDragTargetChange: (objectId: string | null) => void;
+  onPageObjectContextMenu: (payload: { objectId: string; x: number; y: number; label: string }) => void;
   onSelectionChange: (selection: NvdDocumentSelection | null) => void;
+  pageObjectAssetPointerDragController: NvdPageObjectAssetPointerDragController;
+  pageObjectAssetPointerDropTargetId: string | null;
   zoomPercent: number;
 }) {
   if (!openedDocument) {
@@ -97,7 +106,11 @@ export function NvdEditor({
           onControllerChange={onControllerChange}
           onBlocksChange={updateBlocks}
           onPageObjectsChange={updatePageObjects}
+          onPageObjectAssetPointerDragTargetChange={onPageObjectAssetPointerDragTargetChange}
+          onPageObjectContextMenu={onPageObjectContextMenu}
           onSelectionChange={onSelectionChange}
+          pageObjectAssetPointerDragController={pageObjectAssetPointerDragController}
+          pageObjectAssetPointerDropTargetId={pageObjectAssetPointerDropTargetId}
           blocks={document.blocks}
           pageObjects={pageObjects}
           runs={runs}
@@ -120,7 +133,11 @@ function NvdDocumentSurface({
   onControllerChange,
   onBlocksChange,
   onPageObjectsChange,
+  onPageObjectAssetPointerDragTargetChange,
+  onPageObjectContextMenu,
   onSelectionChange,
+  pageObjectAssetPointerDragController,
+  pageObjectAssetPointerDropTargetId,
   blocks,
   pageObjects,
   runs,
@@ -137,7 +154,11 @@ function NvdDocumentSurface({
   onControllerChange: (controller: NvdEditorController) => void;
   onBlocksChange: (blocks: NvdBlock[]) => void;
   onPageObjectsChange: (pageObjects: NvdPageObject[]) => void;
+  onPageObjectAssetPointerDragTargetChange: (objectId: string | null) => void;
+  onPageObjectContextMenu: (payload: { objectId: string; x: number; y: number; label: string }) => void;
   onSelectionChange: (selection: NvdDocumentSelection | null) => void;
+  pageObjectAssetPointerDragController: NvdPageObjectAssetPointerDragController;
+  pageObjectAssetPointerDropTargetId: string | null;
   blocks: NvdBlock[];
   pageObjects: NvdPageObject[];
   runs: NvdTextRun[];
@@ -156,7 +177,11 @@ function NvdDocumentSurface({
       onControllerChange={onControllerChange}
       onBlocksChange={onBlocksChange}
       onPageObjectsChange={onPageObjectsChange}
+      onPageObjectAssetPointerDragTargetChange={onPageObjectAssetPointerDragTargetChange}
+      onPageObjectContextMenu={onPageObjectContextMenu}
       onSelectionChange={onSelectionChange}
+      pageObjectAssetPointerDragController={pageObjectAssetPointerDragController}
+      pageObjectAssetPointerDropTargetId={pageObjectAssetPointerDropTargetId}
       blocks={blocks}
       pageObjects={pageObjects}
       runs={runs}

@@ -30,7 +30,11 @@ import {
   useTreeExpansion,
   useWorkspaceLayout,
 } from "./app/workspace";
-import type { LibraryNodeContextMenuState, SourceFolderContextMenuState } from "./app/shell";
+import type {
+  LibraryNodeContextMenuState,
+  NvdPageObjectContextMenuState,
+  SourceFolderContextMenuState,
+} from "./app/shell";
 import type {
   AddLibraryNodePanelState,
   Asset,
@@ -68,6 +72,26 @@ import type { SceneMode } from "./features/sceneViewer";
 import { libraryTagDefinitions } from "./libraryCatalog";
 import { isPlayableAudioAsset, isWaveAudioAsset, playAssetAudioOnce } from "./sceneReaders/audioReader";
 import type { ModelTransform } from "./sceneReaders/threeModelReader";
+import {
+  NVD_FRAME_PROPERTIES_WINDOW_LABEL,
+  NVD_FRAME_PROPERTIES_WINDOW_READY_EVENT,
+  NVD_FRAME_PROPERTIES_WINDOW_SET_DISPLAY_MODE_EVENT,
+  NVD_FRAME_PROPERTIES_WINDOW_UPDATE_DIMENSIONS_EVENT,
+  NVD_FRAME_PROPERTIES_WINDOW_UPDATE_IMAGE_FIT_EVENT,
+  NVD_FRAME_PROPERTIES_WINDOW_STATE_EVENT,
+  buildNvdFramePropertiesWindowUrl,
+  type NvdFramePropertiesWindowSetDisplayModePayload,
+  type NvdFramePropertiesWindowFrameSnapshot,
+  type NvdFramePropertiesWindowUpdateDimensionsPayload,
+  type NvdFramePropertiesWindowUpdateImageFitPayload,
+  getNvdPageObjectAssetAlignment,
+  getNvdPageObjectAssetFitMode,
+  getNvdPageObjectAssetOffsetXPx,
+  getNvdPageObjectAssetOffsetYPx,
+  getNvdPageObjectAssetScale,
+  getNvdPageObjectFramePaddingPx,
+  getNvdPageObjectWrapPaddingPx,
+} from "./features/nvdEditor";
 import {
   TAG_LIBRARY_WINDOW_ADD_TAG_EVENT,
   TAG_LIBRARY_WINDOW_CREATE_PROJECT_TAG_EVENT,
@@ -134,6 +158,8 @@ export function App() {
   const [detailsColumnWidths, setDetailsColumnWidths] = useState<DetailsColumnWidths>(() => readStoredDetailsColumnWidths());
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
   const [libraryNodeContextMenu, setLibraryNodeContextMenu] = useState<LibraryNodeContextMenuState | null>(null);
+  const [nvdPageObjectContextMenu, setNvdPageObjectContextMenu] = useState<NvdPageObjectContextMenuState | null>(null);
+  const [nvdFramePropertiesObjectId, setNvdFramePropertiesObjectId] = useState<string | null>(null);
   const [sourceFolderContextMenu, setSourceFolderContextMenu] = useState<SourceFolderContextMenuState | null>(null);
   const [addLibraryNodePanel, setAddLibraryNodePanel] = useState<AddLibraryNodePanelState | null>(null);
   const [statusMessage, setStatusMessage] = useState("Create or open an Inventory to begin.");
@@ -216,6 +242,7 @@ export function App() {
     pendingNvdStyleResetRole,
     acceptNvdStyleDraft,
     applyNvdStyle,
+    assignAssetToNvdPageObject,
     assignAssetToSelectedNvdPageObject,
     changeNvdCharacterSpacingPt,
     changeNvdLineHeight,
@@ -234,8 +261,9 @@ export function App() {
     resetNvdStyle,
     saveDraftNvdPageObject,
     selectNvdStyle,
-    setSelectedNvdPageObjectWrapMode,
-    setSelectedNvdPageObjectZMode,
+    setNvdPageObjectDisplayMode,
+    updateNvdPageObjectAssetDisplay,
+    updateNvdPageObjectFrame,
     setNvdPageObjectToolMode,
     setHideFutureNvdStyleResetConfirmations,
     setPendingNvdStyleResetRole,
@@ -761,8 +789,98 @@ export function App() {
       return;
     }
 
+    let disposed = false;
+    let unlistenReady: (() => void) | null = null;
+    let unlistenSetDisplayMode: (() => void) | null = null;
+    let unlistenUpdateDimensions: (() => void) | null = null;
+    let unlistenUpdateImageFit: (() => void) | null = null;
+    const currentWindow = getCurrentWindow();
+
+    void currentWindow
+      .listen(NVD_FRAME_PROPERTIES_WINDOW_READY_EVENT, () => {
+        void syncNvdFramePropertiesWindowState();
+      })
+      .then((unlisten) => {
+        if (disposed) {
+          unlisten();
+          return;
+        }
+
+        unlistenReady = unlisten;
+      });
+
+    void currentWindow
+      .listen<NvdFramePropertiesWindowSetDisplayModePayload>(
+        NVD_FRAME_PROPERTIES_WINDOW_SET_DISPLAY_MODE_EVENT,
+        ({ payload }) => {
+          setNvdPageObjectDisplayMode(payload.objectId, payload.mode);
+        },
+      )
+      .then((unlisten) => {
+        if (disposed) {
+          unlisten();
+          return;
+        }
+
+        unlistenSetDisplayMode = unlisten;
+      });
+
+    void currentWindow
+      .listen<NvdFramePropertiesWindowUpdateDimensionsPayload>(
+        NVD_FRAME_PROPERTIES_WINDOW_UPDATE_DIMENSIONS_EVENT,
+        ({ payload }) => {
+          updateNvdPageObjectFrame(payload.objectId, payload.updates);
+        },
+      )
+      .then((unlisten) => {
+        if (disposed) {
+          unlisten();
+          return;
+        }
+
+        unlistenUpdateDimensions = unlisten;
+      });
+
+    void currentWindow
+      .listen<NvdFramePropertiesWindowUpdateImageFitPayload>(
+        NVD_FRAME_PROPERTIES_WINDOW_UPDATE_IMAGE_FIT_EVENT,
+        ({ payload }) => {
+          updateNvdPageObjectAssetDisplay(payload.objectId, payload.updates);
+        },
+      )
+      .then((unlisten) => {
+        if (disposed) {
+          unlisten();
+          return;
+        }
+
+        unlistenUpdateImageFit = unlisten;
+      });
+
+    return () => {
+      disposed = true;
+      unlistenReady?.();
+      unlistenSetDisplayMode?.();
+      unlistenUpdateDimensions?.();
+      unlistenUpdateImageFit?.();
+    };
+  }, [setNvdPageObjectDisplayMode, updateNvdPageObjectAssetDisplay, updateNvdPageObjectFrame]);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) {
+      return;
+    }
+
     void syncTagLibraryWindowState(selectedAsset);
   }, [projectTagGroups, selectedAsset]);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) {
+      return;
+    }
+
+    void syncNvdFramePropertiesWindowState();
+  }, [activeNvdDocument, activeNvdDocumentStatistics?.pages, nvdFramePropertiesObjectId]);
 
   function cancelPendingLibrarySave() {
     if (saveTimer.current) {
@@ -937,6 +1055,42 @@ export function App() {
     return libraryTagDefinitions.some((tagDefinition) => tagDefinition.id === tagId);
   }
 
+  function getNvdFramePropertiesWindowFrameSnapshot(
+    objectId: string | null = nvdFramePropertiesObjectId,
+  ): NvdFramePropertiesWindowFrameSnapshot | null {
+    if (!activeNvdDocument || !objectId) {
+      return null;
+    }
+
+    const pageObject = activeNvdDocument.document.pageObjects?.find(
+      (entry) => entry.id === objectId,
+    );
+
+    if (!pageObject) {
+      return null;
+    }
+
+    return {
+      assetAlignment: getNvdPageObjectAssetAlignment(pageObject),
+      assetFitMode: getNvdPageObjectAssetFitMode(pageObject),
+      assetOffsetXPx: getNvdPageObjectAssetOffsetXPx(pageObject),
+      assetOffsetYPx: getNvdPageObjectAssetOffsetYPx(pageObject),
+      assetScale: getNvdPageObjectAssetScale(pageObject),
+      assetName: pageObject.asset?.assetName?.trim() || null,
+      framePaddingPx: getNvdPageObjectFramePaddingPx(pageObject),
+      heightPx: pageObject.heightPx,
+      id: pageObject.id,
+      pageIndex: pageObject.pageIndex,
+      rotationDeg: pageObject.rotationDeg ?? 0,
+      wrapMode: pageObject.wrapMode ?? "none",
+      wrapPaddingPx: getNvdPageObjectWrapPaddingPx(pageObject),
+      widthPx: pageObject.widthPx,
+      xPx: pageObject.xPx,
+      yPx: pageObject.yPx,
+      zMode: pageObject.zMode ?? "in-front-of-text",
+    };
+  }
+
   async function syncTagLibraryWindowState(asset: Asset | null) {
     const tagBrowserWindow = await WebviewWindow.getByLabel(TAG_LIBRARY_WINDOW_LABEL);
 
@@ -947,6 +1101,23 @@ export function App() {
     await tagBrowserWindow.emit(TAG_LIBRARY_WINDOW_STATE_EVENT, {
       projectTagGroups,
       selectedAsset: toTagLibraryWindowAssetSnapshot(asset),
+    });
+  }
+
+  async function syncNvdFramePropertiesWindowState(objectId: string | null = nvdFramePropertiesObjectId) {
+    const framePropertiesWindow = await WebviewWindow.getByLabel(NVD_FRAME_PROPERTIES_WINDOW_LABEL);
+
+    if (!framePropertiesWindow) {
+      return;
+    }
+
+    await framePropertiesWindow.emit(NVD_FRAME_PROPERTIES_WINDOW_STATE_EVENT, {
+      documentTitle: activeNvdDocument?.document.title ?? null,
+      frame: getNvdFramePropertiesWindowFrameSnapshot(objectId),
+      pageCount: Math.max(
+        activeNvdDocumentStatistics?.pages ?? 1,
+        (getNvdFramePropertiesWindowFrameSnapshot(objectId)?.pageIndex ?? 0) + 1,
+      ),
     });
   }
 
@@ -990,6 +1161,60 @@ export function App() {
 
     void tagBrowserWindow.once("tauri://error", () => {
       setStatusMessage("Could not open the Tag Library window.");
+    });
+  }
+
+  async function openNvdFramePropertiesWindow(objectId: string) {
+    setNvdFramePropertiesObjectId(objectId);
+
+    if (!isTauriRuntime()) {
+      setStatusMessage("Frame Properties is only available in the desktop app.");
+      return;
+    }
+
+    const existingWindow = await WebviewWindow.getByLabel(NVD_FRAME_PROPERTIES_WINDOW_LABEL);
+
+    if (existingWindow) {
+      await existingWindow.show();
+      await existingWindow.setFocus();
+      await syncNvdFramePropertiesWindowState(objectId);
+      return;
+    }
+
+    const currentWindow = getCurrentWindow();
+    const [position, size, scaleFactor] = await Promise.all([
+      currentWindow.outerPosition(),
+      currentWindow.outerSize(),
+      currentWindow.scaleFactor(),
+    ]);
+    const width = 387;
+    const height = 420;
+    const logicalX = position.x / scaleFactor;
+    const logicalY = position.y / scaleFactor;
+    const logicalWidth = size.width / scaleFactor;
+
+    const propertiesWindow = new WebviewWindow(NVD_FRAME_PROPERTIES_WINDOW_LABEL, {
+      url: buildNvdFramePropertiesWindowUrl(),
+      title: "Frame Properties",
+      width,
+      height,
+      minWidth: 374,
+      minHeight: 360,
+      x: Math.round(logicalX + Math.max(24, logicalWidth - width - 40)),
+      y: Math.round(logicalY + 64),
+      decorations: false,
+      focus: true,
+      parent: currentWindow,
+      resizable: true,
+      skipTaskbar: true,
+    });
+
+    void propertiesWindow.once("tauri://created", () => {
+      void syncNvdFramePropertiesWindowState(objectId);
+    });
+
+    void propertiesWindow.once("tauri://error", () => {
+      setStatusMessage("Could not open the Frame Properties window.");
     });
   }
 
@@ -1114,10 +1339,15 @@ export function App() {
           setDetailsColumnWidths((widths) => ({ ...widths, [columnKey]: width }));
         },
         onDismissNvdSaveReminder: dismissNvdSaveReminder,
+        onAssignAssetToNvdPageObject: assignAssetToNvdPageObject,
         onModelInspectorResult: handleModelInspectorResult,
         onNvdDocumentActivate: activateNvdDocumentContext,
         onNvdDocumentChange: updateActiveNvdDocument,
         onNvdEditorControllerChange: handleNvdEditorControllerChange,
+        onOpenNvdPageObjectContextMenu: (payload) => {
+          setNvdFramePropertiesObjectId(payload.objectId);
+          setNvdPageObjectContextMenu(payload);
+        },
         onNvdStyleDraftChange: updateNvdStyleDraft,
         onNvdSelectionChange: handleNvdSelectionChange,
         onNvvDocumentActivate: activateNvvDocumentContext,
@@ -1181,8 +1411,6 @@ export function App() {
         onNvdCharacterSpacingPtChange: changeNvdCharacterSpacingPt,
         onNvdLineHeightChange: changeNvdLineHeight,
         onNvdPageObjectToolModeChange: setNvdPageObjectToolMode,
-        onNvdSelectedPageObjectWrapModeChange: setSelectedNvdPageObjectWrapMode,
-        onNvdSelectedPageObjectZModeChange: setSelectedNvdPageObjectZMode,
         onSaveDraftNvdPageObject: saveDraftNvdPageObject,
         onNvdSpaceAfterPtChange: changeNvdSpaceAfterPt,
         onNvdSpaceBeforePtChange: changeNvdSpaceBeforePt,
@@ -1208,6 +1436,7 @@ export function App() {
         isTagBrowserOpen,
         libraryNodeContextMenu,
         masterLibraryAssets,
+        nvdPageObjectContextMenu,
         nvdSaveReminderEnabled,
         nvdSaveState,
         nvdStyleResetConfirmationEnabled,
@@ -1241,6 +1470,15 @@ export function App() {
         onDeleteTheme: deleteSelectedTheme,
         onAssetPlacementSuggestionAccept: acceptAssetPlacementSuggestion,
         onLibraryNodeContextMenuClose: () => setLibraryNodeContextMenu(null),
+        onNvdPageObjectContextMenuClose: () => setNvdPageObjectContextMenu(null),
+        onOpenNvdPageObjectProperties: () => {
+          const objectId = nvdPageObjectContextMenu?.objectId;
+          setNvdPageObjectContextMenu(null);
+
+          if (objectId) {
+            void openNvdFramePropertiesWindow(objectId);
+          }
+        },
         onRemoveAssetFromLibraryNode: removeAssetFromLibraryNode,
         onNvdSaveReminderEnabledChange: updateNvdSaveReminderEnabled,
         onNvdStyleResetConfirmationEnabledChange: updateNvdStyleResetConfirmationEnabled,

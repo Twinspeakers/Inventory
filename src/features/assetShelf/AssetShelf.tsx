@@ -64,6 +64,7 @@ const GRID_OVERSCAN_ROWS = 2;
 const DETAILS_OVERSCAN_ROWS = 6;
 const DETAILS_ROW_HEIGHT = 70;
 const DETAILS_ROW_GAP = 4;
+const ASSET_POINTER_DRAG_THRESHOLD_PX = 8;
 
 export const defaultDetailsColumnWidths: DetailsColumnWidths = {
   name: 300,
@@ -123,9 +124,13 @@ export function AssetShelf<TAsset extends AssetShelfAsset>({
   height,
   isScanning,
   nvdDocument,
+  canStartAssetPointerDrag,
   onAssetSearchQueryChange,
   onAssetSortDirectionChange,
   onAssetSortKeyChange,
+  onAssetPointerDragEnd,
+  onAssetPointerDragMove,
+  onAssetPointerDragStart,
   onAssetViewModeChange,
   onDetailsColumnWidthChange,
   onCreateNvdDocument,
@@ -153,9 +158,13 @@ export function AssetShelf<TAsset extends AssetShelfAsset>({
   height: number | null;
   isScanning: boolean;
   nvdDocument: OpenedNvdDocument | null;
+  canStartAssetPointerDrag?: (asset: TAsset) => boolean;
   onAssetSearchQueryChange: (query: string) => void;
   onAssetSortDirectionChange: (direction: SortDirection) => void;
   onAssetSortKeyChange: (sortKey: AssetSortKey) => void;
+  onAssetPointerDragEnd?: () => void;
+  onAssetPointerDragMove?: (position: { clientX: number; clientY: number }) => void;
+  onAssetPointerDragStart?: (asset: TAsset, position: { clientX: number; clientY: number }) => void;
   onAssetViewModeChange: (mode: AssetViewMode) => void;
   onDetailsColumnWidthChange: (columnKey: DetailsColumnKey, width: number) => void;
   onCreateNvdDocument: () => void;
@@ -171,6 +180,12 @@ export function AssetShelf<TAsset extends AssetShelfAsset>({
   totalAssetCount: number;
   viewMode: AssetViewMode;
 }) {
+  const assetPointerGestureRef = useRef<{
+    asset: TAsset;
+    dragged: boolean;
+    pointerId: number;
+    teardown: () => void;
+  } | null>(null);
   const shelfStyle = collapsed
     ? ({ height: COLLAPSED_ASSET_SHELF_HEIGHT, maxHeight: COLLAPSED_ASSET_SHELF_HEIGHT, minHeight: COLLAPSED_ASSET_SHELF_HEIGHT } satisfies CSSProperties)
     : height !== null
@@ -225,6 +240,125 @@ export function AssetShelf<TAsset extends AssetShelfAsset>({
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", stopResize);
     window.addEventListener("pointercancel", stopResize);
+  }
+
+  useEffect(() => {
+    return () => {
+      assetPointerGestureRef.current?.teardown();
+      assetPointerGestureRef.current = null;
+    };
+  }, []);
+
+  function finishAssetPointerGesture(cancelled: boolean) {
+    const gesture = assetPointerGestureRef.current;
+
+    if (!gesture) {
+      return;
+    }
+
+    assetPointerGestureRef.current = null;
+    gesture.teardown();
+
+    if (gesture.dragged) {
+      onAssetPointerDragEnd?.();
+      return;
+    }
+
+    if (!cancelled) {
+      onSelectAsset(gesture.asset.id);
+    }
+  }
+
+  function handleAssetPointerDown(asset: TAsset, event: ReactPointerEvent<HTMLElement>) {
+    if (
+      !isPrimaryPointer(event) ||
+      !canStartAssetPointerDrag?.(asset) ||
+      !onAssetPointerDragStart ||
+      !onAssetPointerDragMove
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    finishAssetPointerGesture(true);
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const pointerId = event.pointerId;
+    const startAssetPointerDrag = onAssetPointerDragStart;
+    const moveAssetPointerDrag = onAssetPointerDragMove;
+    const thresholdPxSquared = ASSET_POINTER_DRAG_THRESHOLD_PX * ASSET_POINTER_DRAG_THRESHOLD_PX;
+    const gesture = {
+      asset,
+      dragged: false,
+      pointerId,
+      teardown: () => {
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", handlePointerUp);
+        window.removeEventListener("pointercancel", handlePointerCancel);
+        window.removeEventListener("blur", handleWindowBlur);
+      },
+    };
+
+    function handlePointerMove(moveEvent: PointerEvent) {
+      if (moveEvent.pointerId !== pointerId) {
+        return;
+      }
+
+      if (!gesture.dragged) {
+        const deltaX = moveEvent.clientX - startX;
+        const deltaY = moveEvent.clientY - startY;
+
+        if (deltaX * deltaX + deltaY * deltaY < thresholdPxSquared) {
+          return;
+        }
+
+        gesture.dragged = true;
+        startAssetPointerDrag(asset, {
+          clientX: moveEvent.clientX,
+          clientY: moveEvent.clientY,
+        });
+      }
+
+      moveAssetPointerDrag({
+        clientX: moveEvent.clientX,
+        clientY: moveEvent.clientY,
+      });
+    }
+
+    function handlePointerUp(upEvent: PointerEvent) {
+      if (upEvent.pointerId !== pointerId) {
+        return;
+      }
+
+      if (gesture.dragged) {
+        moveAssetPointerDrag({
+          clientX: upEvent.clientX,
+          clientY: upEvent.clientY,
+        });
+      }
+
+      finishAssetPointerGesture(false);
+    }
+
+    function handlePointerCancel(cancelEvent: PointerEvent) {
+      if (cancelEvent.pointerId !== pointerId) {
+        return;
+      }
+
+      finishAssetPointerGesture(true);
+    }
+
+    function handleWindowBlur() {
+      finishAssetPointerGesture(true);
+    }
+
+    assetPointerGestureRef.current = gesture;
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerCancel);
+    window.addEventListener("blur", handleWindowBlur);
   }
 
   return (
@@ -340,8 +474,10 @@ export function AssetShelf<TAsset extends AssetShelfAsset>({
                 </div>
                 <VirtualizedDetailsRows
                   assets={assets}
+                  canStartAssetPointerDrag={canStartAssetPointerDrag}
                   gridStyle={detailsGridStyle}
                   nvdDocument={nvdDocument}
+                  onAssetPointerDown={handleAssetPointerDown}
                   onOpenContextMenu={onOpenAssetContextMenu}
                   onSelectAsset={onSelectAsset}
                   selectedAssetId={selectedAsset?.id ?? null}
@@ -350,8 +486,10 @@ export function AssetShelf<TAsset extends AssetShelfAsset>({
             ) : (
               <VirtualizedAssetGrid
                 assets={assets}
+                canStartAssetPointerDrag={canStartAssetPointerDrag}
                 mode={viewMode}
                 nvdDocument={nvdDocument}
+                onAssetPointerDown={handleAssetPointerDown}
                 onOpenContextMenu={onOpenAssetContextMenu}
                 onPlayAudio={onPlayAudio}
                 onSelectAsset={onSelectAsset}
@@ -406,16 +544,20 @@ export function AssetShelf<TAsset extends AssetShelfAsset>({
 
 function VirtualizedAssetGrid<TAsset extends AssetShelfAsset>({
   assets,
+  canStartAssetPointerDrag,
   mode,
   nvdDocument,
+  onAssetPointerDown,
   onOpenContextMenu,
   onPlayAudio,
   onSelectAsset,
   selectedAssetId,
 }: {
   assets: TAsset[];
+  canStartAssetPointerDrag?: (asset: TAsset) => boolean;
   mode: Exclude<AssetViewMode, "details">;
   nvdDocument: OpenedNvdDocument | null;
+  onAssetPointerDown: (asset: TAsset, event: ReactPointerEvent<HTMLElement>) => void;
   onOpenContextMenu: (asset: TAsset, event: ReactMouseEvent<HTMLElement>) => void;
   onPlayAudio: (asset: TAsset) => void;
   onSelectAsset: (id: number) => void;
@@ -449,9 +591,11 @@ function VirtualizedAssetGrid<TAsset extends AssetShelfAsset>({
           {visibleAssets.map((asset) => (
             <AssetCard
               asset={asset}
+              canStartAssetPointerDrag={canStartAssetPointerDrag}
               key={asset.id}
               mode={mode}
               nvdDocument={nvdDocument}
+              onAssetPointerDown={onAssetPointerDown}
               onOpenContextMenu={onOpenContextMenu}
               onPlayAudio={onPlayAudio}
               onSelectAsset={onSelectAsset}
@@ -466,15 +610,19 @@ function VirtualizedAssetGrid<TAsset extends AssetShelfAsset>({
 
 function VirtualizedDetailsRows<TAsset extends AssetShelfAsset>({
   assets,
+  canStartAssetPointerDrag,
   gridStyle,
   nvdDocument,
+  onAssetPointerDown,
   onOpenContextMenu,
   onSelectAsset,
   selectedAssetId,
 }: {
   assets: TAsset[];
+  canStartAssetPointerDrag?: (asset: TAsset) => boolean;
   gridStyle: CSSProperties;
   nvdDocument: OpenedNvdDocument | null;
+  onAssetPointerDown: (asset: TAsset, event: ReactPointerEvent<HTMLElement>) => void;
   onOpenContextMenu: (asset: TAsset, event: ReactMouseEvent<HTMLElement>) => void;
   onSelectAsset: (id: number) => void;
   selectedAssetId: number | null;
@@ -505,9 +653,11 @@ function VirtualizedDetailsRows<TAsset extends AssetShelfAsset>({
             {visibleAssets.map((asset) => (
               <AssetDetailsRow
                 asset={asset}
+                canStartAssetPointerDrag={canStartAssetPointerDrag}
                 gridStyle={gridStyle}
                 key={asset.id}
                 nvdDocument={nvdDocument}
+                onAssetPointerDown={onAssetPointerDown}
                 onOpenContextMenu={onOpenContextMenu}
                 onSelectAsset={onSelectAsset}
                 selected={asset.id === selectedAssetId}
@@ -522,16 +672,20 @@ function VirtualizedDetailsRows<TAsset extends AssetShelfAsset>({
 
 function AssetCard<TAsset extends AssetShelfAsset>({
   asset,
+  canStartAssetPointerDrag,
   mode,
   nvdDocument,
+  onAssetPointerDown,
   onOpenContextMenu,
   onPlayAudio,
   onSelectAsset,
   selected,
 }: {
   asset: TAsset;
+  canStartAssetPointerDrag?: (asset: TAsset) => boolean;
   mode: Exclude<AssetViewMode, "details">;
   nvdDocument: OpenedNvdDocument | null;
+  onAssetPointerDown: (asset: TAsset, event: ReactPointerEvent<HTMLElement>) => void;
   onOpenContextMenu: (asset: TAsset, event: ReactMouseEvent<HTMLElement>) => void;
   onPlayAudio: (asset: TAsset) => void;
   onSelectAsset: (id: number) => void;
@@ -551,6 +705,7 @@ function AssetCard<TAsset extends AssetShelfAsset>({
   const audioActions = isPlayableAudioAsset(asset) ? (
     <AudioCardActions asset={asset} onPlayAudio={onPlayAudio} />
   ) : null;
+  const pointerDragEnabled = Boolean(canStartAssetPointerDrag?.(asset));
 
   if (mode === "extra-large") {
     return (
@@ -558,9 +713,10 @@ function AssetCard<TAsset extends AssetShelfAsset>({
         className={`asset-card asset-card-extra text-left ${selected ? "asset-card-selected" : ""}`}
         role="button"
         tabIndex={0}
-        onClick={handleSelect}
         onContextMenu={(event) => onOpenContextMenu(asset, event)}
         onKeyDown={handleKeyDown}
+        onPointerDown={pointerDragEnabled ? (event) => onAssetPointerDown(asset, event) : undefined}
+        onClick={pointerDragEnabled ? undefined : handleSelect}
       >
         <AssetThumbnail asset={asset} nvdDocument={nvdDocument} />
         {audioActions}
@@ -587,9 +743,10 @@ function AssetCard<TAsset extends AssetShelfAsset>({
         className={`asset-card asset-card-large text-center ${selected ? "asset-card-selected" : ""}`}
         role="button"
         tabIndex={0}
-        onClick={handleSelect}
         onContextMenu={(event) => onOpenContextMenu(asset, event)}
         onKeyDown={handleKeyDown}
+        onPointerDown={pointerDragEnabled ? (event) => onAssetPointerDown(asset, event) : undefined}
+        onClick={pointerDragEnabled ? undefined : handleSelect}
       >
         <AssetThumbnail asset={asset} nvdDocument={nvdDocument} />
         {audioActions}
@@ -605,9 +762,10 @@ function AssetCard<TAsset extends AssetShelfAsset>({
       className={`asset-card asset-card-medium text-left ${selected ? "asset-card-selected" : ""}`}
       role="button"
       tabIndex={0}
-      onClick={handleSelect}
       onContextMenu={(event) => onOpenContextMenu(asset, event)}
       onKeyDown={handleKeyDown}
+      onPointerDown={pointerDragEnabled ? (event) => onAssetPointerDown(asset, event) : undefined}
+      onClick={pointerDragEnabled ? undefined : handleSelect}
     >
       <AssetThumbnail asset={asset} nvdDocument={nvdDocument} />
       {audioActions}
@@ -617,25 +775,32 @@ function AssetCard<TAsset extends AssetShelfAsset>({
 
 function AssetDetailsRow<TAsset extends AssetShelfAsset>({
   asset,
+  canStartAssetPointerDrag,
   gridStyle,
   nvdDocument,
+  onAssetPointerDown,
   onOpenContextMenu,
   onSelectAsset,
   selected,
 }: {
   asset: TAsset;
+  canStartAssetPointerDrag?: (asset: TAsset) => boolean;
   gridStyle: CSSProperties;
   nvdDocument: OpenedNvdDocument | null;
+  onAssetPointerDown: (asset: TAsset, event: ReactPointerEvent<HTMLElement>) => void;
   onOpenContextMenu: (asset: TAsset, event: ReactMouseEvent<HTMLElement>) => void;
   onSelectAsset: (id: number) => void;
   selected: boolean;
 }) {
+  const pointerDragEnabled = Boolean(canStartAssetPointerDrag?.(asset));
+
   return (
     <button
       className={`asset-details-row ${selected ? "asset-details-row-selected" : ""}`}
       style={gridStyle}
-      onClick={() => onSelectAsset(asset.id)}
+      onClick={pointerDragEnabled ? undefined : () => onSelectAsset(asset.id)}
       onContextMenu={(event) => onOpenContextMenu(asset, event)}
+      onPointerDown={pointerDragEnabled ? (event) => onAssetPointerDown(asset, event) : undefined}
     >
       <span className="flex min-w-0 items-center gap-2">
         <span className="w-14 shrink-0">

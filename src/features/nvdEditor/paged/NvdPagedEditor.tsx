@@ -18,6 +18,7 @@ import {
   createNvdDocumentBlocks,
   type NvdBlockLayout,
 } from "../document/nvdRichText";
+import type { NvdPageObjectAssetPointerDragController } from "../document/nvdPageObjectAssetBinding";
 import type { NvdStyleDefinition, NvdStyleRole } from "../document/nvdStyles";
 import { useNvdPagedDocumentController } from "./useNvdPagedDocumentController";
 import { useNvdPagedSelectionController } from "./useNvdPagedSelectionController";
@@ -37,7 +38,11 @@ export function NvdPagedEditor({
   onControllerChange,
   onBlocksChange,
   onPageObjectsChange,
+  onPageObjectAssetPointerDragTargetChange,
+  onPageObjectContextMenu,
   onSelectionChange,
+  pageObjectAssetPointerDragController,
+  pageObjectAssetPointerDropTargetId,
   blocks,
   pageObjects,
   runs,
@@ -54,7 +59,11 @@ export function NvdPagedEditor({
   onControllerChange: (controller: NvdEditorController) => void;
   onBlocksChange: (blocks: NvdBlock[]) => void;
   onPageObjectsChange: (pageObjects: NvdPageObject[]) => void;
+  onPageObjectAssetPointerDragTargetChange: (objectId: string | null) => void;
+  onPageObjectContextMenu: (payload: { objectId: string; x: number; y: number; label: string }) => void;
   onSelectionChange: (selection: NvdDocumentSelection | null) => void;
+  pageObjectAssetPointerDragController: NvdPageObjectAssetPointerDragController;
+  pageObjectAssetPointerDropTargetId: string | null;
   blocks: NvdBlock[];
   pageObjects: NvdPageObject[];
   runs: NvdTextRun[];
@@ -188,10 +197,13 @@ export function NvdPagedEditor({
       </div>
       {layoutSnapshot ? (
         <NvdPagedHostLayer
+          assetPointerDragController={pageObjectAssetPointerDragController}
           draftPageObject={draftPageObject}
           layout={layoutSnapshot}
+          onAssetPointerDragTargetChange={onPageObjectAssetPointerDragTargetChange}
           onDocumentSelectionRequest={handleDocumentSelectionRequest}
           onDraftPageObjectChange={handleDraftPageObjectChange}
+          onPageObjectContextMenu={onPageObjectContextMenu}
           onPageObjectPreviewChange={handlePageObjectPreviewChange}
           onPageObjectSelectionRequest={handlePageObjectSelectionRequest}
           onPageObjectTransformCancel={clearPageObjectPreview}
@@ -209,6 +221,7 @@ export function NvdPagedEditor({
       ) : null}
       <NvdPagedObjectLayer
         draftPageObject={null}
+        dropTargetPageObjectId={pageObjectAssetPointerDropTargetId}
         pageLayout={pageLayout}
         pageObjects={displayPageObjects}
         selectedPageObjectId={selectedPageObjectId}
@@ -224,6 +237,7 @@ export function NvdPagedEditor({
       ) : null}
       <NvdPagedObjectLayer
         draftPageObject={draftPageObject}
+        dropTargetPageObjectId={pageObjectAssetPointerDropTargetId}
         pageLayout={pageLayout}
         pageObjects={displayPageObjects}
         selectedPageObjectId={selectedPageObjectId}
