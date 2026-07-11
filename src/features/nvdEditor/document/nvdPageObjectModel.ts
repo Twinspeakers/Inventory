@@ -7,6 +7,7 @@ import type {
   NvdPageObjectFrameUpdate,
   NvdPageObject,
 } from "../../inventoryProject";
+import { normalizeNvdFrameBackgroundColor } from "../frameColorUtils";
 
 export const DEFAULT_NVD_PAGE_OBJECT_ASSET_FIT_MODE: NvdPageObjectAssetFitMode = "contain";
 export const DEFAULT_NVD_PAGE_OBJECT_ASSET_ALIGNMENT: NvdPageObjectAssetAlignment = "center";
@@ -171,6 +172,12 @@ export function getNvdPageObjectFramePaddingPx(
   );
 }
 
+export function getNvdPageObjectBackgroundColor(
+  pageObject: Pick<NvdPageObject, "backgroundColor">,
+) {
+  return normalizeNvdFrameBackgroundColor(pageObject.backgroundColor);
+}
+
 export function getNvdPageObjectWrapPaddingPx(
   pageObject: Pick<NvdPageObject, "wrapPaddingPx">,
 ) {
@@ -230,6 +237,7 @@ function normalizePageObject(pageObject: NvdPageObject) {
   clonedPageObject.assetOffsetXPx = normalizeAssetOffsetPx(clonedPageObject.assetOffsetXPx);
   clonedPageObject.assetOffsetYPx = normalizeAssetOffsetPx(clonedPageObject.assetOffsetYPx);
   clonedPageObject.assetScale = normalizeAssetScale(clonedPageObject.assetScale);
+  clonedPageObject.backgroundColor = normalizeNvdFrameBackgroundColor(clonedPageObject.backgroundColor);
   clonedPageObject.framePaddingPx = normalizePaddingPx(
     clonedPageObject.framePaddingPx,
     DEFAULT_NVD_PAGE_OBJECT_FRAME_PADDING_PX,

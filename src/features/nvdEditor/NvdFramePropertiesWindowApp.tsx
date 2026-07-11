@@ -1,7 +1,28 @@
-import { type PointerEvent as ReactPointerEvent, useEffect, useState } from "react";
+import {
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { X } from "lucide-react";
+import { PaintBucket, X } from "lucide-react";
+import {
+  DEFAULT_NVD_FRAME_BACKGROUND_COLOR,
+  clampFrameColorValue,
+  getNvdFrameColorOpacityPercent,
+  hsvaToRgba,
+  normalizeNvdFrameBackgroundColor,
+  nvdFrameColorToCssRgba,
+  parseNvdFrameBackgroundColor,
+  rgbaToHsva,
+  roundFrameColorValue,
+  toNvdFrameBackgroundColor,
+  type NvdFrameColorHsva,
+} from "./frameColorUtils";
 import {
   NVD_FRAME_PROPERTIES_WINDOW_SET_DISPLAY_MODE_EVENT,
   NVD_FRAME_PROPERTIES_WINDOW_READY_EVENT,
@@ -20,7 +41,9 @@ export function NvdFramePropertiesWindowApp() {
   const [documentTitle, setDocumentTitle] = useState<string | null>(null);
   const [frame, setFrame] = useState<NvdFramePropertiesWindowFrameSnapshot | null>(null);
   const [pageCount, setPageCount] = useState(1);
-  const [activeTab, setActiveTab] = useState<"dimensions" | "display">("display");
+  const [activeTab, setActiveTab] = useState<"dimensions" | "display" | "style">("display");
+  const [pickerColor, setPickerColor] = useState(DEFAULT_NVD_FRAME_BACKGROUND_COLOR);
+  const activeFrameIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -50,6 +73,35 @@ export function NvdFramePropertiesWindowApp() {
       unlistenState?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (!frame) {
+      activeFrameIdRef.current = null;
+      return;
+    }
+
+    const nextPickerColor = frame.backgroundColor ?? DEFAULT_NVD_FRAME_BACKGROUND_COLOR;
+
+    if (activeFrameIdRef.current !== frame.id) {
+      activeFrameIdRef.current = frame.id;
+      setPickerColor(nextPickerColor);
+      return;
+    }
+
+    if (frame.backgroundColor) {
+      setPickerColor(frame.backgroundColor);
+    }
+  }, [frame]);
+
+  const pickerHsva = useMemo(
+    () => rgbaToHsva(parseNvdFrameBackgroundColor(pickerColor)),
+    [pickerColor],
+  );
+  const pickerRgba = useMemo(
+    () => parseNvdFrameBackgroundColor(pickerColor),
+    [pickerColor],
+  );
+  const backgroundEnabled = frame?.backgroundColor !== null && frame?.backgroundColor !== undefined;
 
   function handleClose() {
     void getCurrentWindow().close().catch(() => getCurrentWindow().destroy());
@@ -110,6 +162,37 @@ export function NvdFramePropertiesWindowApp() {
     void getCurrentWindow().startDragging();
   }
 
+  function applyBackgroundColor(color: string) {
+    const normalized = normalizeNvdFrameBackgroundColor(color) ?? DEFAULT_NVD_FRAME_BACKGROUND_COLOR;
+    setPickerColor(normalized);
+    emitDimensionsUpdate({ backgroundColor: normalized });
+  }
+
+  function handleBackgroundStateChange(nextState: "fill" | "none") {
+    if (nextState === "none") {
+      emitDimensionsUpdate({ backgroundColor: null });
+      return;
+    }
+
+    applyBackgroundColor(pickerColor);
+  }
+
+  function handleStylePickerChange(nextColor: string) {
+    applyBackgroundColor(nextColor);
+  }
+
+  function handleStylePickerCommit(nextColor: string) {
+    applyBackgroundColor(nextColor);
+  }
+
+  function handleHsvaChange(nextHsva: NvdFrameColorHsva) {
+    handleStylePickerChange(toNvdFrameBackgroundColor(hsvaToRgba(nextHsva)));
+  }
+
+  function handleHsvaCommit(nextHsva: NvdFrameColorHsva) {
+    handleStylePickerCommit(toNvdFrameBackgroundColor(hsvaToRgba(nextHsva)));
+  }
+
   return (
     <main className="flex h-screen flex-col overflow-hidden bg-app text-ink">
       <section className="flex h-full flex-col border border-line bg-surface">
@@ -140,6 +223,11 @@ export function NvdFramePropertiesWindowApp() {
               active={activeTab === "display"}
               label="Display"
               onClick={() => setActiveTab("display")}
+            />
+            <TabButton
+              active={activeTab === "style"}
+              label="Style"
+              onClick={() => setActiveTab("style")}
             />
             <TabButton
               active={activeTab === "dimensions"}
@@ -242,6 +330,112 @@ export function NvdFramePropertiesWindowApp() {
                       </div>
                     </div>
                   </div>
+                </section>
+              </section>
+            ) : activeTab === "style" ? (
+              <section className="space-y-[10px]">
+                <section className="space-y-2">
+                  <div className="frame-properties-style-header-row">
+                    <div className="text-[11px] font-semibold uppercase tracking-normal text-muted">Background</div>
+                    <div className="frame-properties-style-toggle-row">
+                      <StyleModeButton
+                        active={!backgroundEnabled}
+                        ariaLabel="No background fill"
+                        title="None"
+                        onClick={() => handleBackgroundStateChange("none")}
+                      >
+                        <X size={12} aria-hidden="true" />
+                      </StyleModeButton>
+                      <StyleModeButton
+                        active={backgroundEnabled}
+                        ariaLabel="Background fill"
+                        title="Fill"
+                        onClick={() => handleBackgroundStateChange("fill")}
+                      >
+                        <PaintBucket size={12} aria-hidden="true" />
+                      </StyleModeButton>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="frame-properties-color-panel">
+                  <div className="frame-properties-color-compact-layout">
+                    <SaturationValueField
+                      hsva={pickerHsva}
+                      onChange={handleHsvaChange}
+                      onCommit={handleHsvaCommit}
+                    />
+                    <div className="frame-properties-color-sidebar">
+                      <ColorPreviewChip
+                        color={backgroundEnabled ? frame.backgroundColor ?? pickerColor : null}
+                      />
+                      <div className="frame-properties-color-channel-list">
+                        <InlineColorNumberField
+                          label="R"
+                          max={255}
+                          min={0}
+                          value={pickerRgba.red}
+                          onCommit={(value) =>
+                            handleStylePickerCommit(toNvdFrameBackgroundColor({ ...pickerRgba, red: value }))
+                          }
+                        />
+                        <InlineColorNumberField
+                          label="G"
+                          max={255}
+                          min={0}
+                          value={pickerRgba.green}
+                          onCommit={(value) =>
+                            handleStylePickerCommit(toNvdFrameBackgroundColor({ ...pickerRgba, green: value }))
+                          }
+                        />
+                        <InlineColorNumberField
+                          label="B"
+                          max={255}
+                          min={0}
+                          value={pickerRgba.blue}
+                          onCommit={(value) =>
+                            handleStylePickerCommit(toNvdFrameBackgroundColor({ ...pickerRgba, blue: value }))
+                          }
+                        />
+                      </div>
+                      <InlineHexField
+                        value={pickerColor}
+                        onCommit={(value) => handleStylePickerCommit(value)}
+                      />
+                    </div>
+                  </div>
+
+                  <RangeField
+                    className="frame-properties-color-hue-range"
+                    label="Hue"
+                    max={360}
+                    min={0}
+                    step={1}
+                    value={roundFrameColorValue(pickerHsva.hue)}
+                    onChange={(value) => handleHsvaChange({ ...pickerHsva, hue: value })}
+                    onCommit={(value) => handleHsvaCommit({ ...pickerHsva, hue: value })}
+                  />
+
+                  <RangeField
+                    className="frame-properties-color-alpha-range"
+                    label="Opacity"
+                    max={100}
+                    min={0}
+                    step={1}
+                    style={{
+                      ["--frame-alpha-end" as never]: nvdFrameColorToCssRgba(
+                        toNvdFrameBackgroundColor({ ...pickerRgba, alpha: 1 }),
+                      ) as never,
+                    }}
+                    value={getNvdFrameColorOpacityPercent(pickerColor)}
+                    valueSuffix="%"
+                    onChange={(value) =>
+                      handleHsvaChange({ ...pickerHsva, alpha: clampFrameColorValue(value / 100, 0, 1) })
+                    }
+                    onCommit={(value) =>
+                      handleHsvaCommit({ ...pickerHsva, alpha: clampFrameColorValue(value / 100, 0, 1) })
+                    }
+                  />
                 </section>
               </section>
             ) : (
@@ -417,6 +611,233 @@ function TextWrapPreview() {
   );
 }
 
+function StyleModeButton({
+  active,
+  ariaLabel,
+  children,
+  onClick,
+  title,
+}: {
+  active: boolean;
+  ariaLabel: string;
+  children: ReactNode;
+  onClick: () => void;
+  title: string;
+}) {
+  return (
+    <button
+      aria-pressed={active}
+      aria-label={ariaLabel}
+      className={`frame-properties-style-mode-button ${active ? "is-active" : ""}`}
+      title={title}
+      type="button"
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SaturationValueField({
+  hsva,
+  onChange,
+  onCommit,
+}: {
+  hsva: NvdFrameColorHsva;
+  onChange: (value: NvdFrameColorHsva) => void;
+  onCommit: (value: NvdFrameColorHsva) => void;
+}) {
+  function updateFromPointer(target: HTMLDivElement, clientX: number, clientY: number, commit = false) {
+    const rect = target.getBoundingClientRect();
+    const nextValue = {
+      ...hsva,
+      saturation: clampFrameColorValue((clientX - rect.left) / Math.max(rect.width, 1), 0, 1),
+      value: clampFrameColorValue(1 - (clientY - rect.top) / Math.max(rect.height, 1), 0, 1),
+    };
+
+    if (commit) {
+      onCommit(nextValue);
+      return;
+    }
+
+    onChange(nextValue);
+  }
+
+  return (
+    <div
+      aria-label="Saturation and brightness"
+      className="frame-properties-sv-field"
+      role="presentation"
+      style={{
+        backgroundColor: `hsl(${Math.round(hsva.hue)} 100% 50%)`,
+      }}
+      onPointerDown={(event) => {
+        if (event.button !== 0) {
+          return;
+        }
+
+        event.preventDefault();
+        const target = event.currentTarget;
+        updateFromPointer(target, event.clientX, event.clientY);
+
+        const handlePointerMove = (moveEvent: PointerEvent) => {
+          updateFromPointer(target, moveEvent.clientX, moveEvent.clientY);
+        };
+        const handlePointerEnd = (endEvent: PointerEvent) => {
+          updateFromPointer(target, endEvent.clientX, endEvent.clientY, true);
+          window.removeEventListener("pointermove", handlePointerMove);
+          window.removeEventListener("pointerup", handlePointerEnd);
+          window.removeEventListener("pointercancel", handlePointerCancel);
+        };
+        const handlePointerCancel = () => {
+          window.removeEventListener("pointermove", handlePointerMove);
+          window.removeEventListener("pointerup", handlePointerEnd);
+          window.removeEventListener("pointercancel", handlePointerCancel);
+        };
+
+        window.addEventListener("pointermove", handlePointerMove);
+        window.addEventListener("pointerup", handlePointerEnd);
+        window.addEventListener("pointercancel", handlePointerCancel);
+      }}
+    >
+      <div className="frame-properties-sv-field-white" />
+      <div className="frame-properties-sv-field-black" />
+      <span
+        className="frame-properties-sv-handle"
+        style={{
+          left: `${hsva.saturation * 100}%`,
+          top: `${(1 - hsva.value) * 100}%`,
+        }}
+      />
+    </div>
+  );
+}
+
+function RangeField({
+  className,
+  label,
+  max,
+  min,
+  onChange,
+  onCommit,
+  step,
+  style,
+  value,
+  valueSuffix = "",
+}: {
+  className?: string;
+  label: string;
+  max: number;
+  min: number;
+  onChange: (value: number) => void;
+  onCommit: (value: number) => void;
+  step: number;
+  style?: CSSProperties;
+  value: number;
+  valueSuffix?: string;
+}) {
+  return (
+    <label className="frame-properties-color-range-row">
+      <span className="frame-properties-color-range-header">
+        <span className="frame-properties-fit-number-label">{label}</span>
+        <span className="frame-properties-fit-slider-value">
+          {Math.round(value)}
+          {valueSuffix}
+        </span>
+      </span>
+      <span className={`frame-properties-color-range-track ${className ?? ""}`} style={style}>
+        <input
+          className="frame-properties-color-range-input"
+          max={max}
+          min={min}
+          step={step}
+          type="range"
+          value={value}
+          onChange={(event) => onChange(Number(event.currentTarget.value))}
+          onPointerUp={(event) => onCommit(Number(event.currentTarget.value))}
+        />
+      </span>
+    </label>
+  );
+}
+
+function ColorPreviewChip({
+  color,
+}: {
+  color: string | null;
+}) {
+  return (
+    <div className="frame-properties-color-preview-chip">
+      <span className="frame-properties-color-preview-swatch transparent-checkerboard">
+        <span
+          className="frame-properties-color-preview-fill"
+          style={color ? { background: color } : undefined}
+        />
+      </span>
+      <span className="frame-properties-color-preview-copy">
+        <span className="frame-properties-fit-number-label">Current</span>
+        <span className="frame-properties-color-preview-value">
+          {color ? "Fill" : "None"}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+function InlineColorNumberField({
+  label,
+  max,
+  min,
+  onCommit,
+  value,
+}: {
+  label: string;
+  max: number;
+  min: number;
+  onCommit: (value: number) => void;
+  value: number;
+}) {
+  const [draftValue, setDraftValue] = useState(() => String(Math.round(value)));
+
+  useEffect(() => {
+    setDraftValue(String(Math.round(value)));
+  }, [value]);
+
+  function commit(nextValue: string) {
+    const parsedValue = Number(nextValue);
+
+    if (!Number.isFinite(parsedValue)) {
+      setDraftValue(String(Math.round(value)));
+      return;
+    }
+
+    onCommit(Math.round(clampNumber(parsedValue, min, max)));
+  }
+
+  return (
+    <label className="frame-properties-color-inline-field">
+      <span className="frame-properties-fit-number-label">{label}</span>
+      <input
+        className="frame-properties-fit-number-input frame-properties-color-inline-input"
+        inputMode="numeric"
+        max={max}
+        min={min}
+        step={1}
+        type="number"
+        value={draftValue}
+        onBlur={(event) => commit(event.currentTarget.value)}
+        onChange={(event) => setDraftValue(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            commit(event.currentTarget.value);
+            event.currentTarget.blur();
+          }
+        }}
+      />
+    </label>
+  );
+}
+
 function NumericField({
   disabled = false,
   label,
@@ -468,6 +889,52 @@ function NumericField({
         value={draftValue}
         onBlur={(event) => commit(event.currentTarget.value)}
         onChange={(event) => setDraftValue(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            commit(event.currentTarget.value);
+            event.currentTarget.blur();
+          }
+        }}
+      />
+    </label>
+  );
+}
+
+function InlineHexField({
+  onCommit,
+  value,
+}: {
+  onCommit: (value: string) => void;
+  value: string;
+}) {
+  const [draftValue, setDraftValue] = useState(() => value);
+
+  useEffect(() => {
+    setDraftValue(value);
+  }, [value]);
+
+  function commit(nextValue: string) {
+    const normalized = normalizeNvdFrameBackgroundColor(nextValue);
+
+    if (!normalized) {
+      setDraftValue(value);
+      return;
+    }
+
+    onCommit(normalized);
+  }
+
+  return (
+    <label className="frame-properties-color-inline-field">
+      <span className="frame-properties-fit-number-label">Hex</span>
+      <input
+        className="frame-properties-fit-number-input frame-properties-color-inline-input frame-properties-color-hex-input"
+        autoCapitalize="characters"
+        spellCheck={false}
+        type="text"
+        value={draftValue}
+        onBlur={(event) => commit(event.currentTarget.value)}
+        onChange={(event) => setDraftValue(event.currentTarget.value.toUpperCase())}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             commit(event.currentTarget.value);

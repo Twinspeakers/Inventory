@@ -89,6 +89,7 @@ import {
   getNvdPageObjectAssetOffsetXPx,
   getNvdPageObjectAssetOffsetYPx,
   getNvdPageObjectAssetScale,
+  getNvdPageObjectBackgroundColor,
   getNvdPageObjectFramePaddingPx,
   getNvdPageObjectWrapPaddingPx,
 } from "./features/nvdEditor";
@@ -1077,6 +1078,7 @@ export function App() {
       assetOffsetYPx: getNvdPageObjectAssetOffsetYPx(pageObject),
       assetScale: getNvdPageObjectAssetScale(pageObject),
       assetName: pageObject.asset?.assetName?.trim() || null,
+      backgroundColor: getNvdPageObjectBackgroundColor(pageObject),
       framePaddingPx: getNvdPageObjectFramePaddingPx(pageObject),
       heightPx: pageObject.heightPx,
       id: pageObject.id,

@@ -8,6 +8,7 @@ import {
   MAX_NVD_PAGE_OBJECT_ASSET_SCALE,
   MIN_NVD_PAGE_OBJECT_ASSET_SCALE,
   createNvdAssetFrameObjectFromDraft,
+  getNvdPageObjectBackgroundColor,
   getNvdPageObjectAssetAlignment,
   getNvdPageObjectAssetFitMode,
   getNvdPageObjectAssetOffsetXPx,
@@ -45,6 +46,7 @@ describe("NVD page object model", () => {
         assetOffsetXPx: Number.NaN,
         assetOffsetYPx: 12.345,
         assetScale: 200,
+        backgroundColor: "rgba(0,0,0,0.5)",
         framePaddingPx: -12,
         heightPx: 120,
         id: "frame-1",
@@ -62,6 +64,7 @@ describe("NVD page object model", () => {
     expect(getNvdPageObjectAssetOffsetXPx(frame)).toBe(0);
     expect(getNvdPageObjectAssetOffsetYPx(frame)).toBe(12.3);
     expect(getNvdPageObjectAssetScale(frame)).toBe(MAX_NVD_PAGE_OBJECT_ASSET_SCALE);
+    expect(getNvdPageObjectBackgroundColor(frame)).toBeNull();
     expect(getNvdPageObjectFramePaddingPx(frame)).toBe(0);
     expect(getNvdPageObjectWrapPaddingPx(frame)).toBe(DEFAULT_NVD_PAGE_OBJECT_WRAP_PADDING_PX);
   });
@@ -83,5 +86,22 @@ describe("NVD page object model", () => {
     };
 
     expect(getNvdPageObjectAssetScale(frame)).toBe(MIN_NVD_PAGE_OBJECT_ASSET_SCALE);
+  });
+
+  it("normalizes frame background colors to uppercase hex with alpha", () => {
+    const [frame] = normalizeNvdPageObjects([
+      {
+        backgroundColor: "#cc8855",
+        heightPx: 64,
+        id: "frame-3",
+        kind: "asset-frame",
+        pageIndex: 0,
+        widthPx: 64,
+        xPx: 0,
+        yPx: 0,
+      },
+    ]);
+
+    expect(getNvdPageObjectBackgroundColor(frame)).toBe("#CC8855FF");
   });
 });

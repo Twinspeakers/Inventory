@@ -96,6 +96,7 @@ export type NvdAssetFrameObject = {
   assetOffsetXPx?: number;
   assetOffsetYPx?: number;
   assetScale?: number;
+  backgroundColor?: string | null;
   framePaddingPx?: number;
   id: string;
   kind: "asset-frame";
@@ -121,7 +122,13 @@ export type NvdPageObjectAssetDisplayUpdate = Partial<
 export type NvdPageObjectFrameUpdate = Partial<
   Pick<
     NvdAssetFrameObject,
-    "framePaddingPx" | "heightPx" | "pageIndex" | "rotationDeg" | "widthPx" | "wrapPaddingPx"
+    | "backgroundColor"
+    | "framePaddingPx"
+    | "heightPx"
+    | "pageIndex"
+    | "rotationDeg"
+    | "widthPx"
+    | "wrapPaddingPx"
   >
 >;
 

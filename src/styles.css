@@ -2830,6 +2830,288 @@ body.is-resizing-tag-library-nesw * {
   cursor: not-allowed;
 }
 
+.frame-properties-style-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.frame-properties-style-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.frame-properties-style-mode-button {
+  display: inline-flex;
+  width: 1.8rem;
+  height: 1.8rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(var(--color-line));
+  background: rgb(var(--color-canvas));
+  color: rgb(var(--color-muted));
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.frame-properties-style-mode-button:hover {
+  color: rgb(var(--color-ink));
+}
+
+.frame-properties-style-mode-button:first-child {
+  background: rgb(236 236 236);
+  color: rgb(173 52 52);
+}
+
+.frame-properties-style-mode-button:first-child:hover {
+  color: rgb(205 57 57);
+}
+
+.frame-properties-style-mode-button.is-active {
+  border-color: rgb(var(--color-steel));
+  background: rgb(var(--color-surface-raised));
+  color: rgb(var(--color-ink));
+}
+
+.frame-properties-style-mode-button:first-child.is-active {
+  border-color: rgb(205 57 57 / 0.8);
+  background: rgb(236 236 236);
+  color: rgb(205 57 57);
+}
+
+.frame-properties-style-mode-button:last-child.is-active {
+  border-color: rgb(var(--color-brand-lime) / 0.75);
+  color: rgb(var(--color-brand-lime));
+}
+
+.frame-properties-color-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.72rem;
+}
+
+.frame-properties-color-compact-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 0.72rem;
+  align-items: start;
+}
+
+.frame-properties-color-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.48rem;
+}
+
+.frame-properties-color-preview-chip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 0.5rem;
+  align-items: center;
+  width: 100%;
+  color: rgb(var(--color-ink));
+  text-align: right;
+}
+
+.frame-properties-color-preview-swatch {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  overflow: hidden;
+  border: 1px solid rgb(var(--color-line));
+  background: rgb(var(--color-canvas));
+  order: 2;
+}
+
+.frame-properties-color-preview-fill {
+  position: absolute;
+  inset: 0;
+}
+
+.frame-properties-color-preview-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.1rem;
+  order: 1;
+  align-items: flex-end;
+}
+
+.frame-properties-color-preview-value {
+  overflow: hidden;
+  color: rgb(var(--color-ink));
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.frame-properties-sv-field {
+  position: relative;
+  height: 179px;
+  overflow: hidden;
+  border: 1px solid rgb(var(--color-line));
+  cursor: crosshair;
+}
+
+.frame-properties-sv-field-white,
+.frame-properties-sv-field-black {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.frame-properties-sv-field-white {
+  background: linear-gradient(90deg, rgb(255 255 255), rgb(255 255 255 / 0));
+}
+
+.frame-properties-sv-field-black {
+  background: linear-gradient(180deg, rgb(0 0 0 / 0), rgb(0 0 0));
+}
+
+.frame-properties-sv-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgb(255 255 255 / 0.95);
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.42);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.frame-properties-color-range-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.frame-properties-color-range-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.frame-properties-color-range-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 16px;
+  overflow: hidden;
+  border: 1px solid rgb(var(--color-line));
+  background: rgb(var(--color-canvas));
+}
+
+.frame-properties-color-hue-range {
+  background: linear-gradient(
+    90deg,
+    rgb(255 0 0) 0%,
+    rgb(255 255 0) 17%,
+    rgb(0 255 0) 33%,
+    rgb(0 255 255) 50%,
+    rgb(0 0 255) 67%,
+    rgb(255 0 255) 83%,
+    rgb(255 0 0) 100%
+  );
+}
+
+.frame-properties-color-alpha-range {
+  background-color: rgb(var(--transparent-checker-a));
+  background-image:
+    linear-gradient(45deg, rgb(var(--transparent-checker-b)) 25%, transparent 25%),
+    linear-gradient(-45deg, rgb(var(--transparent-checker-b)) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgb(var(--transparent-checker-b)) 75%),
+    linear-gradient(-45deg, transparent 75%, rgb(var(--transparent-checker-b)) 75%),
+    linear-gradient(90deg, rgb(255 255 255 / 0), var(--frame-alpha-end));
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0,
+    0 0;
+  background-size:
+    16px 16px,
+    16px 16px,
+    16px 16px,
+    16px 16px,
+    100% 100%;
+}
+
+.frame-properties-color-range-input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: transparent;
+}
+
+.frame-properties-color-range-input::-webkit-slider-runnable-track {
+  height: 100%;
+  background: transparent;
+}
+
+.frame-properties-color-range-input::-moz-range-track {
+  height: 100%;
+  background: transparent;
+  border: 0;
+}
+
+.frame-properties-color-range-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 18px;
+  margin-top: -1px;
+  border: 1px solid rgb(var(--color-surface));
+  background: rgb(var(--color-ink));
+}
+
+.frame-properties-color-range-input::-moz-range-thumb {
+  width: 10px;
+  height: 18px;
+  border: 1px solid rgb(var(--color-surface));
+  background: rgb(var(--color-ink));
+  border-radius: 0;
+}
+
+.frame-properties-color-hex-input {
+  text-transform: uppercase;
+}
+
+.frame-properties-color-channel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.34rem;
+}
+
+.frame-properties-color-inline-field {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.frame-properties-color-inline-input {
+  width: 100%;
+  min-width: 0;
+  height: 1.85rem;
+  padding: 0 0.5rem;
+}
+
+.frame-properties-color-inline-field .frame-properties-fit-number-label {
+  line-height: 1;
+  text-align: center;
+}
+
+.frame-properties-color-inline-field .frame-properties-fit-number-input {
+  text-align: left;
+}
+
 @keyframes nvd-navigation-attention {
   0%,
   100% {

@@ -25,6 +25,7 @@ export type NvdFramePropertiesWindowFrameSnapshot = {
   assetOffsetYPx: number;
   assetScale: number;
   assetName: string | null;
+  backgroundColor: string | null;
   framePaddingPx: number;
   heightPx: number;
   id: string;

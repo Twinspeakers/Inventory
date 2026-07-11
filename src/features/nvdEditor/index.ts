@@ -202,6 +202,7 @@ export type {
   NvdPageObjectAssetSourceDescriptor,
 } from "./document/nvdPageObjectAssetBinding";
 export {
+  getNvdPageObjectBackgroundColor,
   createNvdPageObjectAsset,
   createNvdAssetFrameObjectFromDraft,
   findNvdPageObjectById,

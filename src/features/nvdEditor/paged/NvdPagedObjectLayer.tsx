@@ -4,6 +4,7 @@ import { NVD_PAGE_GAP_PX } from "../layout/nvdLayout";
 import { getNvdPageLayoutPx } from "../layout/nvdPageLayout";
 import {
   getNvdPageObjectBounds,
+  getNvdPageObjectBackgroundColor,
   getNvdPageObjectRotationDeg,
   type NvdDraftPageObject,
 } from "../document/nvdPageObjectModel";
@@ -152,11 +153,16 @@ function FrameAssetPreview({
   }
 
   return (
-    <div className="nvd-paged-object-frame-preview">
-      <div
-        className="nvd-paged-object-frame-preview-image"
-        style={getNvdPageObjectAssetPreviewStyle(pageObject, assetUrl, naturalSize)}
-      />
+    <div
+      className="nvd-paged-object-frame-preview"
+      style={getFramePreviewBackgroundStyle(pageObject)}
+    >
+      {assetUrl ? (
+        <div
+          className="nvd-paged-object-frame-preview-image"
+          style={getNvdPageObjectAssetPreviewStyle(pageObject, assetUrl, naturalSize)}
+        />
+      ) : null}
       {selected ? (
         <div
           className="nvd-paged-object-frame-padding-guide"
@@ -200,5 +206,16 @@ function getObjectBodyStyle(
 }
 
 function shouldRenderObjectAssetPreview(pageObject: NvdPageObject) {
-  return isSupportedPageObjectAssetPreviewPath(pageObject.asset?.assetPath);
+  return (
+    getNvdPageObjectBackgroundColor(pageObject) !== null ||
+    isSupportedPageObjectAssetPreviewPath(pageObject.asset?.assetPath)
+  );
+}
+
+function getFramePreviewBackgroundStyle(
+  pageObject: Pick<NvdPageObject, "backgroundColor">,
+) {
+  const backgroundColor = getNvdPageObjectBackgroundColor(pageObject);
+
+  return backgroundColor ? { background: backgroundColor } : undefined;
 }
